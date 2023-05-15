@@ -1,6 +1,6 @@
-PROJ_NAME = name
+PROJ_NAME = belphegor
 
-MAIN_PATH = *.go
+MAIN_PATH = cmd/main.go
 BUILD_PATH = build/package/
 
 INSTALL_PATH = /usr/bin/
@@ -16,7 +16,7 @@ uninstall:
 	sudo rm $(INSTALL_PATH)$(PROJ_NAME)
 
 clean:
-	rm -rf $(BUILD_PATH)*
+	rm -rf $(BUILD_PATH)*a
 
 tests:
 	go test ./...
