@@ -76,11 +76,6 @@ func (m xClip) Set(data []byte) error {
 	)
 }
 
-func (m xClip) Exist() bool {
-	_, err := exec.LookPath("xclip")
-	return err == nil
-}
-
 func (m xClip) Get() ([]byte, error) {
 	return clipboardGet(exec.Command("xclip", "-out", "-selection", "clipboard"))
 }
@@ -93,11 +88,6 @@ func (m xSel) Set(data []byte) error {
 	)
 }
 
-func (m xSel) Exist() bool {
-	_, err := exec.LookPath("xsel")
-	return err == nil
-}
-
 func (m xSel) Get() ([]byte, error) {
 	return clipboardGet(exec.Command("xsel", "--output", "--clipboard"))
 }
@@ -108,11 +98,6 @@ func (m wlClipboard) Set(data []byte) error {
 	return clipboardSet(data,
 		exec.Command("wl-copy"),
 	)
-}
-
-func (m wlClipboard) Exist() bool {
-	_, err := exec.LookPath("wl-paste")
-	return err == nil
 }
 
 func (m wlClipboard) Get() ([]byte, error) {

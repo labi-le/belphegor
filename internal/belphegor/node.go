@@ -80,7 +80,7 @@ func (n *Node) Broadcast(msg Message) {
 			// do not send messages back to sender
 			continue
 		}
-		logger.Debugf("sent message id: %s to: %s ", msg.Header.ID, addr)
+		logger.Debugf("sent message id: %s to %s: ", msg.Header.ID, addr)
 		msg.Write(conn)
 	}
 }
