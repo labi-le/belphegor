@@ -12,7 +12,6 @@ import (
 
 func NewManager() Manager {
 	return &windows{}
-
 }
 
 type windows struct{}
