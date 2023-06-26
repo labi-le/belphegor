@@ -1,24 +1,35 @@
 package ip
 
 import (
+	"io"
 	"net"
+	"net/http"
 	"strconv"
 )
 
+var outBoundIP net.IP
+
 func GetOutboundIP() string {
-	addrs, err := net.InterfaceAddrs()
+	if outBoundIP != nil {
+		return outBoundIP.String()
+	}
+	req, err := http.Get("https://icanhazip.com")
 	if err != nil {
-		return ""
+		return err.Error()
 	}
-	for _, address := range addrs {
-		// check the address type and if it is not a loopback the display it
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
-			}
-		}
+	defer req.Body.Close()
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		panic(err)
 	}
-	return ""
+
+	// Remove \n
+	body = body[:len(body)-1]
+
+	outBoundIP = net.ParseIP(string(body))
+
+	return outBoundIP.String()
 }
 
 func MakeAddr(port int) string {

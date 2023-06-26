@@ -36,7 +36,7 @@ func (n *Node) ConnectTo(addr string) error {
 
 	logger.Infof("Connected to the clipboard: %s", addr)
 
-	n.nodes[ip.RemovePort(addr)] = c
+	n.nodes[addr] = c
 	go n.handleConnection(c) // Обрабатывайте входящие данные от этого соединения
 	return nil
 }
@@ -59,7 +59,8 @@ func (n *Node) Start() error {
 
 		logger.Infof("Accepted connection from %s", conn.RemoteAddr().String())
 
-		n.nodes[ip.RemovePort(conn.RemoteAddr().String())] = conn
+		//n.nodes[ip.RemovePort(conn.RemoteAddr().String())] = conn
+		n.nodes[conn.RemoteAddr().String()] = conn
 		go n.handleConnection(conn)
 	}
 }
@@ -76,7 +77,7 @@ func (n *Node) handleConnection(conn net.Conn) {
 
 func (n *Node) Broadcast(msg Message) {
 	for addr, conn := range n.nodes {
-		if msg.Header.From == addr {
+		if msg.Header.From == addr || msg.IsDuplicate(n.lastMessage) {
 			// do not send messages back to sender
 			continue
 		}

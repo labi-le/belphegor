@@ -46,21 +46,23 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 
 	// Горутина для чтения обновлений от других узлов
 	go func() {
-		for clip := range externalUpdateChan {
-			logger.Debugf("received external clipboard update: %s", clip)
-			localClipboard = clip
-		}
-	}()
-
-	// Горутина для чтения локального буфера обмена и отправки обновлений
-	go func() {
 		for range time.Tick(delay * time.Second) {
-			newClipboard := fetchLocalClipboard(cp)
-			if !bytes.Equal(newClipboard, localClipboard) {
-				localClipboard = newClipboard
-				clipboardChan <- localClipboard
+			select {
+			case clip := <-externalUpdateChan:
+				if len(clip) > 0 {
+					logger.Debugf("received external clipboard update: %s", clip)
+					localClipboard = clip
+				}
+			default:
+				logger.Debugf("no external clipboard updates, checking local clipboard")
+				newClipboard := fetchLocalClipboard(cp)
+				if !bytes.Equal(newClipboard, localClipboard) {
+					localClipboard = newClipboard
+					clipboardChan <- localClipboard
+				}
 			}
 		}
+
 	}()
 
 	for clip := range clipboardChan {
