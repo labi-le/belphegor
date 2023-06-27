@@ -2,7 +2,6 @@ package belphegor
 
 import (
 	"belphegor/pkg/clipboard"
-	"belphegor/pkg/ip"
 	"bytes"
 	"github.com/rs/zerolog/log"
 	"io"
@@ -39,7 +38,7 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 
 	for clip := range clipboardChan {
 		log.Debug().Msgf("local clipboard data changed: %s", clip)
-		node.Broadcast(NewMessage(clip, ip.GetOutboundIP()))
+		node.Broadcast(NewMessage(clip))
 	}
 }
 
@@ -49,8 +48,6 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 		err := decode(conn, &msg)
 		if err == io.EOF {
 			log.Warn().Msgf("client %s is disconnected", conn.RemoteAddr().String())
-			node.Close(conn)
-
 			return
 		}
 
@@ -65,7 +62,7 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 
 		externalUpdateChan <- msg.Data
 
-		log.Debug().Msgf("received: %s from: %s", msg.Header.From, conn.RemoteAddr().String())
+		log.Debug().Msgf("received: %s from: %s", msg.Header.ID, conn.RemoteAddr().String())
 
 		node.Broadcast(msg)
 	}

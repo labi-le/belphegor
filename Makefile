@@ -10,7 +10,7 @@ FULL_PATH = $(BUILD_PATH)$(PROJ_NAME)
 .phony: run
 
 run:
-	go run $(MAIN_PATH) -debug -port 7777
+	go run $(MAIN_PATH) -debug -node_discover
 
 build: clean
 ifeq ($(OS),Windows_NT)

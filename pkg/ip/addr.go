@@ -4,7 +4,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 )
 
 var outBoundIP net.IP
@@ -32,11 +31,12 @@ func GetOutboundIP() string {
 	return outBoundIP.String()
 }
 
-func MakeAddr(port int) string {
-	if port == 0 {
-		return ":"
-	}
-	return ":" + strconv.Itoa(port)
+func MakeAddr(ip net.IP, port string) string {
+	return ip.String() + MakePort(port)
+}
+
+func MakePort(port string) string {
+	return ":" + port
 }
 
 func RemovePort(addr string) string {

@@ -9,8 +9,7 @@ import (
 )
 
 type Header struct {
-	ID   uuid.UUID
-	From string
+	ID uuid.UUID
 }
 
 type Message struct {
@@ -22,15 +21,14 @@ func (m Message) Write(w io.Writer) (int, error) {
 	return w.Write(encode(m))
 }
 
-func NewMessage(data []byte, addr string) Message {
+func NewMessage(data []byte) Message {
 	return Message{Data: data, Header: Header{
-		ID:   uuid.New(),
-		From: addr,
+		ID: uuid.New(),
 	}}
 }
 
 func (m Message) IsDuplicate(msg Message) bool {
-	return m.Header.ID == msg.Header.ID && m.Header.From == msg.Header.From && bytes.Equal(m.Data, msg.Data)
+	return m.Header.ID == msg.Header.ID && bytes.Equal(m.Data, msg.Data)
 }
 
 func encode(src interface{}) []byte {
