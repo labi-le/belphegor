@@ -40,7 +40,7 @@ Flags:
 func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
 	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
-	flag.BoolVar(&nodeDiscover, "node_discover", false, "Find local nodes on the network and connect to them")
+	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
