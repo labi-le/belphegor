@@ -65,12 +65,13 @@ func main() {
 	if port != 0 {
 		node = belphegor.NewNode(clipboard.NewManager(), ip.MakeAddr(port))
 	} else {
+		log.Debug().Msg("Using random port")
 		node = belphegor.NewNodeRandomPort(clipboard.NewManager())
 	}
 
 	go func() {
 		if err := node.Start(); err != nil {
-			log.Error().Err(err).Msg("Failed to start the node")
+			log.Fatal().Err(err).Msg("Failed to start the node")
 		}
 	}()
 

@@ -2,9 +2,10 @@ package belphegor
 
 import (
 	"belphegor/pkg/clipboard"
-	"belphegor/pkg/ip"
 	"github.com/rs/zerolog/log"
+	"math/rand"
 	"net"
+	"strconv"
 )
 
 type Node struct {
@@ -23,7 +24,12 @@ func NewNode(clipboard clipboard.Manager, addr string) *Node {
 }
 
 func NewNodeRandomPort(clipboard clipboard.Manager) *Node {
-	return NewNode(clipboard, ip.GetOutboundIP()+":0")
+	return NewNode(clipboard, genPort())
+}
+
+func genPort() string {
+	// range port 7000 - 8000
+	return ":" + strconv.Itoa(rand.Intn(1000)+7000)
 }
 
 func (n *Node) ConnectTo(addr string) error {
