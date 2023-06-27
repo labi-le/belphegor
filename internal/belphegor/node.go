@@ -76,9 +76,16 @@ func (n *Node) handleConnection(conn net.Conn) {
 }
 
 func (n *Node) Broadcast(msg Message) {
+	if n.enc != nil {
+		var err error
+		msg.Data, err = n.enc.Encrypt(msg.Data)
+		if err != nil {
+			log.Error().Msgf("failed to encrypt clipboard data: %s", err)
+			return
+		}
+	}
 	for addr, conn := range n.nodes {
-		if msg.Header.From == addr || msg.IsDuplicate(n.lastMessage) {
-			// do not send messages back to sender
+		if msg.IsDuplicate(n.lastMessage) {
 			continue
 		}
 		log.Debug().Msgf("sent message id: %s to %s: ", msg.Header.ID, addr)
