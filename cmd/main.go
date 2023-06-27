@@ -51,7 +51,7 @@ func init() {
 
 func main() {
 	if debug {
-		log.Info().Msg("Debug mode enabled")
+		log.Info().Msg("debug mode enabled")
 	}
 
 	if showVersion {
@@ -67,27 +67,27 @@ func main() {
 	if port != 0 {
 		node = belphegor.NewNode(clipboard.NewManager(), ip.MakePort(strconv.Itoa(port)))
 	} else {
-		log.Debug().Msg("Using random port")
+		log.Debug().Msg("using random port")
 		node = belphegor.NewNodeRandomPort(clipboard.NewManager())
-	}
-
-	if nodeDiscover {
-		log.Debug().Msg("Node discovery enabled")
-		go node.EnableNodeDiscover()
 	}
 
 	go func() {
 		if err := node.Start(); err != nil {
-			log.Fatal().Err(err).Msg("Failed to start the node")
+			log.Fatal().Err(err).Msg("failed to start the node")
 		}
 	}()
 
 	if addressIP != "" {
 		go func() {
 			if err := node.ConnectTo(addressIP); err != nil {
-				log.Fatal().Err(err).Msg("Failed to connect to the node")
+				log.Fatal().Err(err).Msg("failed to connect to the node")
 			}
 		}()
+	}
+
+	if nodeDiscover {
+		log.Debug().Msg("node discovery enabled")
+		go node.EnableNodeDiscover()
 	}
 
 	select {}
@@ -96,7 +96,7 @@ func main() {
 func initLogger(debug bool) {
 	if debug {
 		log.Logger = log.With().Caller().Logger()
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 		return
 	}
 

@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"time"
 )
 
 // NodeIP e.g. ip
@@ -55,11 +56,11 @@ func (n *Node) ConnectTo(addr string) error {
 		return err
 	}
 
-	log.Info().Msgf("Connected to the clipboard: %s", addr)
+	log.Info().Msgf("connected to the clipboard: %s", addr)
 
 	n.storage.Add(c)
 
-	go n.handleConnection("", c)
+	go n.handleConnection(c)
 	return nil
 }
 
@@ -69,7 +70,7 @@ func (n *Node) Start() error {
 		return err
 	}
 
-	log.Info().Msgf("Listening on %s", l.Addr().String())
+	log.Info().Msgf("listening on %s", l.Addr().String())
 
 	defer l.Close()
 
@@ -79,18 +80,15 @@ func (n *Node) Start() error {
 			return err
 		}
 
-		log.Info().Msgf("Accepted connection from %s", conn.RemoteAddr().String())
+		log.Info().Msgf("accepted connection from %s", conn.RemoteAddr().String())
 
-		addr := NodeIP(conn.RemoteAddr().String())
 		n.storage.Add(conn)
 
-		go n.handleConnection(addr, conn)
+		go n.handleConnection(conn)
 	}
 }
 
-func (n *Node) handleConnection(node NodeIP, conn net.Conn) {
-	defer func() { n.storage.Delete(node) }()
-
+func (n *Node) handleConnection(conn net.Conn) {
 	externalUpdateChan := make(chan []byte)
 
 	defer close(externalUpdateChan)
@@ -103,37 +101,38 @@ func (n *Node) Broadcast(msg Message) {
 		if msg.IsDuplicate(n.lastMessage) {
 			continue
 		}
+
 		log.Debug().Msgf("sent message id: %s to %s: ", msg.Header.ID, addr)
 		msg.Write(conn)
 	}
 }
 
-func (n *Node) Close(conn net.Conn) {
-	_ = conn.Close()
-	n.storage.Delete(NodeIP(conn.RemoteAddr().String()))
-}
-
 func (n *Node) EnableNodeDiscover() {
-	discover, err := peerdiscovery.Discover(
+	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
-			Payload: []byte(n.port),
+			Payload:   []byte(n.port),
+			Limit:     -1,
+			TimeLimit: -1,
+			Delay:     time.Second * 10,
+
+			Notify: func(d peerdiscovery.Discovered) {
+				nodeAddr := NodeIP(d.Address)
+
+				log.Trace().Msgf("found node: %s", nodeAddr)
+				if n.storage.Exist(nodeAddr) {
+					log.Trace().Msgf("node %s already exist, skipping...", nodeAddr)
+					return
+				}
+
+				addr := ip.MakeAddr(net.ParseIP(d.Address), string(d.Payload))
+				log.Info().Msgf("connecting to %s", addr)
+				if err := n.ConnectTo(addr); err != nil {
+					log.Error().Msgf("failed to connect to %s", addr)
+				}
+			},
 		},
 	)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to discover nodes")
-	}
-
-	for _, p := range discover {
-		nodeAddr := NodeIP(p.Address)
-		if n.storage.Exist(nodeAddr) {
-			log.Debug().Msgf("node %s already exist, skipping...", nodeAddr)
-			continue
-		}
-
-		addr := ip.MakeAddr(net.ParseIP(p.Address), string(p.Payload))
-		log.Info().Msgf("found node: %s", addr)
-		if err := n.ConnectTo(addr); err != nil {
-			log.Error().Msgf("failed to connect to %s", addr)
-		}
 	}
 }

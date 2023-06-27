@@ -22,7 +22,7 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 			select {
 			case clip := <-externalUpdateChan:
 				if len(clip) > 0 {
-					log.Debug().Msgf("received external clipboard update: %s", clip)
+					log.Trace().Msgf("received external clipboard update: %s", clip)
 					localClipboard = clip
 				}
 			default:
@@ -37,23 +37,28 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 	}()
 
 	for clip := range clipboardChan {
-		log.Debug().Msgf("local clipboard data changed: %s", clip)
+		log.Trace().Msgf("local clipboard data changed: %s", clip)
 		node.Broadcast(NewMessage(clip))
 	}
 }
 
 func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, externalUpdateChan chan []byte) {
+	ip := NodeIP(conn.RemoteAddr().(*net.TCPAddr).IP.String())
+	defer func() {
+		log.Info().Msgf("close connection: %s", ip)
+		node.storage.Delete(ip)
+	}()
 	for {
 		var msg Message
 		err := decode(conn, &msg)
-		if err == io.EOF {
-			log.Warn().Msgf("client %s is disconnected", conn.RemoteAddr().String())
-			return
-		}
-
 		if err != nil {
+			if opErr, ok := err.(*net.OpError); ok || opErr != io.EOF {
+				log.Trace().Err(err).Msg("minor network error")
+				return
+			}
+
 			log.Error().Msgf("failed to decode clipboard data: %s", err)
-			continue
+			break
 		}
 
 		node.lastMessage = msg
@@ -62,7 +67,7 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 
 		externalUpdateChan <- msg.Data
 
-		log.Debug().Msgf("received: %s from: %s", msg.Header.ID, conn.RemoteAddr().String())
+		log.Debug().Msgf("received: %s from: %s", msg.Header.ID, ip)
 
 		node.Broadcast(msg)
 	}

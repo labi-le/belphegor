@@ -31,20 +31,20 @@ func (n *NodeStorage) Add(conn net.Conn) {
 	}
 }
 
-func (n *NodeStorage) Delete(hash NodeIP) {
-	conn, ok := n.nodes[hash]
+func (n *NodeStorage) Delete(ip NodeIP) {
+	conn, ok := n.nodes[ip]
 	if !ok {
 		return
 	}
 	_ = conn.Close()
-	delete(n.nodes, hash)
+	delete(n.nodes, ip)
 }
 
-func (n *NodeStorage) Get(addr NodeIP) net.Conn {
-	return n.nodes[addr]
+func (n *NodeStorage) Get(ip NodeIP) net.Conn {
+	return n.nodes[ip]
 }
-func (n *NodeStorage) Exist(hash NodeIP) bool {
-	return n.nodes[hash] != (NodeInfo{})
+func (n *NodeStorage) Exist(ip NodeIP) bool {
+	return n.nodes[ip] != (NodeInfo{})
 }
 
 func (n *NodeStorage) All() map[NodeIP]NodeInfo {
