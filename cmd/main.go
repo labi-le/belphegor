@@ -17,6 +17,7 @@ import (
 var version = "dev"
 
 var (
+	//todo: add -findLocal flag to find local nodes on the network and connect to them
 	helpMsg = `belphegor - 
 A cross-platform clipboard sharing utility
 
@@ -30,10 +31,6 @@ Flags:
 	-debug | show debug logs
 	-version | show version
 	-help | show help
-
-//todo: add -findLocal flag to find local nodes on the network and connect to them
-
-
 `
 	password []byte
 
