@@ -54,7 +54,6 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 					localClipboard = clip
 				}
 			default:
-				log.Debug().Msgf("no external clipboard updates, checking local clipboard")
 				newClipboard := fetchLocalClipboard(cp)
 				if !bytes.Equal(newClipboard, localClipboard) {
 					localClipboard = newClipboard
