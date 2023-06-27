@@ -22,9 +22,13 @@ endif
 build-windows: clean
 	go build --ldflags '-extldflags "-static"' -v -o $(BUILD_PATH)$(PROJ_NAME).exe $(MAIN_PATH)
 
-install:
-	make build
+install:build
+ifeq ($(OS),Windows_NT)
+	powershell.exe -command "Copy-Item -Path '$(BUILD_PATH)$(PROJ_NAME).exe' \
+	 -Destination '$(APPDATA)\Microsoft\Windows\Start Menu\Programs\Startup\$(PROJ_NAME).exe' -Force"
+else
 	sudo cp $(BUILD_PATH)$(PROJ_NAME) $(INSTALL_PATH)$(PROJ_NAME)
+endif
 
 uninstall:
 	sudo rm $(INSTALL_PATH)$(PROJ_NAME)
