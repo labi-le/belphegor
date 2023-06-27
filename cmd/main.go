@@ -14,10 +14,27 @@ import (
 	"syscall"
 )
 
-var version = "main"
+var version = "dev"
 
 var (
-	helpMsg  = `belphegor - ...`
+	helpMsg = `belphegor - 
+A cross-platform clipboard sharing utility
+
+Usage:
+	belphegor [flags]
+
+Flags:
+	-connect string | ip:port to connect to the node (e.g. 192.168.0.12:7777)
+	-port int | the node will start on this port (e.g. 7777)
+	-secure | encrypt your data with a password
+	-debug | show debug logs
+	-version | show version
+	-help | show help
+
+//todo: add -findLocal flag to find local nodes on the network and connect to them
+
+
+`
 	password []byte
 
 	addressIP   string
