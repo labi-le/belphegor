@@ -5,6 +5,7 @@ import (
 	"belphegor/pkg/ip"
 	"bytes"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
 	"io"
 	"net"
@@ -44,17 +45,16 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 
 	localClipboard := fetchLocalClipboard(cp)
 
-	// Горутина для чтения обновлений от других узлов
 	go func() {
 		for range time.Tick(delay * time.Second) {
 			select {
 			case clip := <-externalUpdateChan:
 				if len(clip) > 0 {
-					logger.Debugf("received external clipboard update: %s", clip)
+					log.Debug().Msgf("received external clipboard update: %s", clip)
 					localClipboard = clip
 				}
 			default:
-				logger.Debugf("no external clipboard updates, checking local clipboard")
+				log.Debug().Msgf("no external clipboard updates, checking local clipboard")
 				newClipboard := fetchLocalClipboard(cp)
 				if !bytes.Equal(newClipboard, localClipboard) {
 					localClipboard = newClipboard
@@ -66,7 +66,7 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 	}()
 
 	for clip := range clipboardChan {
-		logger.Debugf("local clipboard data changed: %s", clip)
+		log.Debug().Msgf("local clipboard data changed: %s", clip)
 		node.Broadcast(NewMessage(clip, ip.GetOutboundIP()))
 	}
 }
@@ -76,14 +76,14 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 		var msg Message
 		err := decode(conn, &msg)
 		if err == io.EOF {
-			logger.Warnf("client %s is disconnected", conn.RemoteAddr().String())
+			log.Warn().Msgf("client %s is disconnected", conn.RemoteAddr().String())
 			node.Close(conn)
 
 			return
 		}
 
 		if err != nil {
-			logger.Errorf("failed to decode clipboard data: %s", err)
+			log.Error().Msgf("failed to decode clipboard data: %s", err)
 			continue
 		}
 
@@ -91,10 +91,9 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 
 		cp.Set(msg.Data)
 
-		// We send the updated data to the channel for processing in monitorClipboard
 		externalUpdateChan <- msg.Data
 
-		logger.Debugf("received: %s from: %s", msg.Header.From, conn.RemoteAddr().String())
+		log.Debug().Msgf("received: %s from: %s", msg.Header.From, conn.RemoteAddr().String())
 
 		node.Broadcast(msg)
 	}
@@ -108,7 +107,7 @@ func fetchLocalClipboard(c clipboard.Manager) []byte {
 func encode(src interface{}) []byte {
 	encoded, err := msgpack.Marshal(src)
 	if err != nil {
-		logger.Errorf("failed to encode clipboard data: %s", err)
+		log.Error().Msgf("failed to encode clipboard data: %s", err)
 	}
 
 	return encoded

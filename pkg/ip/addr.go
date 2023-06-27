@@ -42,3 +42,7 @@ func MakeAddr(port int) string {
 func RemovePort(addr string) string {
 	return addr[:len(addr)-6]
 }
+
+func SetOutboundIP(ip string) {
+	outBoundIP = net.ParseIP(ip)
+}

@@ -4,6 +4,7 @@ import (
 	"belphegor/pkg/clipboard"
 	"belphegor/pkg/encryption"
 	"belphegor/pkg/ip"
+	"github.com/rs/zerolog/log"
 	"net"
 )
 
@@ -34,10 +35,10 @@ func (n *Node) ConnectTo(addr string) error {
 		return err
 	}
 
-	logger.Infof("Connected to the clipboard: %s", addr)
+	log.Info().Msgf("Connected to the clipboard: %s", addr)
 
 	n.nodes[addr] = c
-	go n.handleConnection(c) // Обрабатывайте входящие данные от этого соединения
+	go n.handleConnection(c)
 	return nil
 }
 
@@ -47,7 +48,7 @@ func (n *Node) Start() error {
 		return err
 	}
 
-	logger.Infof("Listening on %s", l.Addr().String())
+	log.Info().Msgf("Listening on %s", l.Addr().String())
 
 	defer l.Close()
 
@@ -57,9 +58,8 @@ func (n *Node) Start() error {
 			return err
 		}
 
-		logger.Infof("Accepted connection from %s", conn.RemoteAddr().String())
+		log.Info().Msgf("Accepted connection from %s", conn.RemoteAddr().String())
 
-		//n.nodes[ip.RemovePort(conn.RemoteAddr().String())] = conn
 		n.nodes[conn.RemoteAddr().String()] = conn
 		go n.handleConnection(conn)
 	}
@@ -81,7 +81,7 @@ func (n *Node) Broadcast(msg Message) {
 			// do not send messages back to sender
 			continue
 		}
-		logger.Debugf("sent message id: %s to %s: ", msg.Header.ID, addr)
+		log.Debug().Msgf("sent message id: %s to %s: ", msg.Header.ID, addr)
 		msg.Write(conn)
 	}
 }

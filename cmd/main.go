@@ -6,8 +6,11 @@ import (
 	"belphegor/pkg/encryption"
 	"belphegor/pkg/ip"
 	"flag"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
+	"os"
 	"syscall"
 )
 
@@ -17,32 +20,32 @@ var (
 	helpMsg  = `belphegor - ...`
 	password []byte
 
-	addr        string
+	addressIP   string
 	port        int
 	secure      bool
 	debug       bool
 	showVersion bool
-	help        bool
+	showHelp    bool
 )
 
 func init() {
-	flag.StringVar(&addr, "connect", "", "address to connect to (client mode)")
-	flag.IntVar(&port, "port", 0, "port to use (server mode)")
-	flag.BoolVar(&secure, "secure", false, "encrypt your data with a password")
-	flag.BoolVar(&debug, "debug", false, "print debug logs")
-	flag.BoolVar(&showVersion, "version", false, "print version")
-	flag.BoolVar(&help, "help", false, "print help")
+	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
+	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
+	flag.BoolVar(&secure, "secure", false, "Encrypt your data with a password")
+	flag.BoolVar(&debug, "debug", false, "Show debug logs")
+	flag.BoolVar(&showVersion, "version", false, "Show version")
+	flag.BoolVar(&showHelp, "help", false, "Show help")
 
 	flag.Parse()
 
+	initLogger(debug)
 }
 
 func main() {
 
 	if debug {
-		belphegor.Logger().Debug("Debug mode enabled")
-		belphegor.Logger().SetReportCaller(true)
-		belphegor.Logger().SetLevel(logrus.DebugLevel)
+		log.Info().Msg("Debug mode enabled")
+		// set report caller to true
 	}
 
 	if secure {
@@ -51,13 +54,12 @@ func main() {
 	}
 
 	if showVersion {
-		belphegor.Logger().Infof("version %s", version)
+		log.Printf("version %s", version)
 	}
 
-	if help {
-		belphegor.Logger().Info(helpMsg)
-		belphegor.Logger().Exit(0)
-		return
+	if showHelp {
+		log.Info().Msg(helpMsg)
+		os.Exit(0)
 	}
 
 	var node *belphegor.Node
@@ -67,11 +69,19 @@ func main() {
 		node = belphegor.NewNodeRandomPort(clipboard.NewManager(), enc(password))
 	}
 
-	go node.Start()
+	go func() {
+		if err := node.Start(); err != nil {
+			log.Error().Err(err).Msg("Failed to start the node")
+		}
+	}()
 
 	//todo add neighbor discovery by key or short word
-	if addr != "" {
-		go node.ConnectTo(addr)
+	if addressIP != "" {
+		go func() {
+			if err := node.ConnectTo(addressIP); err != nil {
+				log.Fatal().Err(err).Msg("Failed to connect to the node")
+			}
+		}()
 	}
 
 	select {}
@@ -83,4 +93,15 @@ func enc(password []byte) *encryption.Cipher {
 	}
 
 	return encryption.NewEncryption(password)
+}
+
+func initLogger(debug bool) {
+	if debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		logrus.SetReportCaller(true)
+
+		return
+	}
+
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 }
