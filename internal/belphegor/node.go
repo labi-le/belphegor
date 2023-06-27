@@ -2,7 +2,6 @@ package belphegor
 
 import (
 	"belphegor/pkg/clipboard"
-	"belphegor/pkg/encryption"
 	"belphegor/pkg/ip"
 	"github.com/rs/zerolog/log"
 	"net"
@@ -10,23 +9,21 @@ import (
 
 type Node struct {
 	clipboard   clipboard.Manager
-	enc         *encryption.Cipher
 	addr        string
 	nodes       map[string]net.Conn
 	lastMessage Message
 }
 
-func NewNode(clipboard clipboard.Manager, enc *encryption.Cipher, addr string) *Node {
+func NewNode(clipboard clipboard.Manager, addr string) *Node {
 	return &Node{
 		clipboard: clipboard,
-		enc:       enc,
 		addr:      addr,
 		nodes:     make(map[string]net.Conn),
 	}
 }
 
-func NewNodeRandomPort(clipboard clipboard.Manager, enc *encryption.Cipher) *Node {
-	return NewNode(clipboard, enc, ip.GetOutboundIP()+":0")
+func NewNodeRandomPort(clipboard clipboard.Manager) *Node {
+	return NewNode(clipboard, ip.GetOutboundIP()+":0")
 }
 
 func (n *Node) ConnectTo(addr string) error {
@@ -76,14 +73,6 @@ func (n *Node) handleConnection(conn net.Conn) {
 }
 
 func (n *Node) Broadcast(msg Message) {
-	if n.enc != nil {
-		var err error
-		msg.Data, err = n.enc.Encrypt(msg.Data)
-		if err != nil {
-			log.Error().Msgf("failed to encrypt clipboard data: %s", err)
-			return
-		}
-	}
 	for addr, conn := range n.nodes {
 		if msg.IsDuplicate(n.lastMessage) {
 			continue

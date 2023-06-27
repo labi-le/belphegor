@@ -3,15 +3,11 @@ package main
 import (
 	"belphegor/internal/belphegor"
 	"belphegor/pkg/clipboard"
-	"belphegor/pkg/encryption"
 	"belphegor/pkg/ip"
 	"flag"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/ssh/terminal"
 	"os"
-	"syscall"
 )
 
 var version = "dev"
@@ -27,16 +23,12 @@ Usage:
 Flags:
 	-connect string | ip:port to connect to the node (e.g. 192.168.0.12:7777)
 	-port int | the node will start on this port (e.g. 7777)
-	-secure | encrypt your data with a password
 	-debug | show debug logs
 	-version | show version
 	-help | show help
 `
-	password []byte
-
 	addressIP   string
 	port        int
-	secure      bool
 	debug       bool
 	showVersion bool
 	showHelp    bool
@@ -45,7 +37,6 @@ Flags:
 func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
 	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
-	flag.BoolVar(&secure, "secure", false, "Encrypt your data with a password")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
@@ -59,12 +50,6 @@ func main() {
 
 	if debug {
 		log.Info().Msg("Debug mode enabled")
-		// set report caller to true
-	}
-
-	if secure {
-		logrus.Print("Password for -secure: ")
-		password, _ = terminal.ReadPassword(int(syscall.Stdin))
 	}
 
 	if showVersion {
@@ -78,9 +63,9 @@ func main() {
 
 	var node *belphegor.Node
 	if port != 0 {
-		node = belphegor.NewNode(clipboard.NewManager(), enc(password), ip.MakeAddr(port))
+		node = belphegor.NewNode(clipboard.NewManager(), ip.MakeAddr(port))
 	} else {
-		node = belphegor.NewNodeRandomPort(clipboard.NewManager(), enc(password))
+		node = belphegor.NewNodeRandomPort(clipboard.NewManager())
 	}
 
 	go func() {
@@ -101,19 +86,10 @@ func main() {
 	select {}
 }
 
-func enc(password []byte) *encryption.Cipher {
-	if password == nil {
-		return nil
-	}
-
-	return encryption.NewEncryption(password)
-}
-
 func initLogger(debug bool) {
 	if debug {
+		log.Logger = log.With().Caller().Logger()
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		logrus.SetReportCaller(true)
-
 		return
 	}
 
