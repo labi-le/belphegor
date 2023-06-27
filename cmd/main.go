@@ -5,6 +5,7 @@ import (
 	"belphegor/pkg/clipboard"
 	"belphegor/pkg/ip"
 	"flag"
+	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"os"
@@ -59,7 +60,7 @@ func main() {
 	}
 
 	if showHelp {
-		log.Info().Msg(helpMsg)
+		fmt.Print(helpMsg)
 		os.Exit(0)
 	}
 
