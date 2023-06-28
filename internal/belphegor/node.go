@@ -114,6 +114,7 @@ func (n *Node) EnableNodeDiscover() {
 			Limit:     -1,
 			TimeLimit: -1,
 			Delay:     time.Second * 10,
+			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {
 				nodeAddr := NodeIP(d.Address)
