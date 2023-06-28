@@ -6,10 +6,18 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
 	"io"
+	"sync"
 )
 
-type Header struct {
-	ID uuid.UUID
+var messagePool = sync.Pool{
+	New: func() interface{} {
+		return &Message{
+			Header: Header{
+				ID: uuid.New(),
+			},
+			Data: []byte{},
+		}
+	},
 }
 
 type Message struct {
@@ -17,17 +25,29 @@ type Message struct {
 	Data   []byte
 }
 
-func (m Message) Write(w io.Writer) (int, error) {
+type Header struct {
+	ID uuid.UUID
+}
+
+func (m *Message) Write(w io.Writer) (int, error) {
 	return w.Write(encode(m))
 }
 
-func NewMessage(data []byte) Message {
-	return Message{Data: data, Header: Header{
-		ID: uuid.New(),
-	}}
+func NewMessage(data []byte) *Message {
+	//return Message{Data: data, Header: Header{
+	//	ID: uuid.New(),
+	//}}
+	msg := messagePool.Get().(*Message)
+	msg.Data = data
+
+	return msg
 }
 
-func (m Message) IsDuplicate(msg Message) bool {
+func (m *Message) IsDuplicate(msg *Message) bool {
+	if msg == nil {
+		return false
+	}
+
 	return m.Header.ID == msg.Header.ID && bytes.Equal(m.Data, msg.Data)
 }
 

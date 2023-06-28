@@ -24,7 +24,7 @@ type Node struct {
 	addr        string
 	port        string
 	storage     Storage
-	lastMessage Message
+	lastMessage *Message
 }
 
 func NewNode(clipboard clipboard.Manager, addr string) *Node {
@@ -92,11 +92,13 @@ func (n *Node) handleConnection(conn net.Conn) {
 	externalUpdateChan := make(chan []byte)
 
 	defer close(externalUpdateChan)
-	go monitorClipboard(n, n.clipboard, 1, externalUpdateChan)
+	go monitorClipboard(n, n.clipboard, 2, externalUpdateChan)
 	handleClipboardData(n, conn, n.clipboard, externalUpdateChan)
 }
 
-func (n *Node) Broadcast(msg Message) {
+func (n *Node) Broadcast(msg *Message) {
+	defer messagePool.Put(msg)
+
 	for addr, conn := range n.storage.All() {
 		if msg.IsDuplicate(n.lastMessage) {
 			continue

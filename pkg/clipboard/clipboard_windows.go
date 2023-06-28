@@ -106,8 +106,6 @@ func readAll() (string, error) {
 }
 
 func writeAll(text string) error {
-	// LockOSThread ensure that the whole method will keep executing on the same thread from begin to end (it actually locks the goroutine thread attribution).
-	// Otherwise if the goroutine switch thread during execution (which is a common practice), the OpenClipboard and CloseClipboard will happen on two different threads, and it will result in a clipboard deadlock.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -122,10 +120,8 @@ func writeAll(text string) error {
 		return err
 	}
 
-	data := syscall.StringToUTF16(text)
+	data, _ := syscall.UTF16FromString(text)
 
-	// "If the hMem parameter identifies a memory object, the object must have
-	// been allocated using the function with the GMEM_MOVEABLE flag."
 	h, _, err := globalAlloc.Call(gmemMoveable, uintptr(len(data)*int(unsafe.Sizeof(data[0]))))
 	if h == 0 {
 		_, _, _ = closeClipboard.Call()

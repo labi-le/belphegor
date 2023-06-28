@@ -16,11 +16,11 @@ build: clean
 ifeq ($(OS),Windows_NT)
 	 $(MAKE) build-windows
 else
-	go build --ldflags '-extldflags "-static"' -v -o $(BUILD_PATH)$(PROJ_NAME) $(MAIN_PATH)
+	go build --ldflags '-s -w -extldflags "-static"' -v -o $(BUILD_PATH)$(PROJ_NAME) $(MAIN_PATH)
 endif
 
 build-windows: clean
-	go build --ldflags '-extldflags "-static"' -v -o $(BUILD_PATH)$(PROJ_NAME).exe $(MAIN_PATH)
+	go build -ldflags "-s -w -H=windowsgui -extldflags -static" -v -o $(BUILD_PATH)$(PROJ_NAME).exe $(MAIN_PATH)
 
 install:build
 ifeq ($(OS),Windows_NT)
@@ -46,3 +46,7 @@ tests:
 
 lint:
 	golangci-lint run
+
+profiling:
+	powershell.exe -command Invoke-WebRequest -Uri "http://localhost:8080/debug/pprof/heap" -OutFile "heap.out"
+	go tool pprof heap.out
