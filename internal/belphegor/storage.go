@@ -48,5 +48,10 @@ func (n *NodeStorage) Exist(ip NodeIP) bool {
 }
 
 func (n *NodeStorage) All() map[NodeIP]NodeInfo {
-	return n.nodes
+	nodes := make(map[NodeIP]NodeInfo)
+	for k, v := range n.nodes {
+		nodes[k] = v
+	}
+
+	return nodes
 }
