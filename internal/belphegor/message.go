@@ -31,6 +31,19 @@ type Data struct {
 	Length   int
 }
 
+func (d Data) DecodeMsgpack(decoder *msgpack.Decoder) error {
+	err := decoder.Decode(&d.Content)
+	if err != nil {
+		return err
+	}
+
+	d.Hash = sha256Hash(d.Content)
+	d.MimeType = http.DetectContentType(d.Content)
+	d.Length = len(d.Content)
+
+	return nil
+}
+
 func NewData(content []byte) Data {
 	return Data{
 		Content:  content,
