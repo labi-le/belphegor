@@ -61,10 +61,6 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 			break
 		}
 
-		if msg.IsDuplicate(node.lastMessage) {
-			continue
-		}
-
 		node.lastMessage = msg
 
 		cp.Set(msg.Data.Content)
