@@ -75,7 +75,7 @@ func (m *Message) IsDuplicate(msg *Message) bool {
 	}
 
 	log.Trace().Msgf(
-		"compare header %s with %s and hash %s with %s",
+		"compare header %s with %s and hash %x with %x",
 		m.Header.ID,
 		msg.Header.ID,
 		m.Data.Hash,
