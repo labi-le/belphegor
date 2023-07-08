@@ -18,35 +18,22 @@ var (
 				Header: Header{
 					ID: uuid.New(),
 				},
-				Data: Data{},
+				Content: []byte{},
 			}
 		},
 	}
 )
 
-type Data struct {
-	Content  []byte
-	Hash     []byte
-	MimeType string
-	Length   int
-}
-
-func NewData(content []byte) Data {
-	return Data{
-		Content:  content,
-		Hash:     sha256Hash(content),
-		MimeType: http.DetectContentType(content),
-		Length:   len(content),
-	}
-}
-
 type Message struct {
-	Header Header
-	Data   Data
+	Header  Header
+	Content []byte
 }
 
 type Header struct {
-	ID uuid.UUID
+	ID       uuid.UUID
+	MimeType string
+	Length   int
+	Hash     []byte
 }
 
 func (m *Message) Write(w io.Writer) (int, error) {
@@ -54,11 +41,17 @@ func (m *Message) Write(w io.Writer) (int, error) {
 }
 
 func NewMessage(data []byte) *Message {
-	//return Message{Data: data, Header: Header{
+	//return Message{Content: data, Header: Header{
 	//	ID: uuid.New(),
 	//}}
 	msg := messagePool.Get().(*Message)
-	msg.Data = NewData(data)
+	msg.Content = data
+	msg.Header = Header{
+		Hash:     sha256Hash(data),
+		MimeType: http.DetectContentType(data),
+		Length:   len(data),
+		ID:       uuid.New(),
+	}
 
 	return msg
 }
@@ -78,10 +71,10 @@ func (m *Message) IsDuplicate(msg *Message) bool {
 		"compare header %s with %s and hash %x with %x",
 		m.Header.ID,
 		msg.Header.ID,
-		m.Data.Hash,
-		msg.Data.Hash,
+		m.Header.Hash,
+		msg.Header.Hash,
 	)
-	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data.Hash, msg.Data.Hash)
+	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Header.Hash, msg.Header.Hash)
 }
 
 func (m *Message) Release() {

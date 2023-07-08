@@ -20,11 +20,11 @@ type NodeInfo struct {
 }
 
 type Node struct {
-	clipboard   clipboard.Manager
-	addr        string
-	port        string
-	storage     Storage
-	lastMessage *Message
+	clipboard           clipboard.Manager
+	addr                string
+	port                string
+	storage             Storage
+	lastReceivedMessage *Message
 }
 
 func NewNode(clipboard clipboard.Manager, addr string) *Node {
@@ -89,7 +89,7 @@ func (n *Node) Start() error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) {
-	externalUpdateChan := make(chan Data)
+	externalUpdateChan := make(chan []byte)
 	defer close(externalUpdateChan)
 
 	go monitorClipboard(n, n.clipboard, 2, externalUpdateChan)
@@ -105,11 +105,11 @@ func (n *Node) Broadcast(msg *Message, except ...NodeIP) {
 	}
 
 	for addr, conn := range nodes {
-		if msg.IsDuplicate(n.lastMessage) {
+		if msg.IsDuplicate(n.lastReceivedMessage) {
 			continue
 		}
 
-		log.Debug().Msgf("sent message id: %s to %s, by %x hash", msg.Header.ID, addr, msg.Data.Hash)
+		log.Debug().Msgf("sent message id: %s to %s, by %x hash", msg.Header.ID, addr, msg.Header.Hash)
 		msg.Write(conn)
 	}
 }
