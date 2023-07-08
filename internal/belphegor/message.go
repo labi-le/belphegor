@@ -32,7 +32,7 @@ type Data struct {
 }
 
 func (d Data) DecodeMsgpack(decoder *msgpack.Decoder) error {
-	err := decoder.Decode(&d.Content)
+	err := decoder.Decode(&d)
 	if err != nil {
 		return err
 	}
