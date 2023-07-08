@@ -104,7 +104,7 @@ func (n *Node) Broadcast(msg *Message) {
 			continue
 		}
 
-		log.Debug().Msgf("sent message id: %s to %s: ", msg.Header.ID, addr)
+		log.Debug().Msgf("sent message id: %s to %s", msg.Header.ID, addr)
 		msg.Write(conn)
 	}
 }
@@ -115,7 +115,7 @@ func (n *Node) EnableNodeDiscover() {
 			Payload:   []byte(n.port),
 			Limit:     -1,
 			TimeLimit: -1,
-			Delay:     time.Second * 10,
+			Delay:     time.Minute,
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {

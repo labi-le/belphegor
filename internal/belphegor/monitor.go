@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, externalUpdateChan chan []byte) {
+func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, externalUpdateChan <-chan []byte) {
 	var (
 		clipboardChan = make(chan []byte)
 	)
@@ -22,11 +22,12 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 			select {
 			case clip := <-externalUpdateChan:
 				if len(clip) > 0 {
-					log.Trace().Msgf("received external clipboard update: %s", clip)
+					log.Trace().Msg("received external clipboard update")
 					localClipboard = clip
 				}
 			default:
 				newClipboard := fetchLocalClipboard(cp)
+				log.Trace().Msgf("new cp: %d, old cp: %d", len(newClipboard), len(localClipboard))
 				if !bytes.Equal(newClipboard, localClipboard) {
 					localClipboard = newClipboard
 					clipboardChan <- localClipboard
@@ -37,7 +38,7 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 	}()
 
 	for clip := range clipboardChan {
-		log.Trace().Msgf("local clipboard data changed: %s", clip)
+		log.Trace().Msg("local clipboard data changed")
 		node.Broadcast(NewMessage(clip))
 	}
 }
@@ -54,7 +55,6 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 		err := decode(conn, msg)
 		if err != nil {
 			if opErr, ok := err.(*net.OpError); ok || opErr != io.EOF {
-				log.Trace().Err(err).Msg("minor network error")
 				return
 			}
 

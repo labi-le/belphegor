@@ -53,6 +53,7 @@ func init() {
 func main() {
 	if debug {
 		log.Info().Msg("debug mode enabled")
+		log.Debug().Msgf("version %s", version)
 	}
 
 	if showVersion {
