@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, externalUpdateChan chan *Data) {
+func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, externalUpdateChan chan Data) {
 	var (
 		clipboardChan = make(chan []byte)
 	)
@@ -42,7 +42,7 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 	}
 }
 
-func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, externalUpdateChan chan *Data) {
+func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, externalUpdateChan chan Data) {
 	ip := NodeIP(conn.RemoteAddr().(*net.TCPAddr).IP.String())
 	defer func() {
 		log.Info().Msgf("close connection: %s", ip)
@@ -73,7 +73,7 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 	}
 }
 
-func fetchLocalClipboard(c clipboard.Manager) *Data {
+func fetchLocalClipboard(c clipboard.Manager) Data {
 	clip, _ := c.Get()
 	return NewData(clip)
 }

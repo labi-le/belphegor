@@ -89,9 +89,9 @@ func (n *Node) Start() error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) {
-	externalUpdateChan := make(chan *Data)
-
+	externalUpdateChan := make(chan Data)
 	defer close(externalUpdateChan)
+
 	go monitorClipboard(n, n.clipboard, 2, externalUpdateChan)
 	handleClipboardData(n, conn, n.clipboard, externalUpdateChan)
 }

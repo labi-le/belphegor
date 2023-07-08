@@ -18,7 +18,7 @@ var (
 				Header: Header{
 					ID: uuid.New(),
 				},
-				Data: &Data{},
+				Data: Data{},
 			}
 		},
 	}
@@ -31,8 +31,8 @@ type Data struct {
 	Length   int
 }
 
-func NewData(content []byte) *Data {
-	return &Data{
+func NewData(content []byte) Data {
+	return Data{
 		Content:  content,
 		Hash:     sha256Hash(content),
 		MimeType: http.DetectContentType(content),
@@ -42,7 +42,7 @@ func NewData(content []byte) *Data {
 
 type Message struct {
 	Header Header
-	Data   *Data
+	Data   Data
 }
 
 type Header struct {
@@ -72,6 +72,13 @@ func (m *Message) IsDuplicate(msg *Message) bool {
 		return false
 	}
 
+	log.Trace().Msgf(
+		"compare header %s with %s and hash %s with %s",
+		m.Header.ID,
+		msg.Header.ID,
+		m.Data.Hash,
+		msg.Data.Hash,
+	)
 	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data.Hash, msg.Data.Hash)
 }
 
