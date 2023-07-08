@@ -89,17 +89,22 @@ func (n *Node) Start() error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) {
-	externalUpdateChan := make(chan []byte)
+	externalUpdateChan := make(chan *Data)
 
 	defer close(externalUpdateChan)
 	go monitorClipboard(n, n.clipboard, 2, externalUpdateChan)
 	handleClipboardData(n, conn, n.clipboard, externalUpdateChan)
 }
 
-func (n *Node) Broadcast(msg *Message) {
-	defer messagePool.Put(msg)
+func (n *Node) Broadcast(msg *Message, except ...NodeIP) {
+	defer msg.Release()
 
-	for addr, conn := range n.storage.All() {
+	nodes := n.storage.All()
+	for _, addr := range except {
+		delete(nodes, addr)
+	}
+
+	for addr, conn := range nodes {
 		if msg.IsDuplicate(n.lastMessage) {
 			continue
 		}

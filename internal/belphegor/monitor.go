@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, externalUpdateChan <-chan []byte) {
+func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, externalUpdateChan chan *Data) {
 	var (
 		clipboardChan = make(chan []byte)
 	)
@@ -21,16 +21,16 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 		for range time.Tick(delay * time.Second) {
 			select {
 			case clip := <-externalUpdateChan:
-				if len(clip) > 0 {
+				if clip.Length > 0 {
 					log.Trace().Msg("received external clipboard update")
 					localClipboard = clip
 				}
 			default:
 				newClipboard := fetchLocalClipboard(cp)
-				log.Trace().Msgf("new cp: %d, old cp: %d", len(newClipboard), len(localClipboard))
-				if !bytes.Equal(newClipboard, localClipboard) {
+				log.Trace().Msgf("new cp: %d, old cp: %d", newClipboard.Length, localClipboard.Length)
+				if !bytes.Equal(newClipboard.Hash, localClipboard.Hash) {
 					localClipboard = newClipboard
-					clipboardChan <- localClipboard
+					clipboardChan <- localClipboard.Content
 				}
 			}
 		}
@@ -43,7 +43,7 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 	}
 }
 
-func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, externalUpdateChan chan []byte) {
+func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, externalUpdateChan chan *Data) {
 	ip := NodeIP(conn.RemoteAddr().(*net.TCPAddr).IP.String())
 	defer func() {
 		log.Info().Msgf("close connection: %s", ip)
@@ -64,17 +64,17 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 
 		node.lastMessage = msg
 
-		cp.Set(msg.Data)
+		cp.Set(msg.Data.Content)
 
 		externalUpdateChan <- msg.Data
 
 		log.Debug().Msgf("received: %s from: %s", msg.Header.ID, ip)
 
-		node.Broadcast(msg)
+		node.Broadcast(msg, ip)
 	}
 }
 
-func fetchLocalClipboard(c clipboard.Manager) []byte {
+func fetchLocalClipboard(c clipboard.Manager) *Data {
 	clip, _ := c.Get()
-	return clip
+	return NewData(clip)
 }

@@ -7,24 +7,42 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
 	"io"
+	"net/http"
 	"sync"
 )
 
-var messagePool = sync.Pool{
-	New: func() interface{} {
-		return &Message{
-			Header: Header{
-				ID: uuid.New(),
-			},
-			Data: []byte{},
-		}
-	},
+var (
+	messagePool = sync.Pool{
+		New: func() interface{} {
+			return &Message{
+				Header: Header{
+					ID: uuid.New(),
+				},
+				Data: &Data{},
+			}
+		},
+	}
+)
+
+type Data struct {
+	Content  []byte
+	Hash     []byte
+	MimeType string
+	Length   int
+}
+
+func NewData(content []byte) *Data {
+	return &Data{
+		Content:  content,
+		Hash:     sha256Hash(content),
+		MimeType: http.DetectContentType(content),
+		Length:   len(content),
+	}
 }
 
 type Message struct {
-	Header   Header
-	Data     []byte
-	DataHash []byte
+	Header Header
+	Data   *Data
 }
 
 type Header struct {
@@ -40,8 +58,7 @@ func NewMessage(data []byte) *Message {
 	//	ID: uuid.New(),
 	//}}
 	msg := messagePool.Get().(*Message)
-	msg.Data = data
-	msg.DataHash = sha256Hash(data)
+	msg.Data = NewData(data)
 
 	return msg
 }
@@ -55,7 +72,11 @@ func (m *Message) IsDuplicate(msg *Message) bool {
 		return false
 	}
 
-	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data, msg.Data) || bytes.Equal(m.DataHash, msg.DataHash)
+	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data.Hash, msg.Data.Hash)
+}
+
+func (m *Message) Release() {
+	messagePool.Put(m)
 }
 
 func encode(src interface{}) []byte {
