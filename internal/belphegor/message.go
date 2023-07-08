@@ -64,7 +64,9 @@ func NewMessage(data []byte) *Message {
 }
 
 func sha256Hash(data []byte) []byte {
-	return sha256.New().Sum(data)
+	h := sha256.New()
+	h.Write(data)
+	return h.Sum(nil)
 }
 
 func (m *Message) IsDuplicate(msg *Message) bool {
