@@ -109,7 +109,7 @@ func (n *Node) Broadcast(msg *Message, except ...NodeIP) {
 			continue
 		}
 
-		log.Debug().Msgf("sent message id: %s to %s, by %s hash", msg.Header.ID, addr, msg.Data.Hash)
+		log.Debug().Msgf("sent message id: %s to %s, by %x hash", msg.Header.ID, addr, msg.Data.Hash)
 		msg.Write(conn)
 	}
 }

@@ -67,7 +67,7 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 
 		externalUpdateChan <- msg.Data
 
-		log.Debug().Msgf("received: %s from: %s, by hash: %s", msg.Header.ID, ip, msg.Data.Hash)
+		log.Debug().Msgf("received: %s from: %s, by hash: %x", msg.Header.ID, ip, msg.Data.Hash)
 
 		node.Broadcast(msg, ip)
 	}

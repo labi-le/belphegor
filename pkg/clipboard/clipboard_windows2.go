@@ -18,7 +18,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"image"
 	"image/color"
 	"image/png"
@@ -57,13 +56,11 @@ func (p *windows) Get() ([]byte, error) {
 
 	buf = Read(FmtImage)
 	if buf != nil {
-		log.Info().Msg("image")
 		return buf, nil
 	}
 
 	buf = Read(FmtText)
 	if buf != nil {
-		log.Info().Msg("text")
 		return buf, nil
 	}
 
