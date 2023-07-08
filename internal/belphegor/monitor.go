@@ -27,7 +27,6 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 				}
 			default:
 				newClipboard := fetchLocalClipboard(cp)
-				log.Trace().Msgf("new cp: %d, old cp: %d", newClipboard.Length, localClipboard.Length)
 				if !bytes.Equal(newClipboard.Hash, localClipboard.Hash) {
 					localClipboard = newClipboard
 					clipboardChan <- localClipboard.Content
