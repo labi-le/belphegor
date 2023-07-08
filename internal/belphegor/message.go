@@ -2,6 +2,7 @@ package belphegor
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
@@ -21,8 +22,9 @@ var messagePool = sync.Pool{
 }
 
 type Message struct {
-	Header Header
-	Data   []byte
+	Header   Header
+	Data     []byte
+	DataHash []byte
 }
 
 type Header struct {
@@ -39,8 +41,13 @@ func NewMessage(data []byte) *Message {
 	//}}
 	msg := messagePool.Get().(*Message)
 	msg.Data = data
+	msg.DataHash = sha256Hash(data)
 
 	return msg
+}
+
+func sha256Hash(data []byte) []byte {
+	return sha256.New().Sum(data)
 }
 
 func (m *Message) IsDuplicate(msg *Message) bool {
@@ -48,7 +55,7 @@ func (m *Message) IsDuplicate(msg *Message) bool {
 		return false
 	}
 
-	return m.Header.ID == msg.Header.ID && bytes.Equal(m.Data, msg.Data)
+	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data, msg.Data) || bytes.Equal(m.DataHash, msg.DataHash)
 }
 
 func encode(src interface{}) []byte {
