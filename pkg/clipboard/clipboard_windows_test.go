@@ -20,11 +20,18 @@ func Test_windows_Set(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "default test",
+			name:    "image test",
 			args:    args{data: getTestFile(t)},
 			want:    getTestFile(t),
 			wantErr: false,
-		}}
+		},
+		{
+			name:    "text test",
+			args:    args{data: []byte("test")},
+			want:    []byte("test"),
+			wantErr: false,
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := NewManager()
@@ -37,7 +44,7 @@ func Test_windows_Set(t *testing.T) {
 				return
 			}
 
-			if bytes.Equal(got, tt.want) {
+			if !bytes.Equal(got, tt.want) {
 				t.Errorf("Get() got = %v, want %v", got, tt.want)
 			}
 		})
