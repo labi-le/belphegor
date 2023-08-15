@@ -2,10 +2,13 @@ package belphegor
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
 	"io"
+	"net/http"
+	"runtime"
 	"sync"
 )
 
@@ -14,19 +17,37 @@ var messagePool = sync.Pool{
 		return &Message{
 			Header: Header{
 				ID: uuid.New(),
+				OS: os,
 			},
-			Data: []byte{},
+			Data: Data{},
 		}
 	},
 }
 
+var os = &OS{
+	Name: runtime.GOOS,
+	Arch: runtime.GOARCH,
+}
+
 type Message struct {
 	Header Header
-	Data   []byte
+	Data   Data
+}
+
+type Data struct {
+	Raw  []byte
+	Hash []byte
+}
+
+type OS struct {
+	Name string
+	Arch string
 }
 
 type Header struct {
-	ID uuid.UUID
+	ID       uuid.UUID
+	OS       *OS
+	MimeType string
 }
 
 func (m *Message) Write(w io.Writer) (int, error) {
@@ -38,7 +59,11 @@ func NewMessage(data []byte) *Message {
 	//	ID: uuid.New(),
 	//}}
 	msg := messagePool.Get().(*Message)
-	msg.Data = data
+	msg.Data = Data{
+		Raw:  data,
+		Hash: hash(data),
+	}
+	msg.Header.MimeType = http.DetectContentType(data)
 
 	return msg
 }
@@ -48,7 +73,7 @@ func (m *Message) IsDuplicate(msg *Message) bool {
 		return false
 	}
 
-	return m.Header.ID == msg.Header.ID && bytes.Equal(m.Data, msg.Data)
+	return m.Header.ID == msg.Header.ID && bytes.Equal(m.Data.Hash, msg.Data.Hash)
 }
 
 func encode(src interface{}) []byte {
@@ -62,4 +87,11 @@ func encode(src interface{}) []byte {
 
 func decode(r io.Reader, dst interface{}) error {
 	return msgpack.NewDecoder(r).Decode(dst)
+}
+
+func hash(data []byte) []byte {
+	sha := sha256.New()
+	sha.Write(data)
+
+	return sha.Sum(nil)
 }

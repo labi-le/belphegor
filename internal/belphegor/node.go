@@ -104,7 +104,7 @@ func (n *Node) Broadcast(msg *Message) {
 			continue
 		}
 
-		log.Debug().Msgf("sent message id: %s to %s: ", msg.Header.ID, addr)
+		log.Debug().Msgf("sent message id: %s to %s by hash %x", msg.Header.ID, addr, msg.Data.Hash)
 		msg.Write(conn)
 	}
 }

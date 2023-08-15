@@ -68,9 +68,9 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 
 		node.lastMessage = msg
 
-		cp.Set(msg.Data)
+		cp.Set(msg.Data.Raw)
 
-		externalUpdateChan <- msg.Data
+		externalUpdateChan <- msg.Data.Raw
 
 		log.Debug().Msgf("received: %s from: %s", msg.Header.ID, ip)
 
