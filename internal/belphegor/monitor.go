@@ -53,8 +53,12 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 
 		err := decode(conn, msg)
 		if err != nil {
-			if opErr, ok := err.(*net.OpError); ok || opErr != io.EOF {
-				log.Trace().Err(err).Msg("minor network error")
+			if err == io.EOF {
+				log.Trace().Msg("connection closed")
+				return
+			}
+			if opErr, ok := err.(*net.OpError); ok {
+				log.Trace().Err(opErr).Msg("connection closed")
 				return
 			}
 
