@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const DefaultDiscoverDelay = 60 * time.Second
+
 // NodeIP e.g. ip
 type NodeIP string
 
@@ -20,29 +22,35 @@ type NodeInfo struct {
 }
 
 type Node struct {
-	clipboard   clipboard.Manager
-	addr        string
-	port        string
-	storage     Storage
-	lastMessage *Message
+	clipboard     clipboard.Manager
+	addr          string
+	port          string
+	storage       Storage
+	lastMessage   *Message
+	discoverDelay time.Duration
 }
 
-func NewNode(clipboard clipboard.Manager, addr string) *Node {
+func NewNode(clipboard clipboard.Manager, addr string, discoverDelay time.Duration) *Node {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		log.Fatal().Msgf("invalid address: %s", addr)
 	}
 
+	if discoverDelay == 0 {
+		discoverDelay = DefaultDiscoverDelay
+	}
+
 	return &Node{
-		clipboard: clipboard,
-		addr:      addr,
-		port:      port,
-		storage:   NewNodeStorage(),
+		clipboard:     clipboard,
+		addr:          addr,
+		port:          port,
+		storage:       NewNodeStorage(),
+		discoverDelay: discoverDelay,
 	}
 }
 
-func NewNodeRandomPort(clipboard clipboard.Manager) *Node {
-	return NewNode(clipboard, genPort())
+func NewNodeRandomPort(clipboard clipboard.Manager, discoverDelay time.Duration) *Node {
+	return NewNode(clipboard, genPort(), discoverDelay)
 }
 
 func genPort() string {
@@ -104,7 +112,13 @@ func (n *Node) Broadcast(msg *Message) {
 			continue
 		}
 
-		log.Debug().Msgf("sent message id: %s to %s by hash %x", msg.Header.ID, addr, msg.Data.Hash)
+		log.Debug().
+			Msgf("sent message, header: %v, id: %s to %s, by hash %x",
+				msg.Header,
+				msg.Header.ID,
+				addr,
+				shortHash(msg.Data.Hash),
+			)
 		msg.Write(conn)
 	}
 }
@@ -115,7 +129,7 @@ func (n *Node) EnableNodeDiscover() {
 			Payload:   []byte(n.port),
 			Limit:     -1,
 			TimeLimit: -1,
-			Delay:     time.Second * 10,
+			Delay:     n.discoverDelay,
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {

@@ -2,7 +2,7 @@ package belphegor
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto/sha1"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
@@ -90,8 +90,12 @@ func decode(r io.Reader, dst interface{}) error {
 }
 
 func hash(data []byte) []byte {
-	sha := sha256.New()
+	sha := sha1.New()
 	sha.Write(data)
 
 	return sha.Sum(nil)
+}
+
+func shortHash(oldHash []byte) []byte {
+	return oldHash[:4]
 }
