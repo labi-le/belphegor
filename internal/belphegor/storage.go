@@ -2,51 +2,70 @@ package belphegor
 
 import (
 	"net"
+	"strconv"
 	"sync"
 )
 
 type Storage interface {
 	Add(conn net.Conn)
-	Delete(hash NodeIP)
-	Get(addr NodeIP) net.Conn
-	Exist(hash NodeIP) bool
-	All() map[NodeIP]NodeInfo
+	Delete(hash IP)
+	Get(addr IP) (net.Conn, bool)
+	Exist(hash IP) bool
+	All(exclude ...IP) Nodes
 }
 
-type NodeStorage struct {
-	nodes      map[NodeIP]NodeInfo
-	nodesMutex sync.Mutex
+type Nodes []NodeInfo
+
+type SyncMapStorage struct {
+	m sync.Map
 }
 
-func NewNodeStorage() *NodeStorage {
-	return &NodeStorage{nodes: make(map[NodeIP]NodeInfo)}
-}
-
-func (n *NodeStorage) Add(conn net.Conn) {
+func (s *SyncMapStorage) Add(conn net.Conn) {
 	host, port, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
-	n.nodes[NodeIP(host)] = NodeInfo{
-		Port: port,
+	portInt, _ := strconv.Atoi(port)
+	s.m.Store(IP(host), NodeInfo{
+		Port: portInt,
 		Conn: conn,
-	}
+	})
 }
 
-func (n *NodeStorage) Delete(ip NodeIP) {
-	conn, ok := n.nodes[ip]
+func (s *SyncMapStorage) Delete(hash IP) {
+	s.m.Delete(hash)
+}
+
+func (s *SyncMapStorage) Get(addr IP) (net.Conn, bool) {
+	v, ok := s.m.Load(addr)
 	if !ok {
-		return
+		return nil, false
 	}
-	_ = conn.Close()
-	delete(n.nodes, ip)
+	return v.(NodeInfo).Conn, true
 }
 
-func (n *NodeStorage) Get(ip NodeIP) net.Conn {
-	return n.nodes[ip]
-}
-func (n *NodeStorage) Exist(ip NodeIP) bool {
-	return n.nodes[ip] != (NodeInfo{})
+func (s *SyncMapStorage) Exist(hash IP) bool {
+	_, ok := s.m.Load(hash)
+	return ok
 }
 
-func (n *NodeStorage) All() map[NodeIP]NodeInfo {
-	return n.nodes
+func (s *SyncMapStorage) All(exclude ...IP) Nodes {
+	var nodes Nodes
+	s.m.Range(func(key, value any) bool {
+		for _, ip := range exclude {
+			if ip == key.(IP) {
+				return true
+			}
+		}
+
+		nodes = append(nodes, NodeInfo{
+			IP:   key.(IP),
+			Port: value.(NodeInfo).Port,
+			Conn: value.(NodeInfo).Conn,
+		})
+		return true
+	})
+	return nodes
+}
+
+func NewSyncMapStorage() Storage {
+	return &SyncMapStorage{}
 }

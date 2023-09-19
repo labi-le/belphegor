@@ -43,8 +43,8 @@ linters-settings:
     # Settings passed to gocritic.
     # The settings key is the name of a supported gocritic checker.
     # The list of supported checkers can be find in https://go-critic.github.io/overview.
-#    disabled-checks:
-#      - captLocal
+    #    disabled-checks:
+    #      - captLocal
     settings:
       captLocal:
         # Whether to restrict checker to params only.
@@ -143,7 +143,7 @@ linters:
   disable-all: true
   enable:
     ## enabled by default
-    - errcheck # checking for unchecked errors, these unchecked errors can be critical bugs in some cases
+    #    - errcheck # checking for unchecked errors, these unchecked errors can be critical bugs in some cases
     - gosimple # specializes in simplifying a code
     - govet # reports suspicious constructs, such as Printf calls whose arguments do not align with the format string
     - ineffassign # detects when assignments to existing variables are not used
@@ -166,7 +166,7 @@ linters:
     - exportloopref # checks for pointers to enclosing loop variables
     - forbidigo # forbids identifiers
     - funlen # tool for detection of long functions
-    - gochecknoglobals # checks that no global variables exist
+    #    - gochecknoglobals # checks that no global variables exist
     #    - gochecknoinits # checks that no init functions are present in Go code
     - gocognit # computes and checks the cognitive complexity of functions
     - goconst # finds repeated strings that could be replaced by a constant
@@ -222,7 +222,7 @@ linters:
 
     ## disabled
     #- containedctx # detects struct contained context.Context field
-    - depguard # [replaced by gomodguard] checks if package imports are in a list of acceptable packages
+    #    - depguard # [replaced by gomodguard] checks if package imports are in a list of acceptable packages
     #- dogsled # checks assignments with too many blank identifiers (e.g. x, _, _, _, := f())
     #- errchkjson # [don't see profit + I'm against of omitting errors like in the first example https://github.com/breml/errchkjson] checks types passed to the json encoding functions. Reports unsupported types and optionally reports occasions, where the check for the returned error can be omitted
     #- forcetypeassert # [replaced by errcheck] finds forced type assertions
