@@ -3,6 +3,7 @@ package belphegor
 import (
 	"belphegor/pkg/clipboard"
 	"belphegor/pkg/ip"
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
 	"math/rand"
@@ -13,49 +14,79 @@ import (
 
 const DefaultDiscoverDelay = 60 * time.Second
 
-// NodeIP e.g. ip
-type NodeIP string
+// IP e.g. 192.168.0.45
+type IP string
 
 type NodeInfo struct {
-	Port string
+	IP IP
 	net.Conn
+	Port int
 }
 
 type Node struct {
-	clipboard     clipboard.Manager
-	addr          string
-	port          string
-	storage       Storage
-	lastMessage   *Message
-	discoverDelay time.Duration
+	clipboard      clipboard.Manager
+	storage        Storage
+	lastMessage    Message
+	publicPort     int
+	discoverDelay  time.Duration
+	localClipboard Channel
 }
 
-func NewNode(clipboard clipboard.Manager, addr string, discoverDelay time.Duration) *Node {
-	_, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		log.Fatal().Msgf("invalid address: %s", addr)
+func NewNode(
+	clipboard clipboard.Manager,
+	port int,
+	discoverDelay time.Duration,
+	storage Storage,
+	channel Channel,
+) *Node {
+	if port <= 0 {
+		log.Fatal().Msgf("invalid publicPort: %d", port)
 	}
 
 	if discoverDelay == 0 {
 		discoverDelay = DefaultDiscoverDelay
 	}
 
+	go stats(storage)
+
 	return &Node{
-		clipboard:     clipboard,
-		addr:          addr,
-		port:          port,
-		storage:       NewNodeStorage(),
-		discoverDelay: discoverDelay,
+		clipboard:      clipboard,
+		publicPort:     port,
+		storage:        storage,
+		discoverDelay:  discoverDelay,
+		localClipboard: channel,
 	}
 }
 
-func NewNodeRandomPort(clipboard clipboard.Manager, discoverDelay time.Duration) *Node {
-	return NewNode(clipboard, genPort(), discoverDelay)
+func stats(storage Storage) {
+	for range time.Tick(5 * time.Second) {
+		nodes := storage.All()
+		log.Trace().Msgf("nodes count: %d", len(nodes))
+		for _, info := range nodes {
+			log.Trace().Msgf("node %s %d", info.IP, info.Port)
+		}
+
+	}
 }
 
-func genPort() string {
-	// range port 7000 - 8000
-	return ":" + strconv.Itoa(rand.Intn(1000)+7000)
+func NewNodeRandomPort(
+	clipboard clipboard.Manager,
+	discoverDelay time.Duration,
+	storage Storage,
+	channel Channel,
+) *Node {
+	return NewNode(
+		clipboard,
+		genPort(),
+		discoverDelay,
+		storage,
+		channel,
+	)
+}
+
+func genPort() int {
+	cryptoRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return cryptoRand.Intn(1000) + 7000
 }
 
 func (n *Node) ConnectTo(addr string) error {
@@ -68,12 +99,12 @@ func (n *Node) ConnectTo(addr string) error {
 
 	n.storage.Add(c)
 
-	go n.handleConnection(c)
+	go n.handleConnection(c, n.localClipboard)
 	return nil
 }
 
-func (n *Node) Start() error {
-	l, err := net.Listen("tcp", `:`+n.port)
+func (n *Node) Start(scanDelay time.Duration) error {
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", n.publicPort))
 	if err != nil {
 		return err
 	}
@@ -82,64 +113,55 @@ func (n *Node) Start() error {
 
 	defer l.Close()
 
+	go monitorClipboard(n, n.clipboard, scanDelay, n.localClipboard)
+
 	for {
-		conn, err := l.Accept()
-		if err != nil {
+		conn, netErr := l.Accept()
+		if netErr != nil {
 			return err
 		}
 
 		log.Info().Msgf("accepted connection from %s", conn.RemoteAddr().String())
 
-		n.storage.Add(conn)
-
-		go n.handleConnection(conn)
+		go n.handleConnection(conn, n.localClipboard)
 	}
 }
 
-func (n *Node) handleConnection(conn net.Conn) {
-	externalUpdateChan := make(chan []byte)
-
-	defer close(externalUpdateChan)
-	go monitorClipboard(n, n.clipboard, 2, externalUpdateChan)
-	handleClipboardData(n, conn, n.clipboard, externalUpdateChan)
+func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
+	n.storage.Add(conn)
+	receiveDataFromNode(n, conn, n.clipboard, localClipboard)
 }
 
-func (n *Node) Broadcast(msg *Message) {
+func (n *Node) Broadcast(msg *Message, ignore ...IP) {
 	defer messagePool.Put(msg)
 
-	for addr, conn := range n.storage.All() {
-		if msg.IsDuplicate(n.lastMessage) {
-			continue
-		}
+	if msg.IsDuplicate(n.lastMessage) {
+		return
+	}
 
-		log.Debug().
-			Msgf("sent message, header: %v, id: %s to %s, by hash %x",
-				msg.Header,
-				msg.Header.ID,
-				addr,
-				shortHash(msg.Data.Hash),
-			)
-		msg.Write(conn)
+	for _, conn := range n.storage.All(ignore...) {
+		log.Debug().Msgf("sent message to %s, by hash %x", conn.IP, shortHash(msg.Data.Hash))
+		_, _ = msg.Write(conn)
 	}
 }
 
 func (n *Node) EnableNodeDiscover() {
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
-			Payload:   []byte(n.port),
+			Payload:   []byte(strconv.Itoa(n.publicPort)),
 			Limit:     -1,
 			TimeLimit: -1,
 			Delay:     n.discoverDelay,
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {
-				nodeAddr := NodeIP(d.Address)
+				nodeAddr := IP(d.Address)
 
-				log.Trace().Msgf("found node: %s", nodeAddr)
 				if n.storage.Exist(nodeAddr) {
 					log.Trace().Msgf("node %s already exist, skipping...", nodeAddr)
 					return
 				}
+				log.Trace().Msgf("found node: %s", nodeAddr)
 
 				addr := ip.MakeAddr(net.ParseIP(d.Address), string(d.Payload))
 				log.Info().Msgf("connecting to %s", addr)
@@ -149,6 +171,7 @@ func (n *Node) EnableNodeDiscover() {
 			},
 		},
 	)
+
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to discover nodes")
 	}

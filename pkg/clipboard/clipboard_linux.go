@@ -11,7 +11,6 @@ import (
 var ErrUnimplementedClipboardManager = errors.New("unimplemented clipboard wrapper")
 
 var managers = []Manager{
-
 	xClip{},
 	xSel{},
 	wlClipboard{},

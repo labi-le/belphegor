@@ -10,7 +10,7 @@ FULL_PATH = $(BUILD_PATH)$(PROJ_NAME)
 .phony: run
 
 run:
-	go run $(MAIN_PATH) -debug -node_discover
+	go run -race $(MAIN_PATH) -node_discover=true -debug -scan_delay 1s
 
 build: clean
 ifeq ($(OS),Windows_NT)

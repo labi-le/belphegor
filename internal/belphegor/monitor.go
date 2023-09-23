@@ -3,33 +3,35 @@ package belphegor
 import (
 	"belphegor/pkg/clipboard"
 	"bytes"
+	"errors"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net"
 	"time"
 )
 
-func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, externalUpdateChan chan []byte) {
+func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, externalUpdateChan Channel) {
 	var (
 		clipboardChan = make(chan []byte)
+		// New node will always send its clipboard
+		currentClipboard []byte
 	)
 	defer close(clipboardChan)
 
-	localClipboard := fetchLocalClipboard(cp)
-
 	go func() {
-		for range time.Tick(delay * time.Second) {
+		for range time.Tick(delay) {
+			log.Trace().Msg("scan local clipboard")
 			select {
-			case clip := <-externalUpdateChan:
+			case clip := <-externalUpdateChan.Get():
 				if len(clip) > 0 {
-					log.Trace().Msgf("received external clipboard update: %s", clip)
-					localClipboard = clip
+					log.Trace().Msg("received external clipboard update")
+					currentClipboard = clip
 				}
 			default:
-				newClipboard := fetchLocalClipboard(cp)
-				if !bytes.Equal(newClipboard, localClipboard) {
-					localClipboard = newClipboard
-					clipboardChan <- localClipboard
+				newestClipboard := fetchLocalClipboard(cp)
+				if !bytes.Equal(newestClipboard, currentClipboard) {
+					currentClipboard = newestClipboard
+					clipboardChan <- currentClipboard
 				}
 			}
 		}
@@ -37,27 +39,28 @@ func monitorClipboard(node *Node, cp clipboard.Manager, delay time.Duration, ext
 	}()
 
 	for clip := range clipboardChan {
-		log.Trace().Msgf("local clipboard data changed: %s", clip)
+		log.Trace().Msg("local clipboard data changed")
 		node.Broadcast(NewMessage(clip))
 	}
 }
 
-func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, externalUpdateChan chan []byte) {
-	ip := NodeIP(conn.RemoteAddr().(*net.TCPAddr).IP.String())
+func receiveDataFromNode(node *Node, conn net.Conn, cp clipboard.Manager, localClipboard Channel) {
+	remoteIP := IP(conn.RemoteAddr().(*net.TCPAddr).IP.String())
 	defer func() {
-		log.Info().Msgf("close connection: %s", ip)
-		node.storage.Delete(ip)
+		log.Info().Msgf("close connection: %s", remoteIP)
+		node.storage.Delete(remoteIP)
 	}()
 	for {
 		msg := NewMessage(nil)
 
 		err := decode(conn, msg)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				log.Trace().Msg("connection closed")
 				return
 			}
-			if opErr, ok := err.(*net.OpError); ok {
+			var opErr *net.OpError
+			if errors.As(err, &opErr) {
 				log.Trace().Err(opErr).Msg("connection closed")
 				return
 			}
@@ -66,15 +69,15 @@ func handleClipboardData(node *Node, conn net.Conn, cp clipboard.Manager, extern
 			break
 		}
 
-		node.lastMessage = msg
+		node.lastMessage = *msg
 
-		cp.Set(msg.Data.Raw)
+		_ = cp.Set(msg.Data.Raw)
 
-		externalUpdateChan <- msg.Data.Raw
+		localClipboard.Set(msg.Data.Raw)
 
-		log.Debug().Msgf("received: %s from: %s", msg.Header.ID, ip)
+		log.Debug().Msgf("received: %s from: %s", msg.Header.ID, remoteIP)
 
-		node.Broadcast(msg)
+		node.Broadcast(msg, remoteIP)
 	}
 }
 

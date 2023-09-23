@@ -45,9 +45,9 @@ type OS struct {
 }
 
 type Header struct {
-	ID       uuid.UUID
 	OS       *OS
 	MimeType string
+	ID       uuid.UUID
 }
 
 func (m *Message) Write(w io.Writer) (int, error) {
@@ -55,7 +55,7 @@ func (m *Message) Write(w io.Writer) (int, error) {
 }
 
 func NewMessage(data []byte) *Message {
-	//return Message{Data: data, Header: Header{
+	// return Message{Data: data, Header: Header{
 	//	ID: uuid.New(),
 	//}}
 	msg := messagePool.Get().(*Message)
@@ -68,12 +68,8 @@ func NewMessage(data []byte) *Message {
 	return msg
 }
 
-func (m *Message) IsDuplicate(msg *Message) bool {
-	if msg == nil {
-		return false
-	}
-
-	return m.Header.ID == msg.Header.ID && bytes.Equal(m.Data.Hash, msg.Data.Hash)
+func (m *Message) IsDuplicate(msg Message) bool {
+	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data.Hash, msg.Data.Hash)
 }
 
 func encode(src interface{}) []byte {
@@ -90,7 +86,7 @@ func decode(r io.Reader, dst interface{}) error {
 }
 
 func hash(data []byte) []byte {
-	sha := sha1.New()
+	sha := sha1.New() //nolint:gosec dn
 	sha.Write(data)
 
 	return sha.Sum(nil)

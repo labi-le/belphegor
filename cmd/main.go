@@ -3,13 +3,11 @@ package main
 import (
 	"belphegor/internal/belphegor"
 	"belphegor/pkg/clipboard"
-	"belphegor/pkg/ip"
 	"flag"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -26,6 +24,7 @@ Flags:
 	-connect string | ip:port to connect to the node (e.g. 192.168.0.12:7777)
 	-port int | the node will start on this port (e.g. 7777)
     -node_discover bool | find local nodes on the network and connect to them
+	-scan_delay string | delay between scan local clipboard (e.g. 5s)
 	-debug | show debug logs
 	-version | show version
 	-help | show help
@@ -33,6 +32,7 @@ Flags:
 	addressIP     string
 	port          int
 	nodeDiscover  bool
+	scanDelay     string
 	discoverDelay string
 	debug         bool
 	showVersion   bool
@@ -44,6 +44,7 @@ func init() {
 	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
 	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
 	flag.StringVar(&discoverDelay, "discover_delay", "60s", "Delay between node discovery")
+	flag.StringVar(&scanDelay, "scan_delay", "5s", "Delay between scan local clipboard")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
@@ -63,7 +64,7 @@ func main() {
 	}
 
 	if showHelp {
-		fmt.Print(helpMsg)
+		_, _ = fmt.Fprint(os.Stderr, helpMsg)
 		os.Exit(0)
 	}
 
@@ -72,16 +73,36 @@ func main() {
 		log.Fatal().Err(delayErr).Msg("failed to parse discover delay")
 	}
 
-	var node *belphegor.Node
+	scanDelayDuration, scanDelayErr := time.ParseDuration(scanDelay)
+	if scanDelayErr != nil {
+		log.Fatal().Err(delayErr).Msg("failed to parse scan delay")
+	}
+
+	var (
+		node    *belphegor.Node
+		storage = belphegor.NewSyncMapStorage()
+		cp      = clipboard.NewThreadSafe()
+	)
 	if port != 0 {
-		node = belphegor.NewNode(clipboard.NewManager(), ip.MakePort(strconv.Itoa(port)), discoverDelayDuration)
+		node = belphegor.NewNode(
+			cp,
+			port,
+			discoverDelayDuration,
+			storage,
+			belphegor.NewChannel(),
+		)
 	} else {
 		log.Debug().Msg("using random port")
-		node = belphegor.NewNodeRandomPort(clipboard.NewManager(), discoverDelayDuration)
+		node = belphegor.NewNodeRandomPort(
+			cp,
+			discoverDelayDuration,
+			storage,
+			belphegor.NewChannel(),
+		)
 	}
 
 	go func() {
-		if err := node.Start(); err != nil {
+		if err := node.Start(scanDelayDuration); err != nil {
 			log.Fatal().Err(err).Msg("failed to start the node")
 		}
 	}()
