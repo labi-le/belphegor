@@ -84,12 +84,12 @@ func main() {
 
 	discoverDelayDuration, delayErr := time.ParseDuration(discoverDelay)
 	if delayErr != nil {
-		log.Fatal().Err(delayErr).Msg("failed to parse discover delay")
+		log.Panic().Err(delayErr).Msg("failed to parse discover delay")
 	}
 
 	scanDelayDuration, scanDelayErr := time.ParseDuration(scanDelay)
 	if scanDelayErr != nil {
-		log.Fatal().Err(delayErr).Msg("failed to parse scan delay")
+		log.Panic().Err(delayErr).Msg("failed to parse scan delay")
 	}
 
 	var (
@@ -117,7 +117,7 @@ func main() {
 
 	go func() {
 		if err := node.Start(scanDelayDuration); err != nil {
-			log.Fatal().Err(err).Msg("failed to start the node")
+			log.Panic().Err(err).Msg("failed to start the node")
 		}
 	}()
 

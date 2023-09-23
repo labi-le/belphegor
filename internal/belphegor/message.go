@@ -30,8 +30,8 @@ var os = &OS{
 }
 
 type Message struct {
-	Header Header
 	Data   Data
+	Header Header
 }
 
 type Data struct {
@@ -55,9 +55,6 @@ func (m *Message) Write(w io.Writer) (int, error) {
 }
 
 func NewMessage(data []byte) *Message {
-	// return Message{Data: data, Header: Header{
-	//	ID: uuid.New(),
-	//}}
 	msg := messagePool.Get().(*Message)
 	msg.Data = Data{
 		Raw:  data,
@@ -70,6 +67,10 @@ func NewMessage(data []byte) *Message {
 
 func (m *Message) IsDuplicate(msg Message) bool {
 	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data.Hash, msg.Data.Hash)
+}
+
+func (m *Message) Free() {
+	messagePool.Put(m)
 }
 
 func encode(src interface{}) []byte {
@@ -86,7 +87,7 @@ func decode(r io.Reader, dst interface{}) error {
 }
 
 func hash(data []byte) []byte {
-	sha := sha1.New() //nolint:gosec dn
+	sha := sha1.New() //nolint:gosec
 	sha.Write(data)
 
 	return sha.Sum(nil)

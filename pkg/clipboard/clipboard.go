@@ -36,10 +36,6 @@ func clipboardSet(data []byte, cmd *exec.Cmd) error {
 		return err
 	}
 
-	//if err = cmd.Wait(); err != nil {
-	//	log.Error().Err(err).Msg("clipboardSet")
-	//}
-
 	return err
 }
 

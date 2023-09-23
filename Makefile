@@ -10,7 +10,7 @@ FULL_PATH = $(BUILD_PATH)$(PROJ_NAME)
 .phony: run
 
 run:
-	go run -race $(MAIN_PATH) -node_discover=true -debug -scan_delay 1s
+	go run -race $(MAIN_PATH) -node_discover=true -debug=false -scan_delay 1s
 
 build: clean
 ifeq ($(OS),Windows_NT)
@@ -50,3 +50,6 @@ lint:
 profiling:
 	powershell.exe -command Invoke-WebRequest -Uri "http://localhost:8080/debug/pprof/heap" -OutFile "heap.out"
 	go tool pprof heap.out
+
+fmt:
+	go fmt ./... && betteralign -apply ./...

@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -18,18 +19,23 @@ const DefaultDiscoverDelay = 60 * time.Second
 type IP string
 
 type NodeInfo struct {
-	IP IP
 	net.Conn
+	IP   IP
 	Port int
 }
 
 type Node struct {
 	clipboard      clipboard.Manager
 	storage        Storage
-	lastMessage    Message
+	localClipboard Channel
+	lastMessage    lastMessage
 	publicPort     int
 	discoverDelay  time.Duration
-	localClipboard Channel
+}
+
+type lastMessage struct {
+	Message
+	mu sync.Mutex
 }
 
 func NewNode(
@@ -58,17 +64,6 @@ func NewNode(
 	}
 }
 
-func stats(storage Storage) {
-	for range time.Tick(5 * time.Second) {
-		nodes := storage.All()
-		log.Trace().Msgf("nodes count: %d", len(nodes))
-		for _, info := range nodes {
-			log.Trace().Msgf("node %s %d", info.IP, info.Port)
-		}
-
-	}
-}
-
 func NewNodeRandomPort(
 	clipboard clipboard.Manager,
 	discoverDelay time.Duration,
@@ -85,7 +80,7 @@ func NewNodeRandomPort(
 }
 
 func genPort() int {
-	cryptoRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	cryptoRand := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec dn
 	return cryptoRand.Intn(1000) + 7000
 }
 
@@ -113,7 +108,7 @@ func (n *Node) Start(scanDelay time.Duration) error {
 
 	defer l.Close()
 
-	go monitorClipboard(n, n.clipboard, scanDelay, n.localClipboard)
+	go NewClipboardMonitor(n, n.clipboard, scanDelay, n.localClipboard).Start()
 
 	for {
 		conn, netErr := l.Accept()
@@ -124,18 +119,19 @@ func (n *Node) Start(scanDelay time.Duration) error {
 		log.Info().Msgf("accepted connection from %s", conn.RemoteAddr().String())
 
 		go n.handleConnection(conn, n.localClipboard)
+
 	}
 }
 
 func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
 	n.storage.Add(conn)
-	receiveDataFromNode(n, conn, n.clipboard, localClipboard)
+	NewNodeDataReceiver(n, conn, n.clipboard, localClipboard).Start()
 }
 
 func (n *Node) Broadcast(msg *Message, ignore ...IP) {
-	defer messagePool.Put(msg)
+	defer msg.Free()
 
-	if msg.IsDuplicate(n.lastMessage) {
+	if msg.IsDuplicate(n.GetLastMessage()) {
 		return
 	}
 
@@ -174,5 +170,30 @@ func (n *Node) EnableNodeDiscover() {
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to discover nodes")
+	}
+}
+
+func (n *Node) SetLastMessage(msg Message) {
+	n.lastMessage.mu.Lock()
+	defer n.lastMessage.mu.Unlock()
+
+	n.lastMessage.Message = msg
+}
+
+func (n *Node) GetLastMessage() Message {
+	n.lastMessage.mu.Lock()
+	defer n.lastMessage.mu.Unlock()
+
+	return n.lastMessage.Message
+}
+
+func stats(storage Storage) {
+	for range time.Tick(5 * time.Second) {
+		nodes := storage.All()
+		log.Trace().Msgf("nodes count: %d", len(nodes))
+		for _, info := range nodes {
+			log.Trace().Msgf("node %s %d", info.IP, info.Port)
+		}
+
 	}
 }
