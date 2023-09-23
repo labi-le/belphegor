@@ -3,15 +3,20 @@ package main
 import (
 	"belphegor/internal/belphegor"
 	"belphegor/pkg/clipboard"
+	"errors"
 	"flag"
 	"fmt"
+	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"os"
+	"path/filepath"
 	"time"
 )
 
 var version = "dev"
+
+const LockFile = "belphegor.lck"
 
 var (
 	helpMsg = `belphegor - 
@@ -39,6 +44,12 @@ Flags:
 	showHelp      bool
 )
 
+var (
+	ErrCannotLock     = errors.New("cannot get locked process: %s")
+	ErrCannotUnlock   = errors.New("cannot unlock process: %s")
+	ErrAlreadyRunning = errors.New("belphegor is already running. pid %d")
+)
+
 func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
 	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
@@ -55,6 +66,9 @@ func init() {
 }
 
 func main() {
+	lock := MustLock()
+	defer Unlock(lock)
+
 	if debug {
 		log.Info().Msg("debug mode enabled")
 	}
@@ -65,7 +79,7 @@ func main() {
 
 	if showHelp {
 		_, _ = fmt.Fprint(os.Stderr, helpMsg)
-		os.Exit(0)
+		return
 	}
 
 	discoverDelayDuration, delayErr := time.ParseDuration(discoverDelay)
@@ -131,4 +145,24 @@ func initLogger(debug bool) {
 	}
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+}
+
+func MustLock() lockfile.Lockfile {
+	lock, _ := lockfile.New(filepath.Join(os.TempDir(), LockFile))
+
+	if lockErr := lock.TryLock(); lockErr != nil {
+		owner, err := lock.GetOwner()
+		if err != nil {
+			log.Fatal().Msgf(ErrCannotLock.Error(), err)
+		}
+		log.Fatal().Msgf(ErrAlreadyRunning.Error(), owner.Pid)
+	}
+
+	return lock
+}
+
+func Unlock(lock lockfile.Lockfile) {
+	if err := lock.Unlock(); err != nil {
+		log.Fatal().Msgf(ErrCannotUnlock.Error(), err)
+	}
 }
