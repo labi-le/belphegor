@@ -36,7 +36,7 @@ func clipboardSet(data []byte, cmd *exec.Cmd) error {
 		return err
 	}
 
-	return err
+	return cmd.Wait()
 }
 
 func toolExist(tool string) bool {
