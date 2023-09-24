@@ -3,10 +3,11 @@ package belphegor
 import (
 	"belphegor/pkg/clipboard"
 	"belphegor/pkg/ip"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
-	"math/rand"
 	"net"
 	"strconv"
 	"sync"
@@ -18,12 +19,6 @@ const DefaultDiscoverDelay = 60 * time.Second
 // IP e.g. 192.168.0.45
 type IP string
 
-type NodeInfo struct {
-	net.Conn
-	IP   IP
-	Port int
-}
-
 type Node struct {
 	clipboard      clipboard.Manager
 	storage        Storage
@@ -33,11 +28,13 @@ type Node struct {
 	discoverDelay  time.Duration
 }
 
+// lastMessage which is stored in Node and serves to identify duplicate messages
 type lastMessage struct {
 	Message
 	mu sync.Mutex
 }
 
+// NewNode creates a new instance of Node with the specified settings.
 func NewNode(
 	clipboard clipboard.Manager,
 	port int,
@@ -64,6 +61,7 @@ func NewNode(
 	}
 }
 
+// NewNodeRandomPort creates a new instance of Node with a random port number.
 func NewNodeRandomPort(
 	clipboard clipboard.Manager,
 	discoverDelay time.Duration,
@@ -79,11 +77,19 @@ func NewNodeRandomPort(
 	)
 }
 
+// genPort generates a random port number between 7000 and 7999.
 func genPort() int {
-	cryptoRand := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec dn
-	return cryptoRand.Intn(1000) + 7000
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+
+	seed := binary.BigEndian.Uint64(b[:])
+	return int(seed%1000) + 7000
 }
 
+// ConnectTo establishes a TCP connection to a remote clipboard at the specified address.
+// It adds the connection to the node's storage and starts handling the connection using 'handleConnection'.
+// The 'addr' parameter should be in the format "host:port" to specify the remote clipboard's address.
+// If the connection is successfully established, it returns nil; otherwise, it returns an error.
 func (n *Node) ConnectTo(addr string) error {
 	c, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -98,6 +104,11 @@ func (n *Node) ConnectTo(addr string) error {
 	return nil
 }
 
+// Start starts the node by listening for incoming connections on the specified public port.
+// It also starts a clipboard monitor to periodically scan and update the local clipboard.
+// When a new connection is accepted, it invokes the 'handleConnection' method to handle the connection.
+// The 'scanDelay' parameter determines the interval at which the clipboard is scanned and updated.
+// The method returns an error if it fails to start listening.
 func (n *Node) Start(scanDelay time.Duration) error {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", n.publicPort))
 	if err != nil {
@@ -128,6 +139,13 @@ func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
 	NewNodeDataReceiver(n, conn, n.clipboard, localClipboard).Start()
 }
 
+// Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
+// It first checks if the message is a duplicate of the last sent message by comparing their IDs and hashes.
+// If the message is a duplicate, it is not sent.
+// For each connection in the storage, it writes the message to the connection's writer.
+// The method logs the sent messages and their hashes for debugging purposes.
+// The 'msg' parameter is the message to be broadcasted.
+// The 'ignore' parameter is a variadic list of IP addresses to exclude from the broadcast.
 func (n *Node) Broadcast(msg *Message, ignore ...IP) {
 	defer msg.Free()
 
@@ -141,6 +159,13 @@ func (n *Node) Broadcast(msg *Message, ignore ...IP) {
 	}
 }
 
+// EnableNodeDiscover enables node discovery.
+// It creates a new peer discovery instance with the specified settings, including payload,
+// discovery limits, time limits, delay, and whether to allow self-discovery.
+// When a new node is discovered, it checks if the node already exists in the storage.
+// If the node is not in the storage, it connects to the discovered node.
+// If the connection attempt fails, an error is logged.
+// If an error occurs while creating the peer discovery instance, the program exits with a fatal error message.
 func (n *Node) EnableNodeDiscover() {
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
@@ -187,6 +212,10 @@ func (n *Node) GetLastMessage() Message {
 	return n.lastMessage.Message
 }
 
+// stats periodically logs information about the nodes in the storage.
+// It retrieves the list of nodes from the provided storage and logs the count of nodes
+// as well as information about each node, including its IP address and port.
+// The function runs at an interval of 5 seconds.
 func stats(storage Storage) {
 	for range time.Tick(5 * time.Second) {
 		nodes := storage.All()
@@ -194,6 +223,5 @@ func stats(storage Storage) {
 		for _, info := range nodes {
 			log.Trace().Msgf("node %s %d", info.IP, info.Port)
 		}
-
 	}
 }
