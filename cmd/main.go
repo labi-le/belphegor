@@ -1,6 +1,7 @@
 package main
 
 import (
+	//_ "net/http/pprof"
 	"belphegor/internal/belphegor"
 	"belphegor/pkg/clipboard"
 	"errors"
@@ -55,7 +56,7 @@ func init() {
 	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
 	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
 	flag.StringVar(&discoverDelay, "discover_delay", "60s", "Delay between node discovery")
-	flag.StringVar(&scanDelay, "scan_delay", "5s", "Delay between scan local clipboard")
+	flag.StringVar(&scanDelay, "scan_delay", "1s", "Delay between scan local clipboard")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
@@ -66,6 +67,9 @@ func init() {
 }
 
 func main() {
+	//if debug {
+	//	go http.ListenAndServe("0.0.0.0:8080", nil)
+	//}
 	lock := MustLock()
 	defer Unlock(lock)
 
