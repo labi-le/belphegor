@@ -9,7 +9,7 @@ Belphegor is a clipboard manager that allows you to share your clipboard with ot
 ## Install
 
 ```sh
-make install
+sudo make install
 ```
 
 ## Usage
