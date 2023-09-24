@@ -4,13 +4,14 @@ MAIN_PATH = cmd/main.go
 BUILD_PATH = build/package/
 
 INSTALL_PATH = /usr/bin/
+CGO_ENABLED=0
 
 FULL_PATH = $(BUILD_PATH)$(PROJ_NAME)
 
 .phony: run
 
 run:
-	go run -race $(MAIN_PATH) -node_discover=true -debug=false -scan_delay 1s
+	go run $(MAIN_PATH) -node_discover=true -debug=false -scan_delay 1s
 
 build: clean
 ifeq ($(OS),Windows_NT)
