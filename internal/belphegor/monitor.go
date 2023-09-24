@@ -11,7 +11,7 @@ type Handler interface {
 	Start()
 }
 
-// ClipboardMonitor отвечает за мониторинг локального буфера обмена.
+// ClipboardMonitor responsible for monitoring the local clipboard.
 type ClipboardMonitor struct {
 	cm           clipboard.Manager
 	updateChan   Channel
@@ -19,7 +19,7 @@ type ClipboardMonitor struct {
 	scanInterval time.Duration
 }
 
-// NewClipboardMonitor создает новый экземпляр ClipboardMonitor.
+// NewClipboardMonitor creates a new instance of ClipboardMonitor.
 func NewClipboardMonitor(node *Node, cp clipboard.Manager, interval time.Duration, extUpdateChan Channel) Handler {
 	return &ClipboardMonitor{
 		node:         node,
@@ -29,7 +29,7 @@ func NewClipboardMonitor(node *Node, cp clipboard.Manager, interval time.Duratio
 	}
 }
 
-// Start начинает мониторинг буфера обмена.
+// Start starts monitoring the clipboard and subsequently sending data to other nodes
 func (cm *ClipboardMonitor) Start() {
 	var (
 		clipboardChan    = make(chan []byte)
@@ -63,7 +63,7 @@ func (cm *ClipboardMonitor) Start() {
 	}
 }
 
-// fetchLocalClipboard возвращает текущее значение локального буфера обмена.
+// fetchLocalClipboard returns the current value of the local clipboard.
 func (cm *ClipboardMonitor) fetchLocalClipboard() []byte {
 	clip, _ := cm.cm.Get()
 	return clip

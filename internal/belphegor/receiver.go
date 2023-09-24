@@ -8,7 +8,7 @@ import (
 	"net"
 )
 
-// NodeDataReceiver отвечает за прием данных от узлов.
+// NodeDataReceiver responsible for receiving data from the node.
 type NodeDataReceiver struct {
 	node      *Node
 	conn      net.Conn
@@ -16,7 +16,7 @@ type NodeDataReceiver struct {
 	localChan Channel
 }
 
-// NewNodeDataReceiver создает новый экземпляр NodeDataReceiver.
+// NewNodeDataReceiver creates a new instance NodeDataReceiver.
 func NewNodeDataReceiver(node *Node, conn net.Conn, cp clipboard.Manager, channel Channel) Handler {
 	return &NodeDataReceiver{
 		node:      node,
@@ -26,7 +26,7 @@ func NewNodeDataReceiver(node *Node, conn net.Conn, cp clipboard.Manager, channe
 	}
 }
 
-// Start начинает прием данных от узла.
+// Start starts receiving data from the node.
 func (ndr *NodeDataReceiver) Start() {
 	remoteIP := IP(ndr.conn.RemoteAddr().(*net.TCPAddr).IP.String())
 	defer func() {
@@ -51,7 +51,7 @@ func (ndr *NodeDataReceiver) Start() {
 	}
 }
 
-// receiveMessage принимает сообщение от узла.
+// receiveMessage receives a message from the node.
 func (ndr *NodeDataReceiver) receiveMessage() (*Message, error) {
 	msg := NewMessage(nil)
 	err := decode(ndr.conn, msg)
@@ -61,7 +61,7 @@ func (ndr *NodeDataReceiver) receiveMessage() (*Message, error) {
 	return msg, nil
 }
 
-// handleReceiveError обрабатывает ошибки при приеме данных.
+// handleReceiveError handles errors when receiving data.
 func (ndr *NodeDataReceiver) handleReceiveError(err error) {
 	if errors.Is(err, io.EOF) {
 		log.Trace().Msg("connection closed by EOF (similar to invalid message)")
