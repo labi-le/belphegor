@@ -15,7 +15,7 @@ Belphegor is a clipboard manager that allows you to share your clipboard with ot
 sudo make install
 ```
 
-If you have Windows, then you will need to install [Make](https://stackoverflow.com/questions/2532234/how-to-run-a-makefile-in-windows) for auto installation, or you can run the command [yourself](Makefile:27)
+If you have Windows, then you will need to install [Make](https://stackoverflow.com/questions/2532234/how-to-run-a-makefile-in-windows) for auto installation, or you can run the command [yourself](Makefile#L27)
 
 ## Usage
 ```
