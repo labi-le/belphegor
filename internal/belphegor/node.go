@@ -154,7 +154,7 @@ func (n *Node) Broadcast(msg *Message, ignore ...IP) {
 	}
 
 	for _, conn := range n.storage.All(ignore...) {
-		log.Debug().Msgf("sent message to %s, by hash %x", conn.IP, shortHash(msg.Data.Hash))
+		log.Debug().Msgf("sent %s to %s by hash %x", msg.Header.ID, conn.IP, shortHash(msg.Data.Hash))
 		_, _ = msg.Write(conn)
 	}
 }
@@ -182,7 +182,7 @@ func (n *Node) EnableNodeDiscover() {
 					log.Trace().Msgf("node %s already exist, skipping...", nodeAddr)
 					return
 				}
-				log.Trace().Msgf("found node: %s", nodeAddr)
+				log.Info().Msgf("found node: %s", nodeAddr)
 
 				addr := ip.MakeAddr(net.ParseIP(d.Address), string(d.Payload))
 				log.Info().Msgf("connecting to %s", addr)

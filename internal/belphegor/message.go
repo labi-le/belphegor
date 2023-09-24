@@ -2,6 +2,7 @@
 package belphegor
 
 import (
+	"belphegor/pkg/image"
 	"bytes"
 	"crypto/sha1"
 	"github.com/google/uuid"
@@ -19,15 +20,15 @@ var messagePool = sync.Pool{
 		return &Message{
 			Header: Header{
 				ID: uuid.New(),
-				OS: os,
+				OS: currentOS,
 			},
 			Data: Data{},
 		}
 	},
 }
 
-// os represents the operating system information.
-var os = &OS{
+// currentOS represents the operating system information.
+var currentOS = &OS{
 	Name: runtime.GOOS,
 	Arch: runtime.GOARCH,
 }
@@ -76,7 +77,39 @@ func NewMessage(data []byte) *Message {
 
 // IsDuplicate checks if the Message is a duplicate of another Message.
 func (m *Message) IsDuplicate(msg Message) bool {
+	// If the MIME type is image/png, compare the images
+	// windows and linux are image processed differently and comparing hashes becomes meaningless
+	if m.hasSameMimeType(msg) && m.isPicture(msg) {
+		return imageComparison(msg, m)
+	}
+
 	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data.Hash, msg.Data.Hash)
+}
+
+func (m *Message) isPicture(msg Message) bool {
+	switch msg.Header.MimeType {
+	case "image/png":
+		return true
+	case "image/jpeg":
+		return true
+	case "image/gif":
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *Message) hasSameMimeType(msg Message) bool {
+	return m.Header.MimeType == msg.Header.MimeType
+}
+
+func imageComparison(msg Message, m *Message) bool {
+	identical, err := image.IsDuplicate(msg.Data.Raw, m.Data.Raw)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to compare images")
+	}
+
+	return identical
 }
 
 // Free returns the Message to the messagePool for reuse.

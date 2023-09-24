@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"io"
 	"net"
+	"os"
 )
 
 // NodeDataReceiver responsible for receiving data from the node.
@@ -45,9 +46,22 @@ func (ndr *NodeDataReceiver) Start() {
 		_ = ndr.cm.Set(msg.Data.Raw)
 		ndr.localChan.Set(msg.Data.Raw)
 
-		log.Debug().Msgf("received: %s from: %s", msg.Header.ID, remoteIP)
+		//go debug(*msg)
+
+		log.Debug().Msgf("received %s from %s by hash %x", msg.Header.ID, remoteIP, shortHash(msg.Data.Hash))
 
 		ndr.node.Broadcast(msg, remoteIP)
+	}
+}
+
+func debug(message Message) {
+	// get current dir
+	dir, _ := os.Getwd()
+	fp := dir + "/debug/" + message.Header.ID.String() + ".png"
+	log.Trace().Msgf("writing debug file to %s", fp)
+	err := os.WriteFile(fp, message.Data.Raw, 0644)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to write debug file")
 	}
 }
 

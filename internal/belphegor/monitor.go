@@ -40,7 +40,7 @@ func (cm *ClipboardMonitor) Start() {
 
 	go func() {
 		for range time.Tick(cm.scanInterval) {
-			log.Trace().Msg("scan local clipboard")
+			//log.Trace().Msg("scan local clipboard")
 			select {
 			case clip := <-cm.updateChan.Get():
 				if len(clip) > 0 {
