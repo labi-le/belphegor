@@ -79,6 +79,7 @@ func main() {
 
 	if showVersion {
 		log.Printf("version %s", version)
+		return
 	}
 
 	if showHelp {
