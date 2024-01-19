@@ -14,11 +14,7 @@ run:
 	go run $(MAIN_PATH) -node_discover=true -debug=false -scan_delay 1s
 
 build: clean
-ifeq ($(OS),Windows_NT)
-	 $(MAKE) build-windows
-else
 	go build --ldflags '-s -w -extldflags "-static"' -v -o $(BUILD_PATH)$(PROJ_NAME) $(MAIN_PATH)
-endif
 
 build-windows: clean
 	go build -ldflags "-s -w -extldflags -static" -v -o $(BUILD_PATH)$(PROJ_NAME).exe $(MAIN_PATH)
