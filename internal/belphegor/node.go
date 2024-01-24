@@ -184,8 +184,11 @@ func (n *Node) EnableNodeDiscover() {
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {
-				rawAddr := d.Address + string(d.Payload)
-				nodeAddr := netip.MustParseAddrPort(rawAddr)
+				nodeAddr := netip.MustParseAddrPort(fmt.Sprintf(
+					"%s:%s",
+					d.Address,
+					string(d.Payload),
+				))
 
 				if n.storage.Exist(nodeAddr) {
 					log.Trace().Msgf("node %s already exist, skipping...", nodeAddr)
