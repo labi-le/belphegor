@@ -7,19 +7,21 @@ import (
 )
 
 // Storage represents a storage for storing nodes.
-type Storage interface {
+type Storage[key any, val any] interface {
 	// Add adds the specified node to the storage.
 	// If the node already exists, it will be overwritten.
-	Add(key netip.AddrPort, val net.Conn)
-	// Delete deletes the node associated with the specified AddrPort.
-	Delete(key netip.AddrPort)
-	// Get netip.AddrPort the node associated with the specified AddrPort.
-	Get(key netip.AddrPort) (net.Conn, bool)
+	Add(key key, val val)
+	// Delete deletes the node associated with the specified id.
+	Delete(key key)
+	// Get returns the node associated with the specified id.
+	Get(key key) (val, bool)
 	// Exist returns true if the specified node exists in the storage.
-	Exist(key netip.AddrPort) bool
+	Exist(key key) bool
 	// Tap calls the specified function for each node in the storage.
-	Tap(fn func(netip.AddrPort, net.Conn))
+	Tap(fn func(key, val))
 }
+
+type NodeStorage Storage[UniqueID, *Peer]
 
 func castAddrPortFromConn(conn net.Conn) netip.AddrPort {
 	return conn.RemoteAddr().(*net.TCPAddr).AddrPort()
@@ -34,30 +36,35 @@ func NewSyncMapStorage() *SyncMapStorage {
 	return &SyncMapStorage{}
 }
 
-func (s *SyncMapStorage) Add(key netip.AddrPort, val net.Conn) {
+func (s *SyncMapStorage) Add(key UniqueID, val *Peer) {
 	s.m.Store(key, val)
 }
 
-func (s *SyncMapStorage) Delete(key netip.AddrPort) {
+func (s *SyncMapStorage) Delete(key UniqueID) {
+	val, exist := s.Get(key)
+	if !exist {
+		return
+	}
+	defer val.Release()
 	s.m.Delete(key)
 }
 
-func (s *SyncMapStorage) Get(key netip.AddrPort) (net.Conn, bool) {
+func (s *SyncMapStorage) Get(key UniqueID) (*Peer, bool) {
 	v, ok := s.m.Load(key)
 	if !ok {
-		return nil, false
+		return &Peer{}, false
 	}
-	return v.(net.Conn), true
+	return v.(*Peer), true
 }
 
-func (s *SyncMapStorage) Exist(key netip.AddrPort) bool {
+func (s *SyncMapStorage) Exist(key UniqueID) bool {
 	_, ok := s.m.Load(key)
 	return ok
 }
 
-func (s *SyncMapStorage) Tap(fn func(netip.AddrPort, net.Conn)) {
+func (s *SyncMapStorage) Tap(fn func(UniqueID, *Peer)) {
 	s.m.Range(func(k, v any) bool {
-		fn(k.(netip.AddrPort), v.(net.Conn))
+		fn(k.(UniqueID), v.(*Peer))
 		return true
 	})
 }

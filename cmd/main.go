@@ -15,8 +15,6 @@ import (
 	"time"
 )
 
-var version = "dev"
-
 const LockFile = "belphegor.lck"
 
 var (
@@ -67,9 +65,9 @@ func init() {
 }
 
 func main() {
-	//if debug {
+	// if debug {
 	//	go http.ListenAndServe("0.0.0.0:8080", nil)
-	//}
+	// }
 	lock := MustLock()
 	defer Unlock(lock)
 
@@ -78,7 +76,7 @@ func main() {
 	}
 
 	if showVersion {
-		log.Printf("version %s", version)
+		log.Printf("version %s", belphegor.Version)
 		return
 	}
 

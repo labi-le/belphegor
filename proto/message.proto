@@ -1,0 +1,18 @@
+syntax = "proto3";
+import "header.proto";
+
+package belphegor;
+
+option go_package = "internal/belphegor/types";
+
+// Message represents clipboard data and its associated metadata
+message Message {
+  Data Data = 1;
+  Header Header = 2;
+}
+
+// Data represents the clipboard data and hash
+message Data {
+  bytes Raw = 1;
+  bytes Hash = 2;
+}

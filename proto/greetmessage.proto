@@ -1,0 +1,16 @@
+syntax = "proto3";
+import "device.proto";
+
+package belphegor;
+
+option go_package = "internal/belphegor/types";
+
+// GreetMessage represents the greeting message
+// Used to shake hands with other nodes
+message GreetMessage {
+  string UniqueID = 1;
+  string Version = 2;
+  Device Device = 3;
+  uint32 Port = 5;
+  bytes PublicKey = 6;
+}

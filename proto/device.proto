@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package belphegor;
+
+option go_package = "internal/belphegor/types";
+
+// Device represents the device information
+message Device {
+  Type Type = 1;
+  string Arch = 2;
+  string Unique = 3;
+}
+
+// Type represents the device type
+// Used to identify the device and handling data specific to it
+enum Type {
+  Linux = 0;
+  Windows = 1;
+  MacOS = 2;
+  IOS = 3;
+  Android = 4;
+}

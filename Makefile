@@ -11,7 +11,7 @@ FULL_PATH = $(BUILD_PATH)$(PROJ_NAME)
 .phony: run
 
 run:
-	go run $(MAIN_PATH) -node_discover=true -debug=false -scan_delay 1s
+	go run $(MAIN_PATH) -node_discover=true -debug -scan_delay 1s
 
 build: clean
 	go build --ldflags '-s -w -extldflags "-static"' -v -o $(BUILD_PATH)$(PROJ_NAME) $(MAIN_PATH)
@@ -48,5 +48,8 @@ profiling:
 	powershell.exe -command Invoke-WebRequest -Uri "http://localhost:8080/debug/pprof/heap" -OutFile "heap.out"
 	go tool pprof heap.out
 
-fmt:
-	go fmt ./... && betteralign -apply ./...
+gen-proto:install-proto
+	protoc --proto_path=proto --go_out=. proto/*
+
+install-proto:
+	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest

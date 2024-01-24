@@ -4,7 +4,6 @@ import (
 	"belphegor/pkg/clipboard"
 	"bytes"
 	"github.com/rs/zerolog/log"
-	"net/netip"
 	"time"
 )
 
@@ -21,7 +20,12 @@ type ClipboardMonitor struct {
 }
 
 // NewClipboardMonitor creates a new instance of ClipboardMonitor.
-func NewClipboardMonitor(node *Node, cp clipboard.Manager, interval time.Duration, extUpdateChan Channel) Handler {
+func NewClipboardMonitor(
+	node *Node,
+	cp clipboard.Manager,
+	interval time.Duration,
+	extUpdateChan Channel,
+) Handler {
 	return &ClipboardMonitor{
 		node:         node,
 		cm:           cp,
@@ -37,13 +41,16 @@ func (cm *ClipboardMonitor) Receive() {
 		currentClipboard []byte
 	)
 
+	// first scan
+	//clipboardChan <- cm.fetchLocalClipboard()
+
 	defer close(clipboardChan)
 
 	go func() {
 		for range time.Tick(cm.scanInterval) {
 			//log.Trace().Msg("scan local clipboard")
 			select {
-			case clip := <-cm.updateChan.Get():
+			case clip := <-cm.updateChan.Read():
 				if len(clip) > 0 {
 					log.Trace().Msg("received external clipboard update")
 					currentClipboard = clip
@@ -60,7 +67,7 @@ func (cm *ClipboardMonitor) Receive() {
 
 	for clip := range clipboardChan {
 		log.Trace().Msg("local clipboard data changed")
-		cm.node.Broadcast(AcquireMessage(clip), netip.AddrPort{})
+		cm.node.Broadcast(AcquireMessage(clip), "")
 	}
 }
 

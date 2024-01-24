@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package belphegor;
+
+option go_package = "internal/belphegor/types";
+
+message EncryptedMessage {
+  repeated bytes Parts = 1;
+}

@@ -1,0 +1,20 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+import "device.proto";
+
+package belphegor;
+
+option go_package = "internal/belphegor/types";
+
+// Header represents the header of a message
+message Header {
+  Mime MimeType = 2;
+  Device Device = 1;
+  string ID = 3;
+  google.protobuf.Timestamp Created = 4;
+}
+
+enum Mime {
+  TEXT = 0;
+  IMAGE = 1;
+}

@@ -1,34 +1,34 @@
 package belphegor
 
 import (
+	gen "belphegor/internal/belphegor/types"
 	"belphegor/pkg/clipboard"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
+	"google.golang.org/protobuf/proto"
 	"net"
-	"net/netip"
 	"strconv"
-	"sync"
 	"time"
 )
 
-const DefaultDiscoverDelay = 60 * time.Second
+const (
+	DefaultDiscoverDelay = 60 * time.Second
+)
+
+var (
+	ErrAlreadyConnected = errors.New("already connected")
+)
 
 type Node struct {
 	clipboard      clipboard.Manager
-	storage        Storage
+	storage        NodeStorage
 	localClipboard Channel
-	lastMessage    lastMessage
 	publicPort     int
 	discoverDelay  time.Duration
-}
-
-// lastMessage which is stored in Node and serves to identify duplicate messages
-type lastMessage struct {
-	*Message
-	mu sync.Mutex
 }
 
 // NewNode creates a new instance of Node with the specified settings.
@@ -36,11 +36,11 @@ func NewNode(
 	clipboard clipboard.Manager,
 	port int,
 	discoverDelay time.Duration,
-	storage Storage,
+	storage NodeStorage,
 	channel Channel,
 ) *Node {
 	if port <= 0 {
-		log.Fatal().Msgf("invalid publicPort: %d", port)
+		log.Fatal().Msgf("invalid port: %d", port)
 	}
 
 	if discoverDelay == 0 {
@@ -55,9 +55,6 @@ func NewNode(
 		storage:        storage,
 		discoverDelay:  discoverDelay,
 		localClipboard: channel,
-		lastMessage: lastMessage{
-			Message: AcquireMessage([]byte{}),
-		},
 	}
 }
 
@@ -65,7 +62,7 @@ func NewNode(
 func NewNodeRandomPort(
 	clipboard clipboard.Manager,
 	discoverDelay time.Duration,
-	storage Storage,
+	storage NodeStorage,
 	channel Channel,
 ) *Node {
 	return NewNode(
@@ -91,17 +88,38 @@ func genPort() int {
 // The 'addr' parameter should be in the format "host:port" to specify the remote clipboard's address.
 // If the connection is successfully established, it returns nil; otherwise, it returns an error.
 func (n *Node) ConnectTo(addr string) error {
-	c, err := net.Dial("tcp", addr)
+	conn, err := net.Dial("tcp4", addr)
 	if err != nil {
 		return err
 	}
 
-	log.Info().Msgf("connected to the clipboard: %s", addr)
-
-	n.storage.Add(castAddrPortFromConn(c), c)
-
-	go n.handleConnection(c, n.localClipboard)
+	go n.handleConnection(conn)
 	return nil
+}
+
+func (n *Node) addPeer(hisHand *gen.GreetMessage, cipher *Cipher, conn net.Conn) (*Peer, error) {
+	var peer *Peer
+
+	if n.storage.Exist(hisHand.UniqueID) {
+		log.Trace().Msgf("node %s already connected, ignoring", hisHand.UniqueID)
+		return peer, ErrAlreadyConnected
+	}
+
+	rightErr := HandShake(greetPool.Acquire(), hisHand)
+	if rightErr == nil {
+		peer = AcquirePeer(
+			conn,
+			castAddrPortFromConn(conn),
+			hisHand.UniqueID,
+			n.localClipboard,
+			cipher,
+		)
+		n.storage.Add(
+			hisHand.UniqueID,
+			peer,
+		)
+	}
+	return peer, rightErr
 }
 
 // Start starts the node by listening for incoming connections on the specified public port.
@@ -110,7 +128,7 @@ func (n *Node) ConnectTo(addr string) error {
 // The 'scanDelay' parameter determines the interval at which the clipboard is scanned and updated.
 // The method returns an error if it fails to start listening.
 func (n *Node) Start(scanDelay time.Duration) error {
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", n.publicPort))
+	l, err := net.Listen("tcp4", fmt.Sprintf(":%d", n.publicPort))
 	if err != nil {
 		return err
 	}
@@ -128,15 +146,40 @@ func (n *Node) Start(scanDelay time.Duration) error {
 		}
 
 		log.Info().Msgf("accepted connection from %s", conn.RemoteAddr().String())
-
-		go n.handleConnection(conn, n.localClipboard)
-
+		go n.handleConnection(conn)
 	}
 }
 
-func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
-	n.storage.Add(castAddrPortFromConn(conn), conn)
-	NewNodeDataReceiver(n, conn, n.clipboard, localClipboard).Receive()
+func (n *Node) handleConnection(conn net.Conn) {
+	cipher := NewCipher()
+
+	myGreet := greetPool.Acquire()
+	myGreet.PublicKey = cipher.PublicKeyBytes()
+
+	greetErr := n.greet(myGreet, conn)
+	if greetErr != nil {
+		log.Error().Err(greetErr).Msg("failed to greet")
+		return
+	}
+	hisHand, errCatch := n.catchHand(conn)
+	if errCatch != nil {
+		log.Error().Err(errCatch).Msg("failed to catch hand")
+		return
+	}
+
+	cipher.public = bytes2PublicKey(hisHand.PublicKey)
+	peer, addErr := n.addPeer(hisHand, cipher, conn)
+	if addErr != nil {
+		if errors.Is(addErr, ErrAlreadyConnected) {
+			return
+		}
+		log.Error().Err(addErr).Msg("failed to add peer")
+		return
+	}
+
+	log.Info().Msgf("connected to the clipboard: %s", peer.ID())
+	peer.Receive(n.clipboard)
+	n.storage.Delete(peer.ID())
 }
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
@@ -144,26 +187,33 @@ func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
 // If the message is a duplicate, it is not sent.
 // For each connection in the storage, it writes the message to the connection's writer.
 // The method logs the sent messages and their hashes for debugging purposes.
-// The 'msg' parameter is the message to be broadcasted.
+// The 'msg' parameter is the message to be broadcast.
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
-func (n *Node) Broadcast(msg *Message, ignore netip.AddrPort) {
-	defer msg.Release()
+func (n *Node) Broadcast(msg *gen.Message, ignore UniqueID) {
+	defer ReleaseMessage(msg)
 
-	if MessageIsDuplicate(n.GetLastMessage(), msg) {
-		return
-	}
-
-	n.storage.Tap(func(metadata netip.AddrPort, conn net.Conn) {
-		if metadata == ignore {
+	n.storage.Tap(func(id UniqueID, peer *Peer) {
+		if id == ignore {
 			return
 		}
+
+		if MessageIsDuplicate(peer.received.Get(), msg) {
+			return
+		}
+
 		log.Debug().Msgf(
 			"sent %s to %s by hash %x",
 			msg.Header.ID,
-			conn.RemoteAddr(),
+			peer.ID(),
 			shortHash(msg.Data.Hash),
 		)
-		_, _ = msg.Write(conn)
+
+		//if _, err := encodeWriter(msg, peer.Conn()); err != nil {
+		//	log.Err(err).Msg("failed to write message")
+		//}
+		if _, err := peer.cipher.EncryptWriter(msg, peer.Conn()); err != nil {
+			log.Err(err).Msg("failed to write message")
+		}
 	})
 }
 
@@ -177,25 +227,37 @@ func (n *Node) Broadcast(msg *Message, ignore netip.AddrPort) {
 func (n *Node) EnableNodeDiscover() {
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
-			Payload:   []byte(strconv.Itoa(n.publicPort)),
+			PayloadFunc: func() []byte {
+				greet := greetPool.Acquire()
+				defer greetPool.Release(greet)
+
+				greet.Port = uint32(n.publicPort)
+
+				byt, _ := proto.Marshal(greet)
+				return byt
+			},
 			Limit:     -1,
 			TimeLimit: -1,
 			Delay:     n.discoverDelay,
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {
-				nodeAddr := netip.MustParseAddrPort(fmt.Sprintf(
-					"%s:%s",
-					d.Address,
-					string(d.Payload),
-				))
+				greet := greetPool.Acquire()
+				defer greetPool.Release(greet)
 
-				if n.storage.Exist(nodeAddr) {
-					log.Trace().Msgf("node %s already exist, skipping...", nodeAddr)
+				if protoErr := proto.Unmarshal(d.Payload, greet); protoErr != nil {
+					log.Error().Err(protoErr).Msg("failed to unmarshal payload")
 					return
 				}
-				log.Info().Msgf("found node and connecting to %s", nodeAddr)
-				if err := n.ConnectTo(nodeAddr.String()); err != nil {
+
+				nodeAddr := fmt.Sprintf(
+					"%s:%s",
+					d.Address,
+					strconv.Itoa(int(greet.Port)),
+				)
+				log.Info().Msgf("found node %s, check availability", nodeAddr)
+				log.Trace().Msgf("payload: %s", greet.String())
+				if err := n.ConnectTo(nodeAddr); err != nil {
 					log.Error().Msgf("failed to connect to %s", nodeAddr)
 				}
 			},
@@ -207,26 +269,29 @@ func (n *Node) EnableNodeDiscover() {
 	}
 }
 
-func (n *Node) SetLastMessage(msg *Message) {
-	n.lastMessage.mu.Lock()
-	defer n.lastMessage.mu.Unlock()
-
-	n.lastMessage.Message = msg
+func (n *Node) catchHand(conn net.Conn) (*gen.GreetMessage, error) {
+	var greet gen.GreetMessage
+	if decodeErr := decodeReader(conn, &greet); decodeErr != nil {
+		return nil, decodeErr
+	}
+	log.Trace().Msgf("received greeting from %s", conn.RemoteAddr().String())
+	return &greet, nil
 }
 
-func (n *Node) GetLastMessage() *Message {
-	n.lastMessage.mu.Lock()
-	defer n.lastMessage.mu.Unlock()
-
-	return n.lastMessage.Message
+func (n *Node) greet(my *gen.GreetMessage, conn net.Conn) error {
+	log.Trace().Msgf("sending greeting to %s", conn.RemoteAddr().String())
+	if _, err := encodeWriter(my, conn); err != nil {
+		return err
+	}
+	return nil
 }
 
 // stats periodically log information about the nodes in the storage.
 // It retrieves the list of nodes from the provided storage and logs the count of nodes
 // as well as information about each node, including its Address and port.
-func stats(storage Storage) {
+func stats(storage NodeStorage) {
 	for range time.Tick(time.Minute) {
-		storage.Tap(func(metadata netip.AddrPort, conn net.Conn) {
+		storage.Tap(func(metadata UniqueID, peer *Peer) {
 			log.Trace().Msgf("node %s", metadata)
 		})
 	}

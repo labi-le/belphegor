@@ -2,117 +2,143 @@
 package belphegor
 
 import (
+	gen "belphegor/internal/belphegor/types"
 	"belphegor/pkg/image"
+	"belphegor/pkg/pool"
 	"bytes"
-	"crypto/sha1"
+	"crypto/sha256"
+	"errors"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/vmihailenco/msgpack/v5"
-	"io"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"net/http"
 	"runtime"
 	"sync"
 	"time"
 )
 
-// messagePool is a pool for reusing Message objects.
-var messagePool = sync.Pool{
-	New: func() interface{} {
-		return &Message{
-			Header: Header{
-				ID:      uuid.New(),
-				OS:      currentOS,
-				Created: time.Now(),
-			},
-			Data: Data{},
+type UniqueID = string
+
+var (
+	ErrVersionMismatch = errors.New("version mismatch")
+)
+
+var (
+	currentUniqueID = uuid.New()
+	// currentOS represents the operating system information.
+	currentOS = &gen.Device{
+		Type:   parseDeviceType(runtime.GOOS),
+		Arch:   runtime.GOARCH,
+		Unique: currentUniqueID.String(),
+	}
+)
+
+var (
+	messagePool = initMessagePool()
+	greetPool   = initGreetPool()
+)
+
+func initGreetPool() *pool.ObjectPool[*gen.GreetMessage] {
+	p := pool.NewObjectPool[*gen.GreetMessage](10)
+	p.New = func() *gen.GreetMessage {
+		return &gen.GreetMessage{
+			UniqueID: currentUniqueID.String(),
+			Version:  Version,
+			Device:   currentOS,
 		}
-	},
+	}
+
+	return p
 }
 
-// currentOS represents the operating system information.
-var currentOS = &OS{
-	Name: runtime.GOOS,
-	Arch: runtime.GOARCH,
-}
-
-// Message represents clipboard data and its associated metadata.
-type Message struct {
-	Data   Data   // Clipboard data
-	Header Header // Metadata
-}
-
-// Header represents the metadata associated with a Message.
-type Header struct {
-	OS       *OS
-	MimeType string
-	ID       uuid.UUID
-	Created  time.Time
-}
-
-// Data represents the clipboard data and its SHA-1 hash.
-type Data struct {
-	Raw  []byte // Raw clipboard data
-	Hash []byte // SHA-1 hash of the clipboard data
-}
-
-// OS represents the operating system information.
-type OS struct {
-	Name string // Name of the operating system
-	Arch string // Architecture of the operating system
+func initMessagePool() *pool.ObjectPool[*gen.Message] {
+	p := pool.NewObjectPool[*gen.Message](10)
+	p.New = func() *gen.Message {
+		return &gen.Message{
+			Header: &gen.Header{
+				ID:      uuid.New().String(),
+				Device:  currentOS,
+				Created: timestamppb.New(time.Now()),
+			},
+			Data: &gen.Data{},
+		}
+	}
+	return p
 }
 
 // AcquireMessage creates a new Message with the provided data.
-func AcquireMessage(data []byte) *Message {
-	msg := messagePool.Get().(*Message)
-	msg.Data = Data{
-		Raw:  data,
-		Hash: hash(data),
-	}
-	msg.Header.MimeType = http.DetectContentType(data)
+func AcquireMessage(data []byte) *gen.Message {
+	msg := messagePool.Acquire()
+	msg.Data.Raw = data
+	msg.Data.Hash = hashBytes(data)
+
+	msg.Header.MimeType = parseMimeType(http.DetectContentType(data))
 
 	return msg
 }
 
-// Write writes the encoded Message to an io.Writer.
-func (m *Message) Write(w io.Writer) (int, error) {
-	return w.Write(encode(m))
+// ReleaseMessage returns the Message to the messagePool for reuse.
+func ReleaseMessage(m *gen.Message) {
+	messagePool.Release(m)
 }
 
-// Release returns the Message to the messagePool for reuse.
-func (m *Message) Release() {
-	messagePool.Put(m)
+func parseDeviceType(os string) gen.Type {
+	switch os {
+	case "linux":
+		return gen.Type_Linux
+	case "windows":
+		return gen.Type_Windows
+	case "darwin":
+		return gen.Type_MacOS
+	case "ios":
+		return gen.Type_IOS
+	case "android":
+		return gen.Type_Android
+	default:
+		panic("unimplemented device")
+	}
 }
 
-func (m *Message) IsImage() bool {
-	return image.HasPicture(m.Header.MimeType)
-}
-
-// encode encodes the source interface using msgpack and returns the encoded byte slice.
-func encode(src interface{}) []byte {
-	encoded, err := msgpack.Marshal(src)
-	if err != nil {
-		log.Error().Msgf("failed to encode clipboard data: %s", err)
+func HandShake(self *gen.GreetMessage, other *gen.GreetMessage) error {
+	if self.Version != other.Version {
+		return ErrVersionMismatch
 	}
 
-	return encoded
+	return nil
 }
 
-// decodeMessage decodes data from an io.Reader into the destination interface using msgpack.
-func decodeMessage(r io.Reader, msg *Message) error {
-	return decode(r, msg)
+// lastMessage which is stored in Node and serves to identify duplicate messages
+type lastMessage struct {
+	*gen.Message
+	mu sync.Mutex
 }
 
-func decode(r io.Reader, dst interface{}) error {
-	decoder := msgpack.GetDecoder()
-	decoder.Reset(r)
-	defer msgpack.PutDecoder(decoder)
+func (m *lastMessage) Get() *gen.Message {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	return decoder.Decode(dst)
+	return m.Message
 }
 
-// hash calculates the SHA-1 hash of the provided data and returns it as a byte slice.
-func hash(data []byte) []byte {
-	sha := sha1.New() //nolint:gosec
+func (m *lastMessage) Set(msg *gen.Message) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.Message = msg
+}
+
+func parseMimeType(ct string) gen.Mime {
+	switch ct {
+	case "image/png":
+		return gen.Mime_IMAGE
+	default:
+		return gen.Mime_TEXT
+	}
+}
+
+// hashBytes calculates the SHA-256 hash of the provided data and returns it as a byte slice.
+func hashBytes(data []byte) []byte {
+	sha := sha256.New()
 	sha.Write(data)
 
 	return sha.Sum(nil)
@@ -123,20 +149,20 @@ func shortHash(oldHash []byte) []byte {
 	return oldHash[:4]
 }
 
-func MessageIsDuplicate(msg1 *Message, msg2 *Message) bool {
-	if msg1.Header.ID == msg2.Header.ID {
+func MessageIsDuplicate(self *gen.Message, from *gen.Message) bool {
+	if self.Header.ID == from.Header.ID {
 		return true
 	}
 
-	if msg1.IsImage() && msg2.IsImage() {
-		if equalSystem(msg1, msg2) {
-			return bytes.Equal(msg1.Data.Hash, msg2.Data.Hash)
+	if self.Header.MimeType == gen.Mime_IMAGE && from.Header.MimeType == gen.Mime_IMAGE {
+		if equalSystem(self, from) {
+			return bytes.Equal(self.Data.Hash, from.Data.Hash)
 		}
 
 		// mse: compare images
 		identical, err := image.Equal(
-			bytes.NewReader(msg1.Data.Raw),
-			bytes.NewReader(msg2.Data.Raw),
+			bytes.NewReader(self.Data.Raw),
+			bytes.NewReader(from.Data.Raw),
 		)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to compare images")
@@ -148,7 +174,7 @@ func MessageIsDuplicate(msg1 *Message, msg2 *Message) bool {
 	return false
 }
 
-func equalSystem(msg1 *Message, msg2 *Message) bool {
-	return msg1.Header.OS.Name == msg2.Header.OS.Name &&
-		msg1.Header.OS.Arch == msg2.Header.OS.Arch
+func equalSystem(self *gen.Message, from *gen.Message) bool {
+	return self.Header.Device.Type == from.Header.Device.Type &&
+		self.Header.Device.Arch == from.Header.Device.Arch
 }
