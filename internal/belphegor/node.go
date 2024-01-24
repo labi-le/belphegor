@@ -55,6 +55,9 @@ func NewNode(
 		storage:        storage,
 		discoverDelay:  discoverDelay,
 		localClipboard: channel,
+		lastMessage: lastMessage{
+			Message: AcquireMessage([]byte{}),
+		},
 	}
 }
 
