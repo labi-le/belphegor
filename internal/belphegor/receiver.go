@@ -18,7 +18,7 @@ type NodeDataReceiver struct {
 }
 
 // NewNodeDataReceiver creates a new instance NodeDataReceiver.
-func NewNodeDataReceiver(node *Node, conn net.Conn, cp clipboard.Manager, channel Channel) Handler {
+func NewNodeDataReceiver(node *Node, conn net.Conn, cp clipboard.Manager, channel Channel) *NodeDataReceiver {
 	return &NodeDataReceiver{
 		node:      node,
 		conn:      conn,
@@ -27,9 +27,9 @@ func NewNodeDataReceiver(node *Node, conn net.Conn, cp clipboard.Manager, channe
 	}
 }
 
-// Start starts receiving data from the node.
-func (ndr *NodeDataReceiver) Start() {
-	remoteIP := IP(ndr.conn.RemoteAddr().(*net.TCPAddr).IP.String())
+// Receive starts receiving data from the node.
+func (ndr *NodeDataReceiver) Receive() {
+	remoteIP := Address(ndr.conn.RemoteAddr().(*net.TCPAddr).IP.String())
 	defer func() {
 		log.Info().Msgf("node %s disconnected", remoteIP)
 		ndr.node.storage.Delete(remoteIP)
@@ -42,7 +42,7 @@ func (ndr *NodeDataReceiver) Start() {
 			break
 		}
 
-		ndr.node.SetLastMessage(*msg)
+		ndr.node.SetLastMessage(msg)
 		_ = ndr.cm.Set(msg.Data.Raw)
 		ndr.localChan.Set(msg.Data.Raw)
 
@@ -54,7 +54,7 @@ func (ndr *NodeDataReceiver) Start() {
 	}
 }
 
-func debug(message Message) {
+func debug(message *Message) {
 	// get current dir
 	dir, _ := os.Getwd()
 	fp := dir + "/debug/" + message.Header.ID.String() + ".png"
@@ -67,8 +67,8 @@ func debug(message Message) {
 
 // receiveMessage receives a message from the node.
 func (ndr *NodeDataReceiver) receiveMessage() (*Message, error) {
-	msg := NewMessage(nil)
-	err := decode(ndr.conn, msg)
+	msg := AcquireMessage([]byte{})
+	err := decodeMessage(ndr.conn, msg)
 	if err != nil {
 		return nil, err
 	}

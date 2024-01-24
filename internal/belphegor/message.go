@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"runtime"
 	"sync"
+	"time"
 )
 
 // messagePool is a pool for reusing Message objects.
@@ -19,8 +20,9 @@ var messagePool = sync.Pool{
 	New: func() interface{} {
 		return &Message{
 			Header: Header{
-				ID: uuid.New(),
-				OS: currentOS,
+				ID:      uuid.New(),
+				OS:      currentOS,
+				Created: time.Now(),
 			},
 			Data: Data{},
 		}
@@ -44,6 +46,7 @@ type Header struct {
 	OS       *OS
 	MimeType string
 	ID       uuid.UUID
+	Created  time.Time
 }
 
 // Data represents the clipboard data and its SHA-1 hash.
@@ -58,13 +61,8 @@ type OS struct {
 	Arch string // Architecture of the operating system
 }
 
-// Write writes the encoded Message to an io.Writer.
-func (m *Message) Write(w io.Writer) (int, error) {
-	return w.Write(encode(m))
-}
-
-// NewMessage creates a new Message with the provided data.
-func NewMessage(data []byte) *Message {
+// AcquireMessage creates a new Message with the provided data.
+func AcquireMessage(data []byte) *Message {
 	msg := messagePool.Get().(*Message)
 	msg.Data = Data{
 		Raw:  data,
@@ -75,46 +73,18 @@ func NewMessage(data []byte) *Message {
 	return msg
 }
 
-// IsDuplicate checks if the Message is a duplicate of another Message.
-func (m *Message) IsDuplicate(msg Message) bool {
-	// If the MIME type is image/png, compare the images
-	// windows and linux are image processed differently and comparing hashes becomes meaningless
-	if m.hasSameMimeType(msg) && m.isPicture(msg) {
-		return imageComparison(msg, m)
-	}
-
-	return m.Header.ID == msg.Header.ID || bytes.Equal(m.Data.Hash, msg.Data.Hash)
+// Write writes the encoded Message to an io.Writer.
+func (m *Message) Write(w io.Writer) (int, error) {
+	return w.Write(encode(m))
 }
 
-func (m *Message) isPicture(msg Message) bool {
-	switch msg.Header.MimeType {
-	case "image/png":
-		return true
-	case "image/jpeg":
-		return true
-	case "image/gif":
-		return true
-	default:
-		return false
-	}
-}
-
-func (m *Message) hasSameMimeType(msg Message) bool {
-	return m.Header.MimeType == msg.Header.MimeType
-}
-
-func imageComparison(msg Message, m *Message) bool {
-	identical, err := image.IsDuplicate(msg.Data.Raw, m.Data.Raw)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to compare images")
-	}
-
-	return identical
-}
-
-// Free returns the Message to the messagePool for reuse.
-func (m *Message) Free() {
+// Release returns the Message to the messagePool for reuse.
+func (m *Message) Release() {
 	messagePool.Put(m)
+}
+
+func (m *Message) IsImage() bool {
+	return image.HasPicture(m.Header.MimeType)
 }
 
 // encode encodes the source interface using msgpack and returns the encoded byte slice.
@@ -127,9 +97,17 @@ func encode(src interface{}) []byte {
 	return encoded
 }
 
-// decode decodes data from an io.Reader into the destination interface using msgpack.
+// decodeMessage decodes data from an io.Reader into the destination interface using msgpack.
+func decodeMessage(r io.Reader, msg *Message) error {
+	return decode(r, msg)
+}
+
 func decode(r io.Reader, dst interface{}) error {
-	return msgpack.NewDecoder(r).Decode(dst)
+	decoder := msgpack.GetDecoder()
+	decoder.Reset(r)
+	defer msgpack.PutDecoder(decoder)
+
+	return decoder.Decode(dst)
 }
 
 // hash calculates the SHA-1 hash of the provided data and returns it as a byte slice.
@@ -143,4 +121,34 @@ func hash(data []byte) []byte {
 // shortHash returns the first 4 bytes of the provided hash.
 func shortHash(oldHash []byte) []byte {
 	return oldHash[:4]
+}
+
+func MessageIsDuplicate(msg1 *Message, msg2 *Message) bool {
+	if msg1.Header.ID == msg2.Header.ID {
+		return true
+	}
+
+	if msg1.IsImage() && msg2.IsImage() {
+		if equalSystem(msg1, msg2) {
+			return bytes.Equal(msg1.Data.Hash, msg2.Data.Hash)
+		}
+
+		// mse: compare images
+		identical, err := image.Equal(
+			bytes.NewReader(msg1.Data.Raw),
+			bytes.NewReader(msg2.Data.Raw),
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to compare images")
+		}
+
+		return identical
+	}
+
+	return false
+}
+
+func equalSystem(msg1 *Message, msg2 *Message) bool {
+	return msg1.Header.OS.Name == msg2.Header.OS.Name &&
+		msg1.Header.OS.Arch == msg2.Header.OS.Arch
 }

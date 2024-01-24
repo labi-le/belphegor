@@ -8,7 +8,7 @@ import (
 )
 
 type Handler interface {
-	Start()
+	Receive()
 }
 
 // ClipboardMonitor responsible for monitoring the local clipboard.
@@ -30,7 +30,7 @@ func NewClipboardMonitor(node *Node, cp clipboard.Manager, interval time.Duratio
 }
 
 // Start starts monitoring the clipboard and subsequently sending data to other nodes
-func (cm *ClipboardMonitor) Start() {
+func (cm *ClipboardMonitor) Receive() {
 	var (
 		clipboardChan    = make(chan []byte)
 		currentClipboard []byte
@@ -59,7 +59,7 @@ func (cm *ClipboardMonitor) Start() {
 
 	for clip := range clipboardChan {
 		log.Trace().Msg("local clipboard data changed")
-		cm.node.Broadcast(NewMessage(clip))
+		cm.node.Broadcast(AcquireMessage(clip))
 	}
 }
 

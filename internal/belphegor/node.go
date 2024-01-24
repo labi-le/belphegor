@@ -16,8 +16,8 @@ import (
 
 const DefaultDiscoverDelay = 60 * time.Second
 
-// IP e.g. 192.168.0.45
-type IP string
+// Address e.g. 192.168.0.45
+type Address string
 
 type Node struct {
 	clipboard      clipboard.Manager
@@ -30,7 +30,7 @@ type Node struct {
 
 // lastMessage which is stored in Node and serves to identify duplicate messages
 type lastMessage struct {
-	Message
+	*Message
 	mu sync.Mutex
 }
 
@@ -119,7 +119,7 @@ func (n *Node) Start(scanDelay time.Duration) error {
 
 	defer l.Close()
 
-	go NewClipboardMonitor(n, n.clipboard, scanDelay, n.localClipboard).Start()
+	go NewClipboardMonitor(n, n.clipboard, scanDelay, n.localClipboard).Receive()
 
 	for {
 		conn, netErr := l.Accept()
@@ -136,7 +136,7 @@ func (n *Node) Start(scanDelay time.Duration) error {
 
 func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
 	n.storage.Add(conn)
-	NewNodeDataReceiver(n, conn, n.clipboard, localClipboard).Start()
+	NewNodeDataReceiver(n, conn, n.clipboard, localClipboard).Receive()
 }
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
@@ -145,11 +145,11 @@ func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
 // For each connection in the storage, it writes the message to the connection's writer.
 // The method logs the sent messages and their hashes for debugging purposes.
 // The 'msg' parameter is the message to be broadcasted.
-// The 'ignore' parameter is a variadic list of IP addresses to exclude from the broadcast.
-func (n *Node) Broadcast(msg *Message, ignore ...IP) {
-	defer msg.Free()
+// The 'ignore' parameter is a variadic list of Address addresses to exclude from the broadcast.
+func (n *Node) Broadcast(msg *Message, ignore ...Address) {
+	defer msg.Release()
 
-	if msg.IsDuplicate(n.GetLastMessage()) {
+	if MessageIsDuplicate(n.GetLastMessage(), msg) {
 		return
 	}
 
@@ -176,7 +176,7 @@ func (n *Node) EnableNodeDiscover() {
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {
-				nodeAddr := IP(d.Address)
+				nodeAddr := Address(d.Address)
 
 				if n.storage.Exist(nodeAddr) {
 					log.Trace().Msgf("node %s already exist, skipping...", nodeAddr)
@@ -198,14 +198,14 @@ func (n *Node) EnableNodeDiscover() {
 	}
 }
 
-func (n *Node) SetLastMessage(msg Message) {
+func (n *Node) SetLastMessage(msg *Message) {
 	n.lastMessage.mu.Lock()
 	defer n.lastMessage.mu.Unlock()
 
 	n.lastMessage.Message = msg
 }
 
-func (n *Node) GetLastMessage() Message {
+func (n *Node) GetLastMessage() *Message {
 	n.lastMessage.mu.Lock()
 	defer n.lastMessage.mu.Unlock()
 
@@ -214,7 +214,7 @@ func (n *Node) GetLastMessage() Message {
 
 // stats periodically logs information about the nodes in the storage.
 // It retrieves the list of nodes from the provided storage and logs the count of nodes
-// as well as information about each node, including its IP address and port.
+// as well as information about each node, including its Address address and port.
 // The function runs at an interval of 5 seconds.
 func stats(storage Storage) {
 	for range time.Tick(5 * time.Second) {

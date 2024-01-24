@@ -1,9 +1,9 @@
 package image
 
 import (
-	"bytes"
 	"image"
 	"image/png"
+	"io"
 	"math"
 )
 
@@ -35,19 +35,17 @@ func calculateMSE(img1 image.Image, img2 image.Image) float64 {
 	return mse
 }
 
-// IsDuplicate comparing two images by mean square error (MSE)
-func IsDuplicate(imageData1 []byte, imageData2 []byte) (bool, error) {
-	img1, err := png.Decode(bytes.NewReader(imageData1))
+// Equal comparing two images by mean square error (MSE)
+func Equal(img1 io.Reader, img2 io.Reader) (bool, error) {
+	png1, err := png.Decode(img1)
 	if err != nil {
 		return false, err
 	}
 
-	img2, err := png.Decode(bytes.NewReader(imageData2))
+	png2, err := png.Decode(img2)
 	if err != nil {
 		return false, err
 	}
 	// calculate mse between images
-	mse := calculateMSE(img1, img2)
-
-	return mse < threshold, nil
+	return calculateMSE(png1, png2) < threshold, nil
 }
