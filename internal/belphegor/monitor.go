@@ -4,6 +4,7 @@ import (
 	"belphegor/pkg/clipboard"
 	"bytes"
 	"github.com/rs/zerolog/log"
+	"net/netip"
 	"time"
 )
 
@@ -29,7 +30,7 @@ func NewClipboardMonitor(node *Node, cp clipboard.Manager, interval time.Duratio
 	}
 }
 
-// Start starts monitoring the clipboard and subsequently sending data to other nodes
+// Receive starts monitoring the clipboard and subsequently sending data to other nodes
 func (cm *ClipboardMonitor) Receive() {
 	var (
 		clipboardChan    = make(chan []byte)
@@ -59,7 +60,7 @@ func (cm *ClipboardMonitor) Receive() {
 
 	for clip := range clipboardChan {
 		log.Trace().Msg("local clipboard data changed")
-		cm.node.Broadcast(AcquireMessage(clip))
+		cm.node.Broadcast(AcquireMessage(clip), netip.AddrPort{})
 	}
 }
 

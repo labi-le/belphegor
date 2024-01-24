@@ -2,22 +2,19 @@ package belphegor
 
 import (
 	"belphegor/pkg/clipboard"
-	"belphegor/pkg/ip"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
 	"net"
+	"net/netip"
 	"strconv"
 	"sync"
 	"time"
 )
 
 const DefaultDiscoverDelay = 60 * time.Second
-
-// Address e.g. 192.168.0.45
-type Address string
 
 type Node struct {
 	clipboard      clipboard.Manager
@@ -98,7 +95,7 @@ func (n *Node) ConnectTo(addr string) error {
 
 	log.Info().Msgf("connected to the clipboard: %s", addr)
 
-	n.storage.Add(c)
+	n.storage.Add(castAddrPortFromConn(c), c)
 
 	go n.handleConnection(c, n.localClipboard)
 	return nil
@@ -135,7 +132,7 @@ func (n *Node) Start(scanDelay time.Duration) error {
 }
 
 func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
-	n.storage.Add(conn)
+	n.storage.Add(castAddrPortFromConn(conn), conn)
 	NewNodeDataReceiver(n, conn, n.clipboard, localClipboard).Receive()
 }
 
@@ -145,18 +142,26 @@ func (n *Node) handleConnection(conn net.Conn, localClipboard Channel) {
 // For each connection in the storage, it writes the message to the connection's writer.
 // The method logs the sent messages and their hashes for debugging purposes.
 // The 'msg' parameter is the message to be broadcasted.
-// The 'ignore' parameter is a variadic list of Address addresses to exclude from the broadcast.
-func (n *Node) Broadcast(msg *Message, ignore ...Address) {
+// The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
+func (n *Node) Broadcast(msg *Message, ignore netip.AddrPort) {
 	defer msg.Release()
 
 	if MessageIsDuplicate(n.GetLastMessage(), msg) {
 		return
 	}
 
-	for _, conn := range n.storage.All(ignore...) {
-		log.Debug().Msgf("sent %s to %s by hash %x", msg.Header.ID, conn.IP, shortHash(msg.Data.Hash))
+	n.storage.Tap(func(metadata netip.AddrPort, conn net.Conn) {
+		if metadata == ignore {
+			return
+		}
+		log.Debug().Msgf(
+			"sent %s to %s by hash %x",
+			msg.Header.ID,
+			conn.RemoteAddr(),
+			shortHash(msg.Data.Hash),
+		)
 		_, _ = msg.Write(conn)
-	}
+	})
 }
 
 // EnableNodeDiscover enables node discovery.
@@ -176,18 +181,16 @@ func (n *Node) EnableNodeDiscover() {
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {
-				nodeAddr := Address(d.Address)
+				rawAddr := d.Address + string(d.Payload)
+				nodeAddr := netip.MustParseAddrPort(rawAddr)
 
 				if n.storage.Exist(nodeAddr) {
 					log.Trace().Msgf("node %s already exist, skipping...", nodeAddr)
 					return
 				}
-				log.Info().Msgf("found node: %s", nodeAddr)
-
-				addr := ip.MakeAddr(net.ParseIP(d.Address), string(d.Payload))
-				log.Info().Msgf("connecting to %s", addr)
-				if err := n.ConnectTo(addr); err != nil {
-					log.Error().Msgf("failed to connect to %s", addr)
+				log.Info().Msgf("found node and connecting to %s", nodeAddr)
+				if err := n.ConnectTo(nodeAddr.String()); err != nil {
+					log.Error().Msgf("failed to connect to %s", nodeAddr)
 				}
 			},
 		},
@@ -212,16 +215,13 @@ func (n *Node) GetLastMessage() *Message {
 	return n.lastMessage.Message
 }
 
-// stats periodically logs information about the nodes in the storage.
+// stats periodically log information about the nodes in the storage.
 // It retrieves the list of nodes from the provided storage and logs the count of nodes
-// as well as information about each node, including its Address address and port.
-// The function runs at an interval of 5 seconds.
+// as well as information about each node, including its Address and port.
 func stats(storage Storage) {
-	for range time.Tick(5 * time.Second) {
-		nodes := storage.All()
-		log.Trace().Msgf("nodes count: %d", len(nodes))
-		for _, info := range nodes {
-			log.Trace().Msgf("node %s %d", info.IP, info.Port)
-		}
+	for range time.Tick(time.Minute) {
+		storage.Tap(func(metadata netip.AddrPort, conn net.Conn) {
+			log.Trace().Msgf("node %s", metadata)
+		})
 	}
 }

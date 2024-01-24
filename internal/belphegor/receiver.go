@@ -6,7 +6,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"io"
 	"net"
-	"os"
 )
 
 // NodeDataReceiver responsible for receiving data from the node.
@@ -29,10 +28,10 @@ func NewNodeDataReceiver(node *Node, conn net.Conn, cp clipboard.Manager, channe
 
 // Receive starts receiving data from the node.
 func (ndr *NodeDataReceiver) Receive() {
-	remoteIP := Address(ndr.conn.RemoteAddr().(*net.TCPAddr).IP.String())
+	addr := castAddrPortFromConn(ndr.conn)
 	defer func() {
-		log.Info().Msgf("node %s disconnected", remoteIP)
-		ndr.node.storage.Delete(remoteIP)
+		log.Info().Msgf("node %s disconnected", addr)
+		ndr.node.storage.Delete(addr)
 	}()
 
 	for {
@@ -46,22 +45,14 @@ func (ndr *NodeDataReceiver) Receive() {
 		_ = ndr.cm.Set(msg.Data.Raw)
 		ndr.localChan.Set(msg.Data.Raw)
 
-		//go debug(*msg)
+		log.Debug().Msgf(
+			"received %s from %s by hash %x",
+			msg.Header.ID,
+			addr,
+			shortHash(msg.Data.Hash),
+		)
 
-		log.Debug().Msgf("received %s from %s by hash %x", msg.Header.ID, remoteIP, shortHash(msg.Data.Hash))
-
-		ndr.node.Broadcast(msg, remoteIP)
-	}
-}
-
-func debug(message *Message) {
-	// get current dir
-	dir, _ := os.Getwd()
-	fp := dir + "/debug/" + message.Header.ID.String() + ".png"
-	log.Trace().Msgf("writing debug file to %s", fp)
-	err := os.WriteFile(fp, message.Data.Raw, 0644)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to write debug file")
+		ndr.node.Broadcast(msg, addr)
 	}
 }
 

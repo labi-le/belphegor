@@ -2,7 +2,7 @@ package belphegor
 
 import (
 	"net"
-	"strconv"
+	"net/netip"
 	"sync"
 )
 
@@ -10,25 +10,20 @@ import (
 type Storage interface {
 	// Add adds the specified node to the storage.
 	// If the node already exists, it will be overwritten.
-	Add(conn net.Conn)
-	// Delete deletes the node associated with the specified Address.
-	Delete(hash Address)
-	// Get returns the node associated with the specified Address.
-	Get(addr Address) (net.Conn, bool)
+	Add(key netip.AddrPort, val net.Conn)
+	// Delete deletes the node associated with the specified AddrPort.
+	Delete(key netip.AddrPort)
+	// Get netip.AddrPort the node associated with the specified AddrPort.
+	Get(key netip.AddrPort) (net.Conn, bool)
 	// Exist returns true if the specified node exists in the storage.
-	Exist(hash Address) bool
-	// All returns copy of all nodes excluding the specified nodes.
-	All(exclude ...Address) Nodes
+	Exist(key netip.AddrPort) bool
+	// Tap calls the specified function for each node in the storage.
+	Tap(fn func(netip.AddrPort, net.Conn))
 }
 
-// NodeInfo represents a node's information such as Address, port, and connection.
-type NodeInfo struct {
-	net.Conn
-	IP   Address
-	Port int
+func castAddrPortFromConn(conn net.Conn) netip.AddrPort {
+	return conn.RemoteAddr().(*net.TCPAddr).AddrPort()
 }
-
-type Nodes []NodeInfo
 
 type SyncMapStorage struct {
 	m sync.Map
@@ -39,48 +34,30 @@ func NewSyncMapStorage() *SyncMapStorage {
 	return &SyncMapStorage{}
 }
 
-func (s *SyncMapStorage) Add(conn net.Conn) {
-	host, port, _ := net.SplitHostPort(conn.RemoteAddr().String())
-
-	portInt, _ := strconv.Atoi(port)
-	s.m.Store(Address(host), NodeInfo{
-		Port: portInt,
-		Conn: conn,
-	})
+func (s *SyncMapStorage) Add(key netip.AddrPort, val net.Conn) {
+	s.m.Store(key, val)
 }
 
-func (s *SyncMapStorage) Delete(hash Address) {
-	s.m.Delete(hash)
+func (s *SyncMapStorage) Delete(key netip.AddrPort) {
+	s.m.Delete(key)
 }
 
-func (s *SyncMapStorage) Get(addr Address) (net.Conn, bool) {
-	v, ok := s.m.Load(addr)
+func (s *SyncMapStorage) Get(key netip.AddrPort) (net.Conn, bool) {
+	v, ok := s.m.Load(key)
 	if !ok {
 		return nil, false
 	}
-	return v.(NodeInfo).Conn, true
+	return v.(net.Conn), true
 }
 
-func (s *SyncMapStorage) Exist(hash Address) bool {
-	_, ok := s.m.Load(hash)
+func (s *SyncMapStorage) Exist(key netip.AddrPort) bool {
+	_, ok := s.m.Load(key)
 	return ok
 }
 
-func (s *SyncMapStorage) All(exclude ...Address) Nodes {
-	var nodes Nodes
-	s.m.Range(func(key, value any) bool {
-		for _, ip := range exclude {
-			if ip == key.(Address) {
-				return true
-			}
-		}
-
-		nodes = append(nodes, NodeInfo{
-			IP:   key.(Address),
-			Port: value.(NodeInfo).Port,
-			Conn: value.(NodeInfo).Conn,
-		})
+func (s *SyncMapStorage) Tap(fn func(netip.AddrPort, net.Conn)) {
+	s.m.Range(func(k, v any) bool {
+		fn(k.(netip.AddrPort), v.(net.Conn))
 		return true
 	})
-	return nodes
 }
