@@ -15,7 +15,7 @@ type UpdateChannel struct {
 }
 
 // NewChannel creates a new instance of UpdateChannel and returns it as a Channel interface.
-func NewChannel() Channel {
+func NewChannel() *UpdateChannel {
 	return &UpdateChannel{raw: make(chan []byte)}
 }
 
