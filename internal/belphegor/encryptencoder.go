@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	BitSize = 4096
+	BitSize = 1024
 )
 
 type Cipher struct {
