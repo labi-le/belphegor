@@ -1,5 +1,4 @@
 //go:build darwin
-// +build darwin
 
 package clipboard
 
@@ -16,5 +15,5 @@ func (p darwin) Get() ([]byte, error) {
 }
 
 func (p darwin) Set(data []byte) error {
-	return clipboardSet(data, p.Get())
+	return clipboardSet(data, exec.Command("pbcopy"))
 }
