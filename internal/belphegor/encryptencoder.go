@@ -1,3 +1,5 @@
+// todo put in a separate package
+
 package belphegor
 
 import (
