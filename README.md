@@ -9,6 +9,8 @@ Belphegor is a clipboard manager that allows you to share your clipboard with ot
 - pbpaste (macos)
 - makefile
 
+It works unstable on makos, i don't have this system to fix the code
+
 ## Install
 
 ```sh
