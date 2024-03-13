@@ -8,7 +8,17 @@ import (
 type Manager interface {
 	Get() ([]byte, error)
 	Set(data []byte) error
+	Name() string
 }
+
+const (
+	XClip       = "xclip"
+	XSel        = "xsel"
+	WlClipboard = "wl-clipboard"
+	Termux      = "termux"
+	WindowsNT10 = "nt10"
+	MasOsStd    = "masos-std"
+)
 
 func clipboardGet(cmd *exec.Cmd) ([]byte, error) {
 	return cmd.Output()
@@ -42,4 +52,8 @@ func clipboardSet(data []byte, cmd *exec.Cmd) error {
 func toolExist(tool string) bool {
 	_, err := exec.LookPath(tool)
 	return err == nil
+}
+
+func New() Manager {
+	return NewThreadSafe()
 }

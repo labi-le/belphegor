@@ -4,16 +4,20 @@ package clipboard
 
 import "os/exec"
 
-func NewManager() Manager {
-	return &darwin{}
+func NewManager() *Darwin {
+	return &Darwin{}
 }
 
-type darwin struct{}
+type Darwin struct{}
 
-func (p darwin) Get() ([]byte, error) {
+func (p *Darwin) Get() ([]byte, error) {
 	return clipboardGet(exec.Command("pbpaste"))
 }
 
-func (p darwin) Set(data []byte) error {
+func (p *Darwin) Set(data []byte) error {
 	return clipboardSet(data, exec.Command("pbcopy"))
+}
+
+func (p *Darwin) Name() string {
+	return MasOsStd
 }

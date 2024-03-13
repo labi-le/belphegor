@@ -5,7 +5,6 @@
 // Written by Changkun Ou <changkun.de>
 
 //go:build windows
-// +build windows
 
 package clipboard
 
@@ -98,6 +97,10 @@ func (p *windows) Set(data []byte) error {
 
 	_, err := write(FmtText, data)
 	return err
+}
+
+func (p *windows) Name() string {
+	return WindowsNT10
 }
 
 var (
