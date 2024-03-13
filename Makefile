@@ -17,26 +17,24 @@ build: clean
 	go build --ldflags '-s -w -extldflags "-static"' -v -o $(BUILD_PATH)$(PROJ_NAME) $(MAIN_PATH)
 
 build-windows: clean
-	go build -ldflags "-s -w -extldflags -static" -v -o $(BUILD_PATH)$(PROJ_NAME).exe $(MAIN_PATH)
+	GOOS=windows go build -ldflags "-s -w -extldflags -static" -v -o $(BUILD_PATH)$(PROJ_NAME).exe $(MAIN_PATH)
 
-install:build
-ifeq ($(OS),Windows_NT)
+install-windows:build-windows
 	powershell.exe -command "Copy-Item -Path '$(BUILD_PATH)$(PROJ_NAME).exe' \
 	 -Destination '$(APPDATA)\Microsoft\Windows\Start Menu\Programs\Startup\$(PROJ_NAME).exe' -Force"
-else
+
+
+install: build
 	sudo cp $(BUILD_PATH)$(PROJ_NAME) $(INSTALL_PATH)$(PROJ_NAME)
-endif
 
 uninstall:
 	sudo rm $(INSTALL_PATH)$(PROJ_NAME)
 
 clean:
-# if os is windows then remove .exe file
-ifeq ($(OS),Windows_NT)
-	-powershell.exe -command Remove-Item -Path $(BUILD_PATH)$(PROJ_NAME).exe -ErrorAction SilentlyContinue
-else
 	rm -rf $(FULL_PATH)
-endif
+
+clean-windows:
+	-powershell.exe -command Remove-Item -Path $(BUILD_PATH)$(PROJ_NAME).exe -ErrorAction SilentlyContinue
 
 tests:
 	go test ./...
