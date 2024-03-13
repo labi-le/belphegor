@@ -6,6 +6,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"io"
+	"net"
+	"time"
 )
 
 const DataLength = 4
@@ -28,6 +30,15 @@ func encodeWriter(src proto.Message, w io.Writer) (int, error) {
 	defer byteslice.Put(lenBytes)
 
 	binary.BigEndian.PutUint32(lenBytes, uint32(len(encoded)))
+
+	// Set write timeout if the writer implements net.Conn
+	if conn, ok := w.(*net.TCPConn); ok {
+		err := conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err != nil {
+			return 0, err
+		}
+		defer conn.SetWriteDeadline(time.Time{}) // Reset the deadline when done
+	}
 
 	n, err := w.Write(lenBytes)
 	if err != nil {

@@ -208,6 +208,14 @@ func (n *Node) Broadcast(msg *gen.Message, ignore UniqueID) {
 			shortHash(msg.Data.Hash),
 		)
 
+		// Set write timeout if the writer implements net.Conn
+		err := peer.Conn().SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err != nil {
+			log.Err(err).Msg("write timeout")
+			return
+		}
+		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
+
 		//if _, err := encodeWriter(msg, peer.Conn()); err != nil {
 		//	log.Err(err).Msg("failed to write message")
 		//}
