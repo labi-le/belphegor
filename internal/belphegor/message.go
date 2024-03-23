@@ -3,6 +3,7 @@ package belphegor
 
 import (
 	gen "belphegor/internal/belphegor/types"
+	"belphegor/pkg/clipboard"
 	"belphegor/pkg/image"
 	"belphegor/pkg/pool"
 	"bytes"
@@ -25,11 +26,11 @@ var (
 
 var (
 	currentUniqueID = uuid.New()
-	// currentOS represents the operating system information.
-	currentOS = &gen.Device{
-		Type:   parseDeviceType(runtime.GOOS),
-		Arch:   runtime.GOARCH,
-		Unique: currentUniqueID.String(),
+	// thisDevice represents the current device.
+	thisDevice = &gen.Device{
+		Arch:              runtime.GOARCH,
+		UniqueName:        currentUniqueID.String(),
+		ClipboardProvider: parseClipboardProvider(clipboard.NewManager()),
 	}
 )
 
@@ -44,7 +45,7 @@ func initGreetPool() *pool.ObjectPool[*gen.GreetMessage] {
 		return &gen.GreetMessage{
 			UniqueID: currentUniqueID.String(),
 			Version:  Version,
-			Device:   currentOS,
+			Device:   thisDevice,
 		}
 	}
 
@@ -57,7 +58,7 @@ func initMessagePool() *pool.ObjectPool[*gen.Message] {
 		return &gen.Message{
 			Header: &gen.Header{
 				ID:      uuid.New().String(),
-				Device:  currentOS,
+				Device:  thisDevice,
 				Created: timestamppb.New(time.Now()),
 			},
 			Data: &gen.Data{},
@@ -82,18 +83,19 @@ func ReleaseMessage(m *gen.Message) {
 	messagePool.Release(m)
 }
 
-func parseDeviceType(os string) gen.Type {
-	switch os {
-	case "linux":
-		return gen.Type_Linux
-	case "windows":
-		return gen.Type_Windows
-	case "darwin":
-		return gen.Type_MacOS
-	case "ios":
-		return gen.Type_IOS
-	case "android":
-		return gen.Type_Android
+func parseClipboardProvider(m clipboard.Manager) gen.Clipboard {
+	switch m.Name() {
+	case clipboard.XSel:
+		return gen.Clipboard_XSel
+	case clipboard.XClip:
+		return gen.Clipboard_XClip
+	case clipboard.WlClipboard:
+		return gen.Clipboard_WlClipboard
+	case clipboard.MasOsStd:
+		return gen.Clipboard_MasOsStd
+	case clipboard.WindowsNT10:
+		return gen.Clipboard_WindowsNT10
+
 	default:
 		panic("unimplemented device")
 	}
@@ -155,7 +157,7 @@ func MessageIsDuplicate(self *gen.Message, from *gen.Message) bool {
 	}
 
 	if self.Header.MimeType == gen.Mime_IMAGE && from.Header.MimeType == gen.Mime_IMAGE {
-		if equalSystem(self, from) {
+		if equalClipboardProviders(self, from) {
 			return bytes.Equal(self.Data.Hash, from.Data.Hash)
 		}
 
@@ -174,7 +176,6 @@ func MessageIsDuplicate(self *gen.Message, from *gen.Message) bool {
 	return false
 }
 
-func equalSystem(self *gen.Message, from *gen.Message) bool {
-	return self.Header.Device.Type == from.Header.Device.Type &&
-		self.Header.Device.Arch == from.Header.Device.Arch
+func equalClipboardProviders(self *gen.Message, from *gen.Message) bool {
+	return self.Header.Device.ClipboardProvider == from.Header.Device.ClipboardProvider
 }

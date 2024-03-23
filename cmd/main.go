@@ -98,7 +98,7 @@ func main() {
 	var (
 		node    *belphegor.Node
 		storage = belphegor.NewSyncMapStorage()
-		cp      = clipboard.NewThreadSafe()
+		cp      = clipboard.New()
 	)
 	if port != 0 {
 		node = belphegor.NewNode(
