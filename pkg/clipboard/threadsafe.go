@@ -26,5 +26,5 @@ func (t *ThreadSafe) Name() string {
 }
 
 func NewThreadSafe() *ThreadSafe {
-	return &ThreadSafe{defaultManager: New()}
+	return &ThreadSafe{defaultManager: NewManager()}
 }
