@@ -17,7 +17,7 @@ type Storage[key any, val any] interface {
 	Get(key key) (val, bool)
 	// Exist returns true if the specified node exists in the storage.
 	Exist(key key) bool
-	// Tap calls the specified function for each node in the storage.
+	// Tap calls the specified function for parallel each node in the storage.
 	Tap(fn func(key, val))
 }
 
@@ -63,8 +63,15 @@ func (s *SyncMapStorage) Exist(key UniqueID) bool {
 }
 
 func (s *SyncMapStorage) Tap(fn func(UniqueID, *Peer)) {
+	var wg sync.WaitGroup
 	s.m.Range(func(k, v any) bool {
-		fn(k.(UniqueID), v.(*Peer))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fn(k.(UniqueID), v.(*Peer))
+		}()
 		return true
 	})
+
+	wg.Wait()
 }
