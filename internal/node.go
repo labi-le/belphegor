@@ -300,7 +300,7 @@ func (n *Node) greet(my *gen.GreetMessage, conn net.Conn) error {
 func stats(storage NodeStorage) {
 	for range time.Tick(time.Minute) {
 		storage.Tap(func(metadata UniqueID, peer *Peer) {
-			log.Trace().Msgf("node %s", metadata)
+			log.Trace().Msgf("node %s is alive", metadata)
 		})
 	}
 }
