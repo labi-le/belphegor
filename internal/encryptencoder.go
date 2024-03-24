@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io"
 	"math"
+	"sync"
 )
 
 const (
@@ -66,6 +67,12 @@ func (c *Cipher) Encrypt(src []byte) (*types.EncryptedMessage, error) {
 	var (
 		parts = explodeBySize(src, c.size)
 	)
+
+	parallelEnc(&enc, parts, c)
+	return &enc, nil
+}
+
+func nonParallelEnc(t *types.EncryptedMessage, parts [][]byte, c *Cipher) {
 	for _, part := range parts {
 		encByt, encErr := rsa.EncryptOAEP(
 			sha256.New(),
@@ -75,13 +82,58 @@ func (c *Cipher) Encrypt(src []byte) (*types.EncryptedMessage, error) {
 			nil,
 		)
 		if encErr != nil {
-			return nil, encErr
+			panic(encErr)
 		}
 
-		enc.Parts = append(enc.Parts, encByt)
+		t.Parts = append(t.Parts, encByt)
+	}
+}
+
+func parallelEnc(enc *types.EncryptedMessage, parts [][]byte, c *Cipher) {
+	var (
+		encChan = make(chan encPart)
+		wg      sync.WaitGroup
+	)
+
+	enc.Parts = make([][]byte, len(parts))
+	go func() {
+		for part := range encChan {
+			enc.Parts[part.index] = part.byt
+		}
+	}()
+
+	for i, part := range parts {
+		wg.Add(1)
+
+		part := part
+		i := i
+		go func() {
+			defer wg.Done()
+
+			encByt, encErr := rsa.EncryptOAEP(
+				sha256.New(),
+				rand.Reader,
+				c.public.(*rsa.PublicKey),
+				part,
+				nil,
+			)
+			if encErr != nil {
+				panic(encErr)
+			}
+
+			encChan <- encPart{
+				index: i,
+				byt:   encByt,
+			}
+		}()
 	}
 
-	return &enc, nil
+	wg.Wait()
+}
+
+type encPart struct {
+	index int
+	byt   []byte
 }
 
 func (c *Cipher) EncryptMessage(msg proto.Message) (*types.EncryptedMessage, error) {

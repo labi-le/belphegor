@@ -85,6 +85,22 @@ func TestCipher_Encrypt(t *testing.T) {
 		},
 
 		{
+			name:    "very large text",
+			fields:  NewCipher(),
+			args:    bytes.Repeat([]byte("hello"), 100_000),
+			want:    bytes.Repeat([]byte("hello"), 100_000),
+			wantErr: false,
+		},
+
+		{
+			name:    "1kk large text",
+			fields:  NewCipher(),
+			args:    bytes.Repeat([]byte("hello"), 1_000_000),
+			want:    bytes.Repeat([]byte("hello"), 1_000_000),
+			wantErr: false,
+		},
+
+		{
 			name:    "non ascii",
 			fields:  NewCipher(),
 			args:    []byte("hello\x00world"),
