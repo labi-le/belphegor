@@ -49,11 +49,6 @@ func clipboardSet(data []byte, cmd *exec.Cmd) error {
 	return cmd.Wait()
 }
 
-func toolExist(tool string) bool {
-	_, err := exec.LookPath(tool)
-	return err == nil
-}
-
 func New() Manager {
 	return NewThreadSafe()
 }
