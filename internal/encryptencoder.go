@@ -1,16 +1,16 @@
 // todo put in a separate package
 
-package belphegor
+package internal
 
 import (
-	"belphegor/internal/belphegor/types"
-	"belphegor/pkg/pool/byteslice"
 	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"github.com/labi-le/belphegor/internal/types"
+	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"io"

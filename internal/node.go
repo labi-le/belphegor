@@ -1,12 +1,12 @@
-package belphegor
+package internal
 
 import (
-	gen "belphegor/internal/belphegor/types"
-	"belphegor/pkg/clipboard"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	gen "github.com/labi-le/belphegor/internal/types"
+	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
 	"google.golang.org/protobuf/proto"

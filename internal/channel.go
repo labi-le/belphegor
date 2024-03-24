@@ -1,4 +1,4 @@
-package belphegor
+package internal
 
 // Channel is an interface for managing clipboard data.
 type Channel interface {

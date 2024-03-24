@@ -1,4 +1,4 @@
-package belphegor
+package internal
 
 import (
 	"net"

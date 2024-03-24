@@ -1,10 +1,10 @@
-package belphegor
+package internal
 
 import (
-	gen "belphegor/internal/belphegor/types"
-	"belphegor/pkg/clipboard"
-	"belphegor/pkg/pool"
 	"errors"
+	gen "github.com/labi-le/belphegor/internal/types"
+	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net"

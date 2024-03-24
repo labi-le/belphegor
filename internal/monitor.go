@@ -1,8 +1,8 @@
-package belphegor
+package internal
 
 import (
-	"belphegor/pkg/clipboard"
 	"bytes"
+	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/rs/zerolog/log"
 	"time"
 )

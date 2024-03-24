@@ -16,8 +16,8 @@ var managers = map[string]Manager{
 }
 
 func findClipboardManager() Manager {
-	for name, manager := range managers {
-		if toolExist(name) {
+	for _, manager := range managers {
+		if _, err := manager.Get(); err == nil {
 			return manager
 		}
 	}

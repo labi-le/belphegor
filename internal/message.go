@@ -1,15 +1,15 @@
 // Package belphegor provides functionality for managing clipboard data between nodes.
-package belphegor
+package internal
 
 import (
-	gen "belphegor/internal/belphegor/types"
-	"belphegor/pkg/clipboard"
-	"belphegor/pkg/image"
-	"belphegor/pkg/pool"
 	"bytes"
 	"crypto/sha256"
 	"errors"
 	"github.com/google/uuid"
+	gen "github.com/labi-le/belphegor/internal/types"
+	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/image"
+	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"net/http"

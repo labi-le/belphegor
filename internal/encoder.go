@@ -1,8 +1,8 @@
-package belphegor
+package internal
 
 import (
-	"belphegor/pkg/pool/byteslice"
 	"encoding/binary"
+	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"io"

@@ -24,7 +24,6 @@ import (
 	"os"
 	"reflect"
 	"runtime"
-	"sync"
 	"syscall"
 	"time"
 	"unicode/utf16"
@@ -69,26 +68,6 @@ func (p *windows) Get() ([]byte, error) {
 }
 
 func (p *windows) Set(data []byte) error {
-	//return writeAll(string(data))
-	//return clipboardSet(data, exec.Command("clip"))
-	// узнать какой формат данных
-	// если текст, то записать в текст
-	// если картинка, то записать в картинку
-	// если неизвестный формат, то записать в текст
-
-	//mime := http.DetectContentType(data)
-	//spew.Dump(mime)
-	//if mime == "image/png" {
-	//	Write(FmtImage, data)
-	//	return nil
-	//}
-	//
-	//Write(FmtText, data)
-	//return nil
-
-	lock.Lock()
-	defer lock.Unlock()
-
 	mime := http.DetectContentType(data)
 	if mime == "image/png" {
 		_, err := write(FmtImage, data)
@@ -119,15 +98,6 @@ const (
 	FmtText Format = iota
 	// FmtImage indicates image/png clipboard format
 	FmtImage
-)
-
-var (
-	// Due to the limitation on operating systems (such as darwin),
-	// concurrent read can even cause panic, use a global lock to
-	// guarantee one read at a time.
-	lock      = sync.Mutex{}
-	initOnce  sync.Once
-	initError error
 )
 
 // readText reads the clipboard and returns the text data if presents.
@@ -529,9 +499,6 @@ func watch(ctx context.Context, t Format) <-chan []byte {
 // Read returns a chunk of bytes of the clipboard data if it presents
 // in the desired format t presents. Otherwise, it returns nil.
 func Read(t Format) []byte {
-	lock.Lock()
-	defer lock.Unlock()
-
 	buf, err := read(t)
 	if err != nil {
 		//fmt.Fprintf(os.Stderr, "read clipboard err: %v\n", err)
@@ -547,9 +514,6 @@ func Read(t Format) []byte {
 // If format t indicates an image, then the given buf assumes
 // the image data is PNG encoded.
 func Write(t Format, buf []byte) <-chan struct{} {
-	lock.Lock()
-	defer lock.Unlock()
-
 	changed, err := write(t, buf)
 	if err != nil {
 		if debug {

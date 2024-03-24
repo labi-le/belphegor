@@ -2,11 +2,11 @@ package main
 
 import (
 	//_ "net/http/pprof"
-	"belphegor/internal/belphegor"
-	"belphegor/pkg/clipboard"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/labi-le/belphegor/internal"
+	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -15,14 +15,14 @@ import (
 	"time"
 )
 
-const LockFile = "belphegor.lck"
+const LockFile = "internal.lck"
 
 var (
-	helpMsg = `belphegor - 
+	helpMsg = `internal - 
 A cross-platform clipboard sharing utility
 
 Usage:
-	belphegor [flags]
+	internal [flags]
 
 Flags:
 	-connect string | ip:port to connect to the node (e.g. 192.168.0.12:7777)
@@ -46,7 +46,7 @@ Flags:
 var (
 	ErrCannotLock     = errors.New("cannot get locked process: %s")
 	ErrCannotUnlock   = errors.New("cannot unlock process: %s")
-	ErrAlreadyRunning = errors.New("belphegor is already running. pid %d")
+	ErrAlreadyRunning = errors.New("internal is already running. pid %d")
 )
 
 func init() {
@@ -76,7 +76,12 @@ func main() {
 	}
 
 	if showVersion {
-		log.Printf("version %s", belphegor.Version)
+		log.Info().Msgf(
+			"version %s | commit %s | build time %s",
+			internal.Version,
+			internal.CommitHash,
+			internal.BuildTime,
+		)
 		return
 	}
 
@@ -92,29 +97,29 @@ func main() {
 
 	scanDelayDuration, scanDelayErr := time.ParseDuration(scanDelay)
 	if scanDelayErr != nil {
-		log.Panic().Err(delayErr).Msg("failed to parse scan delay")
+		log.Panic().Err(scanDelayErr).Msg("failed to parse scan delay")
 	}
 
 	var (
-		node    *belphegor.Node
-		storage = belphegor.NewSyncMapStorage()
+		node    *internal.Node
+		storage = internal.NewSyncMapStorage()
 		cp      = clipboard.New()
 	)
 	if port != 0 {
-		node = belphegor.NewNode(
+		node = internal.NewNode(
 			cp,
 			port,
 			discoverDelayDuration,
 			storage,
-			belphegor.NewChannel(),
+			internal.NewChannel(),
 		)
 	} else {
 		log.Debug().Msg("using random port")
-		node = belphegor.NewNodeRandomPort(
+		node = internal.NewNodeRandomPort(
 			cp,
 			discoverDelayDuration,
 			storage,
-			belphegor.NewChannel(),
+			internal.NewChannel(),
 		)
 	}
 

@@ -3,7 +3,7 @@ import "header.proto";
 
 package belphegor;
 
-option go_package = "internal/belphegor/types";
+option go_package = "internal/types";
 
 // Message represents clipboard data and its associated metadata
 message Message {
