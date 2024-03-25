@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"crypto/rand"
 	"errors"
 	gen "github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
@@ -24,7 +26,13 @@ func initPeerPool() *pool.ObjectPool[*Peer] {
 	return p
 }
 
-func AcquirePeer(conn net.Conn, addr netip.AddrPort, id UniqueID, updates Channel, cipher *Cipher) *Peer {
+func AcquirePeer(
+	conn net.Conn,
+	addr netip.AddrPort,
+	id UniqueID,
+	updates Channel,
+	cipher *encrypter.Cipher,
+) *Peer {
 	p := peerPool.Acquire()
 	p.conn = conn
 	p.addr = addr
@@ -43,7 +51,7 @@ type Peer struct {
 	updates Channel
 
 	received *lastMessage
-	cipher   *Cipher
+	cipher   *encrypter.Cipher
 }
 
 func (p *Peer) Release() {
@@ -129,7 +137,7 @@ func (p *Peer) receiveMessage() (*gen.Message, error) {
 		return &message, decodeEnc
 	}
 
-	decrypt, decErr := p.cipher.Decrypt(&encrypt)
+	decrypt, decErr := p.cipher.Decrypt(rand.Reader, encrypt.Parts, nil)
 	if decErr != nil {
 		return &message, decErr
 	}

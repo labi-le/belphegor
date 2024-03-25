@@ -1,7 +1,9 @@
-package internal
+package encrypter
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rand"
 	"testing"
 )
 
@@ -85,6 +87,14 @@ func TestCipher_Encrypt(t *testing.T) {
 		},
 
 		{
+			name:    "fish",
+			fields:  NewCipher(),
+			args:    []byte("A new login is required since the authentication session expired."),
+			want:    []byte("A new login is required since the authentication session expired."),
+			wantErr: false,
+		},
+
+		{
 			name:    "very large text",
 			fields:  NewCipher(),
 			args:    bytes.Repeat([]byte("hello"), 100_000),
@@ -110,13 +120,13 @@ func TestCipher_Encrypt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.fields.Encrypt(tt.args)
+			got, err := tt.fields.Sign(rand.Reader, tt.args, crypto.SHA256)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Encrypt() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			got2, errDec := tt.fields.Decrypt(got)
+			got2, errDec := tt.fields.Decrypt(rand.Reader, got, crypto.SHA256)
 			if errDec != nil {
 				t.Errorf("Decrypt() error = %v", errDec)
 			}

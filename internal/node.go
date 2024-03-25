@@ -2,11 +2,13 @@ package internal
 
 import (
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	gen "github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
 	"google.golang.org/protobuf/proto"
@@ -87,7 +89,7 @@ func (n *Node) ConnectTo(addr string) error {
 	return nil
 }
 
-func (n *Node) addPeer(hisHand *gen.GreetMessage, cipher *Cipher, conn net.Conn) (*Peer, error) {
+func (n *Node) addPeer(hisHand *gen.GreetMessage, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
 	var peer *Peer
 
 	if n.storage.Exist(hisHand.UniqueID) {
@@ -145,10 +147,13 @@ func (n *Node) Start(scanDelay time.Duration) error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) {
-	cipher := NewCipher()
+	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, 4096)
+	if cipherErr != nil {
+		log.Fatal().Msgf("failed to generate private key: %s", cipherErr)
+	}
 
 	myGreet := greetPool.Acquire()
-	myGreet.PublicKey = cipher.PublicKeyBytes()
+	myGreet.PublicKey = encrypter.PublicKey2Bytes(privateKey.Public())
 
 	greetErr := n.greet(myGreet, conn)
 	if greetErr != nil {
@@ -161,8 +166,11 @@ func (n *Node) handleConnection(conn net.Conn) {
 		return
 	}
 
-	cipher.public = bytes2PublicKey(hisHand.PublicKey)
-	peer, addErr := n.addPeer(hisHand, cipher, conn)
+	peer, addErr := n.addPeer(
+		hisHand,
+		encrypter.NewCipher(privateKey, encrypter.Bytes2PublicKey(hisHand.PublicKey)),
+		conn,
+	)
 	if addErr != nil {
 		if errors.Is(addErr, ErrAlreadyConnected) {
 			return
@@ -214,12 +222,15 @@ func (n *Node) Broadcast(msg *gen.Message, ignore UniqueID) {
 		//	log.Err(err).Msg("failed to write message")
 		//}
 
-		encData, encErr := peer.cipher.Encrypt(encode(msg))
+		encData, encErr := peer.cipher.Sign(rand.Reader, encode(msg), nil)
 		if encErr != nil {
 			log.Err(encErr).Msg("failed to encrypt message")
 		}
 
-		if _, err := encodeWriter(encData, peer.Conn()); err != nil {
+		if _, err := encodeWriter(
+			&gen.EncryptedMessage{Parts: encData},
+			peer.Conn(),
+		); err != nil {
 			log.Err(err).Msg("failed to write message")
 		}
 	})
