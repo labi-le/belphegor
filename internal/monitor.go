@@ -25,7 +25,7 @@ func NewClipboardMonitor(
 	cp clipboard.Manager,
 	interval time.Duration,
 	extUpdateChan Channel,
-) Handler {
+) *ClipboardMonitor {
 	return &ClipboardMonitor{
 		node:         node,
 		cm:           cp,
