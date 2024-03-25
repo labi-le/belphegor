@@ -25,7 +25,7 @@ var (
 
 type Node struct {
 	clipboard      clipboard.Manager
-	storage        NodeStorage
+	storage        *NodeStorage
 	localClipboard Channel
 	publicPort     int
 	discoverDelay  time.Duration
@@ -36,11 +36,17 @@ func NewNode(
 	clipboard clipboard.Manager,
 	port int,
 	discoverDelay time.Duration,
-	storage NodeStorage,
+	storage *NodeStorage,
 	channel Channel,
 ) *Node {
-	if port <= 0 {
-		log.Fatal().Msgf("invalid port: %d", port)
+	if port <= 0 || port > 65535 {
+		newPort := genPort()
+		log.Warn().Msgf(
+			"invalid port specified: %d, use random port: %d",
+			port,
+			newPort,
+		)
+		port = newPort
 	}
 
 	if discoverDelay == 0 {
@@ -56,22 +62,6 @@ func NewNode(
 		discoverDelay:  discoverDelay,
 		localClipboard: channel,
 	}
-}
-
-// NewNodeRandomPort creates a new instance of Node with a random port number.
-func NewNodeRandomPort(
-	clipboard clipboard.Manager,
-	discoverDelay time.Duration,
-	storage NodeStorage,
-	channel Channel,
-) *Node {
-	return NewNode(
-		clipboard,
-		genPort(),
-		discoverDelay,
-		storage,
-		channel,
-	)
 }
 
 // genPort generates a random port number between 7000 and 7999.
@@ -297,7 +287,7 @@ func (n *Node) greet(my *gen.GreetMessage, conn net.Conn) error {
 // stats periodically log information about the nodes in the storage.
 // It retrieves the list of nodes from the provided storage and logs the count of nodes
 // as well as information about each node, including its Address and port.
-func stats(storage NodeStorage) {
+func stats(storage *NodeStorage) {
 	for range time.Tick(time.Minute) {
 		storage.Tap(func(metadata UniqueID, peer *Peer) {
 			log.Trace().Msgf("node %s is alive", metadata)

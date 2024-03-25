@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
 	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -100,28 +101,13 @@ func main() {
 		log.Panic().Err(scanDelayErr).Msg("failed to parse scan delay")
 	}
 
-	var (
-		node    *internal.Node
-		storage = internal.NewSyncMapStorage()
-		cp      = clipboard.New()
+	node := internal.NewNode(
+		clipboard.New(),
+		port,
+		discoverDelayDuration,
+		storage.NewSyncMapStorage[internal.UniqueID, *internal.Peer](),
+		internal.NewChannel(),
 	)
-	if port != 0 {
-		node = internal.NewNode(
-			cp,
-			port,
-			discoverDelayDuration,
-			storage,
-			internal.NewChannel(),
-		)
-	} else {
-		log.Debug().Msg("using random port")
-		node = internal.NewNodeRandomPort(
-			cp,
-			discoverDelayDuration,
-			storage,
-			internal.NewChannel(),
-		)
-	}
 
 	go func() {
 		if err := node.Start(scanDelayDuration); err != nil {
