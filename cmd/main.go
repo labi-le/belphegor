@@ -15,14 +15,14 @@ import (
 	"time"
 )
 
-const LockFile = "internal.lck"
+const LockFile = "belphegor.lck"
 
 var (
-	helpMsg = `internal - 
+	helpMsg = `belphegor - 
 A cross-platform clipboard sharing utility
 
 Usage:
-	internal [flags]
+	belphegor [flags]
 
 Flags:
 	-connect string | ip:port to connect to the node (e.g. 192.168.0.12:7777)
@@ -46,7 +46,7 @@ Flags:
 var (
 	ErrCannotLock     = errors.New("cannot get locked process: %s")
 	ErrCannotUnlock   = errors.New("cannot unlock process: %s")
-	ErrAlreadyRunning = errors.New("internal is already running. pid %d")
+	ErrAlreadyRunning = errors.New("belphegor is already running. pid %d")
 )
 
 func init() {
