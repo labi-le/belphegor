@@ -209,7 +209,13 @@ func (n *Node) Broadcast(msg *gen.Message, ignore UniqueID) {
 		//if _, err := encodeWriter(msg, peer.Conn()); err != nil {
 		//	log.Err(err).Msg("failed to write message")
 		//}
-		if _, err := peer.cipher.EncryptWriter(msg, peer.Conn()); err != nil {
+
+		encData, encErr := peer.cipher.Encrypt(encode(msg))
+		if encErr != nil {
+			log.Err(encErr).Msg("failed to encrypt message")
+		}
+
+		if _, err := encodeWriter(encData, peer.Conn()); err != nil {
 			log.Err(err).Msg("failed to write message")
 		}
 	})

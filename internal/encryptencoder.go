@@ -12,8 +12,6 @@ import (
 	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/protobuf/proto"
-	"io"
 	"math"
 	"sync"
 )
@@ -27,6 +25,10 @@ type Cipher struct {
 	public  crypto.PublicKey
 
 	size int
+}
+
+type EncryptedMessage interface {
+	Parts() [][]byte
 }
 
 func NewCipher() *Cipher {
@@ -136,17 +138,17 @@ type encPart struct {
 	byt   []byte
 }
 
-func (c *Cipher) EncryptMessage(msg proto.Message) (*types.EncryptedMessage, error) {
-	return c.Encrypt(encode(msg))
-}
+//func (c *Cipher) EncryptMessage(msg proto.Message) (*types.EncryptedMessage, error) {
+//	return c.Encrypt(encode(msg))
+//}
 
-func (c *Cipher) EncryptWriter(msg proto.Message, w io.Writer) (int, error) {
-	message, err := c.EncryptMessage(msg)
-	if err != nil {
-		return 0, err
-	}
-	return encodeWriter(message, w)
-}
+//func (c *Cipher) EncryptWriter(msg proto.Message, w io.Writer) (int, error) {
+//	message, err := c.EncryptMessage(msg)
+//	if err != nil {
+//		return 0, err
+//	}
+//	return encodeWriter(message, w)
+//}
 
 func (c *Cipher) Decrypt(src *types.EncryptedMessage) ([]byte, error) {
 	if len(src.Parts) == 1 {
@@ -180,19 +182,19 @@ func (c *Cipher) Decrypt(src *types.EncryptedMessage) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (c *Cipher) DecryptReader(r io.Reader, dst proto.Message) error {
-	var encrypt types.EncryptedMessage
-	if decodeEnc := decodeReader(r, &encrypt); decodeEnc != nil {
-		return decodeEnc
-	}
-
-	decrypt, decErr := c.Decrypt(&encrypt)
-	if decErr != nil {
-		return decErr
-	}
-
-	return proto.Unmarshal(decrypt, dst)
-}
+//func (c *Cipher) DecryptReader(r io.Reader, dst proto.Message) error {
+//	var encrypt types.EncryptedMessage
+//	if decodeEnc := decodeReader(r, &encrypt); decodeEnc != nil {
+//		return decodeEnc
+//	}
+//
+//	decrypt, decErr := c.Decrypt(&encrypt)
+//	if decErr != nil {
+//		return decErr
+//	}
+//
+//	return proto.Unmarshal(decrypt, dst)
+//}
 
 func encryptSize(pub crypto.PublicKey) int {
 	return pub.(*rsa.PublicKey).Size() - 2*sha256.New().Size() - 2

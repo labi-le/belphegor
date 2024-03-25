@@ -6,6 +6,7 @@ import (
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"net"
 	"net/netip"
@@ -122,13 +123,22 @@ func (p *Peer) handleReceiveError(err error) {
 // receiveMessage receives a message from the node.
 func (p *Peer) receiveMessage() (*gen.Message, error) {
 	var message gen.Message
-	//if err := decodeReader(p.conn, &message); err != nil {
+
+	var encrypt gen.EncryptedMessage
+	if decodeEnc := decodeReader(p.Conn(), &encrypt); decodeEnc != nil {
+		return &message, decodeEnc
+	}
+
+	decrypt, decErr := p.cipher.Decrypt(&encrypt)
+	if decErr != nil {
+		return &message, decErr
+	}
+
+	return &message, proto.Unmarshal(decrypt, &message)
+
+	//if err := p.cipher.DecryptReader(p.conn, &message); err != nil {
 	//	return nil, err
 	//}
 	//
-	if err := p.cipher.DecryptReader(p.conn, &message); err != nil {
-		return nil, err
-	}
-
-	return &message, nil
+	//return &message, nil
 }
