@@ -30,7 +30,7 @@ var (
 	thisDevice = &gen.Device{
 		Arch:              runtime.GOARCH,
 		UniqueName:        currentUniqueID.String(),
-		ClipboardProvider: parseClipboardProvider(clipboard.NewManager()),
+		ClipboardProvider: parseClipboardProvider(clipboard.New()),
 	}
 )
 

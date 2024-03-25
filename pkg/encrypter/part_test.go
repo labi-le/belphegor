@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"testing"
 )
 
@@ -61,6 +62,14 @@ func Test_explodeBySize(t *testing.T) {
 		})
 	}
 }
+func pkAndPbKey(t *testing.T) (crypto.PrivateKey, crypto.PublicKey) {
+	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, 2048)
+	if cipherErr != nil {
+		t.Fatal(cipherErr)
+	}
+
+	return privateKey, privateKey.Public()
+}
 
 func TestCipher_Encrypt(t *testing.T) {
 	tests := []struct {
@@ -72,7 +81,7 @@ func TestCipher_Encrypt(t *testing.T) {
 	}{
 		{
 			name:    "short text",
-			fields:  NewCipher(),
+			fields:  NewCipher(pkAndPbKey(t)),
 			args:    []byte("hello"),
 			want:    []byte("hello"),
 			wantErr: false,
@@ -80,7 +89,7 @@ func TestCipher_Encrypt(t *testing.T) {
 
 		{
 			name:    "large text",
-			fields:  NewCipher(),
+			fields:  NewCipher(pkAndPbKey(t)),
 			args:    bytes.Repeat([]byte("hello"), 1000),
 			want:    bytes.Repeat([]byte("hello"), 1000),
 			wantErr: false,
@@ -88,7 +97,7 @@ func TestCipher_Encrypt(t *testing.T) {
 
 		{
 			name:    "fish",
-			fields:  NewCipher(),
+			fields:  NewCipher(pkAndPbKey(t)),
 			args:    []byte("A new login is required since the authentication session expired."),
 			want:    []byte("A new login is required since the authentication session expired."),
 			wantErr: false,
@@ -96,7 +105,7 @@ func TestCipher_Encrypt(t *testing.T) {
 
 		{
 			name:    "very large text",
-			fields:  NewCipher(),
+			fields:  NewCipher(pkAndPbKey(t)),
 			args:    bytes.Repeat([]byte("hello"), 100_000),
 			want:    bytes.Repeat([]byte("hello"), 100_000),
 			wantErr: false,
@@ -104,7 +113,7 @@ func TestCipher_Encrypt(t *testing.T) {
 
 		{
 			name:    "1kk large text",
-			fields:  NewCipher(),
+			fields:  NewCipher(pkAndPbKey(t)),
 			args:    bytes.Repeat([]byte("hello"), 1_000_000),
 			want:    bytes.Repeat([]byte("hello"), 1_000_000),
 			wantErr: false,
@@ -112,7 +121,7 @@ func TestCipher_Encrypt(t *testing.T) {
 
 		{
 			name:    "non ascii",
-			fields:  NewCipher(),
+			fields:  NewCipher(pkAndPbKey(t)),
 			args:    []byte("hello\x00world"),
 			want:    []byte("hello\x00world"),
 			wantErr: false,

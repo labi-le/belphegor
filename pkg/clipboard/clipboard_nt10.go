@@ -32,7 +32,7 @@ import (
 	"golang.org/x/image/bmp"
 )
 
-func NewManager() Manager {
+func New() Manager {
 	return &windows{}
 }
 
