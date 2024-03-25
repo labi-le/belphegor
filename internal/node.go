@@ -9,6 +9,7 @@ import (
 	gen "github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
+	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
 	"google.golang.org/protobuf/proto"
@@ -33,36 +34,54 @@ type Node struct {
 	discoverDelay  time.Duration
 }
 
-// NewNode creates a new instance of Node with the specified settings.
-func NewNode(
-	clipboard clipboard.Manager,
-	port int,
-	discoverDelay time.Duration,
-	storage *NodeStorage,
-	channel Channel,
-) *Node {
-	if port <= 0 || port > 65535 {
+type NodeOptions struct {
+	Clipboard        clipboard.Manager
+	Storage          *NodeStorage
+	Port             int
+	DiscoverDelay    time.Duration
+	ClipboardChannel Channel
+}
+
+func (o *NodeOptions) Prepare() {
+	if o.Port <= 0 || o.Port > 65535 {
 		newPort := genPort()
 		log.Warn().Msgf(
 			"invalid port specified: %d, use random port: %d",
-			port,
+			o.Port,
 			newPort,
 		)
-		port = newPort
+		o.Port = newPort
 	}
 
-	if discoverDelay == 0 {
-		discoverDelay = DefaultDiscoverDelay
+	if o.DiscoverDelay == 0 {
+		o.DiscoverDelay = DefaultDiscoverDelay
 	}
 
-	go stats(storage)
+	if o.ClipboardChannel == nil {
+		o.ClipboardChannel = NewChannel()
+	}
+
+	if o.Storage == nil {
+		o.Storage = storage.NewSyncMapStorage[UniqueID, *Peer]()
+	}
+
+	if o.Clipboard == nil {
+		o.Clipboard = clipboard.NewThreadSafe()
+	}
+}
+
+// NewNode creates a new instance of Node with the specified settings.
+func NewNode(opts NodeOptions) *Node {
+	opts.Prepare()
+
+	go stats(opts.Storage)
 
 	return &Node{
-		clipboard:      clipboard,
-		publicPort:     port,
-		storage:        storage,
-		discoverDelay:  discoverDelay,
-		localClipboard: channel,
+		clipboard:      opts.Clipboard,
+		publicPort:     opts.Port,
+		storage:        opts.Storage,
+		discoverDelay:  opts.DiscoverDelay,
+		localClipboard: opts.ClipboardChannel,
 	}
 }
 
@@ -147,7 +166,7 @@ func (n *Node) Start(scanDelay time.Duration) error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) {
-	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, 4096)
+	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, 2048)
 	if cipherErr != nil {
 		log.Fatal().Msgf("failed to generate private key: %s", cipherErr)
 	}

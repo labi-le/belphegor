@@ -6,8 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
-	"github.com/labi-le/belphegor/pkg/clipboard"
-	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -101,13 +99,10 @@ func main() {
 		log.Panic().Err(scanDelayErr).Msg("failed to parse scan delay")
 	}
 
-	node := internal.NewNode(
-		clipboard.New(),
-		port,
-		discoverDelayDuration,
-		storage.NewSyncMapStorage[internal.UniqueID, *internal.Peer](),
-		internal.NewChannel(),
-	)
+	node := internal.NewNode(internal.NodeOptions{
+		Port:          port,
+		DiscoverDelay: discoverDelayDuration,
+	})
 
 	go func() {
 		if err := node.Start(scanDelayDuration); err != nil {

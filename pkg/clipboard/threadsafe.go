@@ -8,15 +8,15 @@ type ThreadSafe struct {
 }
 
 func (t *ThreadSafe) Get() ([]byte, error) {
-	t.RLock()
-	defer t.RUnlock()
+	t.RWMutex.Lock()
+	defer t.RWMutex.Unlock()
 
 	return t.defaultManager.Get()
 }
 
 func (t *ThreadSafe) Set(data []byte) error {
-	t.RLock()
-	defer t.RUnlock()
+	t.RWMutex.Lock()
+	defer t.RWMutex.Unlock()
 
 	return t.defaultManager.Set(data)
 }
@@ -26,5 +26,5 @@ func (t *ThreadSafe) Name() string {
 }
 
 func NewThreadSafe() *ThreadSafe {
-	return &ThreadSafe{defaultManager: NewManager()}
+	return &ThreadSafe{defaultManager: New()}
 }

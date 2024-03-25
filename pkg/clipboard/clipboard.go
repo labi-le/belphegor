@@ -48,7 +48,3 @@ func clipboardSet(data []byte, cmd *exec.Cmd) error {
 
 	return cmd.Wait()
 }
-
-func New() Manager {
-	return NewThreadSafe()
-}

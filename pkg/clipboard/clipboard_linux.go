@@ -35,7 +35,7 @@ func findClipboardManager() Manager {
 	panic(ErrUnimplementedClipboardManager)
 }
 
-func NewManager() Manager {
+func New() Manager {
 	return &wrapped{
 		findClipboardManager(),
 	}

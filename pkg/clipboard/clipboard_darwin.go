@@ -4,7 +4,7 @@ package clipboard
 
 import "os/exec"
 
-func NewManager() *Darwin {
+func New() *Darwin {
 	return &Darwin{}
 }
 
