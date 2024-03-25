@@ -4,6 +4,7 @@ package clipboard
 
 import (
 	"errors"
+	"os/exec"
 )
 
 var ErrUnimplementedClipboardManager = errors.New("unimplemented clipboard wrapper")
@@ -17,8 +18,17 @@ var managers = map[string]Manager{
 
 func findClipboardManager() Manager {
 	for _, manager := range managers {
-		if _, err := manager.Get(); err == nil {
+		_, err := manager.Get()
+
+		if err == nil {
 			return manager
+		}
+
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			if ee.ExitCode() == 1 {
+				return manager
+			}
 		}
 	}
 
