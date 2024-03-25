@@ -262,7 +262,7 @@ func (n *Node) EnableNodeDiscover() {
 				log.Info().Msgf("found node %s, check availability", nodeAddr)
 				log.Trace().Msgf("payload: %s", greet.String())
 				if err := n.ConnectTo(nodeAddr); err != nil {
-					log.Error().Msgf("failed to connect to %s", nodeAddr)
+					log.Err(err).Msgf("failed to connect to %s", nodeAddr)
 				}
 			},
 		},
