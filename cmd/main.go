@@ -76,7 +76,7 @@ func main() {
 	}
 
 	if showVersion {
-		log.Info().Msgf(
+		_, _ = fmt.Fprintf(os.Stderr,
 			"version %s | commit %s | build time %s",
 			internal.Version,
 			internal.CommitHash,
