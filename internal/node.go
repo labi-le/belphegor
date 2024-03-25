@@ -135,7 +135,7 @@ func (n *Node) Start(scanDelay time.Duration) error {
 			return err
 		}
 
-		log.Info().Msgf("accepted connection from %s", conn.RemoteAddr().String())
+		log.Trace().Msgf("accepted connection from %s", conn.RemoteAddr().String())
 		go n.handleConnection(conn)
 	}
 }
