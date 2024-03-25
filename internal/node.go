@@ -108,6 +108,10 @@ func (n *Node) addPeer(hisHand *gen.GreetMessage, cipher *Cipher, conn net.Conn)
 			hisHand.UniqueID,
 			peer,
 		)
+		if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
+			n.storage.Delete(hisHand.UniqueID)
+			return nil, aliveErr
+		}
 	}
 	return peer, rightErr
 }
