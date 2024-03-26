@@ -293,7 +293,7 @@ func (n *Node) EnableNodeDiscover() {
 					d.Address,
 					strconv.Itoa(int(greet.Port)),
 				)
-				log.Info().Msgf("found node %s, check availability", nodeAddr)
+				log.Trace().Msgf("found node %s, check availability", nodeAddr)
 				log.Trace().Msgf("payload: %s", greet.String())
 				if err := n.ConnectTo(nodeAddr); err != nil {
 					log.Err(err).Msgf("failed to connect to %s", nodeAddr)
