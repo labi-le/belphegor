@@ -18,10 +18,6 @@ import (
 	"time"
 )
 
-const (
-	DefaultDiscoverDelay = 60 * time.Second
-)
-
 var (
 	ErrAlreadyConnected = errors.New("already connected")
 )
@@ -32,14 +28,20 @@ type Node struct {
 	localClipboard Channel
 	publicPort     int
 	discoverDelay  time.Duration
+	bitSize        int
+	keepAliveDelay time.Duration
 }
 
+// NodeOptions represents options for Node
+// If no options are specified, default values will be used
 type NodeOptions struct {
 	Clipboard        clipboard.Manager
 	Storage          *NodeStorage
 	Port             int
 	DiscoverDelay    time.Duration
 	ClipboardChannel Channel
+	BitSize          int
+	KeepAliveDelay   time.Duration
 }
 
 func (o *NodeOptions) Prepare() {
@@ -54,7 +56,7 @@ func (o *NodeOptions) Prepare() {
 	}
 
 	if o.DiscoverDelay == 0 {
-		o.DiscoverDelay = DefaultDiscoverDelay
+		o.DiscoverDelay = 60 * time.Second
 	}
 
 	if o.ClipboardChannel == nil {
@@ -68,12 +70,21 @@ func (o *NodeOptions) Prepare() {
 	if o.Clipboard == nil {
 		o.Clipboard = clipboard.NewThreadSafe()
 	}
+
+	if o.BitSize == 0 {
+		o.BitSize = 2048
+	}
+
+	if o.KeepAliveDelay == 0 {
+		o.KeepAliveDelay = 10 * time.Second
+	}
 }
 
 // NewNode creates a new instance of Node with the specified settings.
 func NewNode(opts NodeOptions) *Node {
 	opts.Prepare()
 
+	// todo rewrite to unixsocket calling method
 	go stats(opts.Storage)
 
 	return &Node{
@@ -82,6 +93,8 @@ func NewNode(opts NodeOptions) *Node {
 		storage:        opts.Storage,
 		discoverDelay:  opts.DiscoverDelay,
 		localClipboard: opts.ClipboardChannel,
+		bitSize:        opts.BitSize,
+		keepAliveDelay: opts.KeepAliveDelay,
 	}
 }
 
@@ -125,14 +138,19 @@ func (n *Node) addPeer(hisHand *gen.GreetMessage, cipher *encrypter.Cipher, conn
 			n.localClipboard,
 			cipher,
 		)
+
+		if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
+			return nil, aliveErr
+		}
+
+		if err := conn.(*net.TCPConn).SetKeepAlivePeriod(n.keepAliveDelay); err != nil {
+			return nil, err
+		}
+
 		n.storage.Add(
 			hisHand.UniqueID,
 			peer,
 		)
-		if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
-			n.storage.Delete(hisHand.UniqueID)
-			return nil, aliveErr
-		}
 	}
 	return peer, rightErr
 }
@@ -166,7 +184,7 @@ func (n *Node) Start(scanDelay time.Duration) error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) {
-	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, n.bitSize)
 	if cipherErr != nil {
 		log.Fatal().Msgf("failed to generate private key: %s", cipherErr)
 	}
@@ -251,6 +269,7 @@ func (n *Node) Broadcast(msg *gen.Message, ignore UniqueID) {
 			peer.Conn(),
 		); err != nil {
 			log.Err(err).Msg("failed to write message")
+			n.storage.Delete(peer.ID())
 		}
 	})
 }
@@ -280,6 +299,11 @@ func (n *Node) EnableNodeDiscover() {
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {
+				// For some reason the library calls Notify ignoring AllowSelf:false
+				if d.Address == "127.0.0.1" {
+					return
+				}
+
 				greet := greetPool.Acquire()
 				defer greetPool.Release(greet)
 
