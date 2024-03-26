@@ -5,5 +5,5 @@ package belphegor;
 option go_package = "internal/types";
 
 message EncryptedMessage {
-  bytes Parts = 1;
+  bytes Message = 1;
 }

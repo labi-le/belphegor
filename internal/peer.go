@@ -137,7 +137,7 @@ func (p *Peer) receiveMessage() (*gen.Message, error) {
 		return &message, decodeEnc
 	}
 
-	decrypt, decErr := p.cipher.Decrypt(rand.Reader, encrypt.Parts, nil)
+	decrypt, decErr := p.cipher.Decrypt(rand.Reader, encrypt.Message, nil)
 	if decErr != nil {
 		return &message, decErr
 	}

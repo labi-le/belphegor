@@ -247,7 +247,7 @@ func (n *Node) Broadcast(msg *gen.Message, ignore UniqueID) {
 		}
 
 		if _, err := encodeWriter(
-			&gen.EncryptedMessage{Parts: encData},
+			&gen.EncryptedMessage{Message: encData},
 			peer.Conn(),
 		); err != nil {
 			log.Err(err).Msg("failed to write message")
