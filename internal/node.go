@@ -9,6 +9,7 @@ import (
 	gen "github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
+	"github.com/labi-le/belphegor/pkg/ip"
 	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
@@ -305,8 +306,9 @@ func (n *Node) EnableNodeDiscover() {
 			AllowSelf: false,
 
 			Notify: func(d peerdiscovery.Discovered) {
+				peerIP := net.ParseIP(d.Address)
 				// For some reason the library calls Notify ignoring AllowSelf:false
-				if d.Address == "127.0.0.1" {
+				if ip.IsLocalIP(peerIP) {
 					return
 				}
 
@@ -318,15 +320,15 @@ func (n *Node) EnableNodeDiscover() {
 					return
 				}
 
-				nodeAddr := fmt.Sprintf(
+				peerAddr := fmt.Sprintf(
 					"%s:%s",
-					d.Address,
+					peerIP.String(),
 					strconv.Itoa(int(greet.Port)),
 				)
-				log.Trace().Msgf("found node %s, check availability", nodeAddr)
+				log.Trace().Msgf("found node %s, check availability", peerAddr)
 				log.Trace().Msgf("payload: %s", greet.String())
-				if err := n.ConnectTo(nodeAddr); err != nil {
-					log.Err(err).Msgf("failed to connect to %s", nodeAddr)
+				if err := n.ConnectTo(peerAddr); err != nil {
+					log.Err(err).Msgf("failed to connect to %s", peerAddr)
 				}
 			},
 		},
