@@ -23,25 +23,27 @@ var (
 )
 
 type Node struct {
-	clipboard      clipboard.Manager
-	storage        *NodeStorage
-	localClipboard Channel
-	publicPort     int
-	discoverDelay  time.Duration
-	bitSize        int
-	keepAliveDelay time.Duration
+	clipboard          clipboard.Manager
+	storage            *NodeStorage
+	localClipboard     Channel
+	publicPort         int
+	discoverDelay      time.Duration
+	bitSize            int
+	keepAliveDelay     time.Duration
+	clipboardScanDelay time.Duration
 }
 
 // NodeOptions represents options for Node
 // If no options are specified, default values will be used
 type NodeOptions struct {
-	Clipboard        clipboard.Manager
-	Storage          *NodeStorage
-	Port             int
-	DiscoverDelay    time.Duration
-	ClipboardChannel Channel
-	BitSize          int
-	KeepAliveDelay   time.Duration
+	Clipboard          clipboard.Manager
+	Storage            *NodeStorage
+	Port               int
+	DiscoverDelay      time.Duration
+	ClipboardChannel   Channel
+	BitSize            int
+	KeepAliveDelay     time.Duration
+	ClipboardScanDelay time.Duration
 }
 
 func (o *NodeOptions) Prepare() {
@@ -56,7 +58,7 @@ func (o *NodeOptions) Prepare() {
 	}
 
 	if o.DiscoverDelay == 0 {
-		o.DiscoverDelay = 60 * time.Second
+		o.DiscoverDelay = 1 * time.Minute
 	}
 
 	if o.ClipboardChannel == nil {
@@ -77,6 +79,10 @@ func (o *NodeOptions) Prepare() {
 
 	if o.KeepAliveDelay == 0 {
 		o.KeepAliveDelay = 10 * time.Second
+	}
+
+	if o.ClipboardScanDelay == 0 {
+		o.ClipboardScanDelay = 2 * time.Second
 	}
 }
 
@@ -160,7 +166,7 @@ func (n *Node) addPeer(hisHand *gen.GreetMessage, cipher *encrypter.Cipher, conn
 // When a new connection is accepted, it invokes the 'handleConnection' method to handle the connection.
 // The 'scanDelay' parameter determines the interval at which the clipboard is scanned and updated.
 // The method returns an error if it fails to start listening.
-func (n *Node) Start(scanDelay time.Duration) error {
+func (n *Node) Start() error {
 	l, err := net.Listen("tcp4", fmt.Sprintf(":%d", n.publicPort))
 	if err != nil {
 		return err
@@ -170,7 +176,7 @@ func (n *Node) Start(scanDelay time.Duration) error {
 
 	defer l.Close()
 
-	go NewClipboardMonitor(n, n.clipboard, scanDelay, n.localClipboard).Receive()
+	go NewClipboardMonitor(n, n.clipboard, n.clipboardScanDelay, n.localClipboard).Receive()
 
 	for {
 		conn, netErr := l.Accept()

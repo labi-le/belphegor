@@ -35,8 +35,8 @@ Flags:
 	addressIP     string
 	port          int
 	nodeDiscover  bool
-	scanDelay     string
-	discoverDelay string
+	scanDelay     time.Duration
+	discoverDelay time.Duration
 	debug         bool
 	showVersion   bool
 	showHelp      bool
@@ -52,8 +52,8 @@ func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
 	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
 	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.StringVar(&discoverDelay, "discover_delay", "60s", "Delay between node discovery")
-	flag.StringVar(&scanDelay, "scan_delay", "1s", "Delay between scan local clipboard")
+	flag.DurationVar(&discoverDelay, "discover_delay", 0, "Delay between node discovery")
+	flag.DurationVar(&scanDelay, "scan_delay", 0, "Delay between scan local clipboard")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
@@ -89,23 +89,14 @@ func main() {
 		return
 	}
 
-	discoverDelayDuration, delayErr := time.ParseDuration(discoverDelay)
-	if delayErr != nil {
-		log.Panic().Err(delayErr).Msg("failed to parse discover delay")
-	}
-
-	scanDelayDuration, scanDelayErr := time.ParseDuration(scanDelay)
-	if scanDelayErr != nil {
-		log.Panic().Err(scanDelayErr).Msg("failed to parse scan delay")
-	}
-
 	node := internal.NewNode(internal.NodeOptions{
-		Port:          port,
-		DiscoverDelay: discoverDelayDuration,
+		Port:               port,
+		DiscoverDelay:      discoverDelay,
+		ClipboardScanDelay: scanDelay,
 	})
 
 	go func() {
-		if err := node.Start(scanDelayDuration); err != nil {
+		if err := node.Start(); err != nil {
 			log.Panic().Err(err).Msg("failed to start the node")
 		}
 	}()
@@ -119,7 +110,6 @@ func main() {
 	}
 
 	if nodeDiscover {
-		log.Debug().Msg("node discovery enabled, delay: " + discoverDelay)
 		go node.EnableNodeDiscover()
 	}
 
