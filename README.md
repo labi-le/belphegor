@@ -5,6 +5,8 @@ Belphegor is a clipboard manager that allows you to share your clipboard with ot
 ## Dependencies
 
 - Go 1.22 (to build a binary) // pls help to create gh actions
+- jq
+- git
 - xclip or xsel (for skufs) or wl-clipboard (linux)
 - pbpaste (macos)
 - makefile
