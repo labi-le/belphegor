@@ -35,3 +35,5 @@ Flags:
 	-version | show version
 	-help | show help
 ```
+## Todo
+[ ] Create github actions for build binary and running tests
