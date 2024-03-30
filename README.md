@@ -1,11 +1,12 @@
 # belphegor
 
 Belphegor is a clipboard manager that allows you to share your clipboard with other devices on the network.\
-<img src="logo.webp" width="600">
+<img src="logo.webp" width="800">
 ___
 
 ### Features
 - cipher (rsa)
+- peer to peer
 - discovering local nodes
 - image sharing (`wayland` <—> `wayland`, `wayland` <—> `windows`)
 
@@ -35,7 +36,7 @@ cd belphegor
 sudo make install
 ```
 
-## Usage
+### Usage
 ```
 Usage of belphegor:
   -connect string
@@ -55,5 +56,5 @@ Usage of belphegor:
   -version
         Show version
 ```
-## Todo
-[ ] Create github actions for build binary and running tests
+### Todo
+[x] Create github actions for build binary and running tests
