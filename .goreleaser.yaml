@@ -1,0 +1,76 @@
+project_name: belphegor
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+builds:
+  - main: "./cmd/"
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm
+    tags:
+      - netgo
+      - osusergo
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -extldflags '-static'
+      - -X {{ .ModulePath }}/internal.Version={{ .Version }}
+      - -X {{ .ModulePath }}/internal.CommitHash={{ .Commit }}
+      - -X {{ .ModulePath }}/internal.BuildTime={{ .CommitDate }}
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  name_template: 'v{{ .Version }}'
+  make_latest: true
+
+nfpms:
+  - vendor: labi-le
+
+    # Your app's homepage.
+    homepage: https://github.com/labi-le/belphegor
+
+    # Your app's maintainer (probably you).
+    maintainer: labi-le <i@labile.cc>
+
+    # Your app's description.
+    description: |-
+      share clipboard on network
+
+    # Your app's license.
+    license: MIT
+
+    # Formats to be generated.
+    formats:
+      - deb
+      - rpm
+      - archlinux
+
+    # Packages your package recommends installing. (overridable)
+    recommends:
+      - wl-clipboard
+      - xclip
+      - xsel
+
+    version_metadata: git
+
+    # Makes a meta package - an empty package that contains only supporting
+    # files and dependencies.
+    # When set to `true`, the `builds` option is ignored.
+    meta: true
