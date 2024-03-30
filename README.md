@@ -1,25 +1,34 @@
 # belphegor
 
 Belphegor is a clipboard manager that allows you to share your clipboard with other devices on the network.
+___
 
-## Dependencies
+# How it work
+![p2p](logo.webp =100*20)
 
+___
+### Dependencies
+- linux:
+    * xclip or xsel (for skufs) or wl-clipboard (linux)
+- macos:
+    * pbpaste
+- windows:
+    * nothing
+
+
+### Installation
+#### Build from source
 - Go 1.22 (to build a binary) // pls help to create gh actions
 - jq
 - git
-- xclip or xsel (for skufs) or wl-clipboard (linux)
-- pbpaste (macos)
 - makefile
-
-It works unstable on macos, i don't have this system to fix the code
-
-## Install
-
 ```sh
 sudo make install
 ```
 
-If you have Windows, then you will need to install [Make](https://stackoverflow.com/questions/2532234/how-to-run-a-makefile-in-windows) for auto installation, or you can run the command [yourself](Makefile#L27)
+#### Prebuilt binaries
+- https://github.com/labi-le/belphegor/releases
+
 
 ## Usage
 ```
