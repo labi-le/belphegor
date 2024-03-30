@@ -12,7 +12,7 @@ VERSION=$(shell git describe --tags --always --abbrev=0 --match='v[0-9]*.[0-9]*.
 COMMIT_HASH=$(shell git rev-parse --short HEAD)
 BUILD_TIMESTAMP=$(shell date '+%Y-%m-%dT%H:%M:%S')
 
-FULL_PACKAGE=$(shell go mod edit -json | jq -r '.Module.Path')
+FULL_PACKAGE=$(shell go list -m)
 LDFLAGS=-ldflags="-X '${FULL_PACKAGE}/internal.Version=${VERSION}' \
                   -X '${FULL_PACKAGE}/internal.CommitHash=${COMMIT_HASH}' \
                   -X '${FULL_PACKAGE}/internal.BuildTime=${BUILD_TIMESTAMP}' \
