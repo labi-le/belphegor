@@ -58,3 +58,11 @@ Usage of belphegor:
 ```
 ### Todo
 [x] Create github actions for build binary and running tests
+
+[ ] Add the use of unix sockets to track connected nodes
+
+[ ] Debug image sharing for xclip, xsel, pbpaste
+
+[ ] Publish to aur package
+
+[ ] Add disable cipher option
