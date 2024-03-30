@@ -2,7 +2,7 @@ run:
   # Timeout for analysis, e.g. 30s, 5m.
   # Default: 1m
   timeout: 3m
-  go: "1.19"
+  go: "1.22"
   allow-parallel-runners: true
 
 
