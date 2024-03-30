@@ -3,6 +3,8 @@ before:
   hooks:
     - go mod tidy
     - go generate ./...
+archives:
+  - format: zip
 builds:
   - main: "./cmd/"
     mod_timestamp: '{{ .CommitTimestamp }}'
@@ -43,6 +45,7 @@ release:
 nfpms:
   - vendor: labi-le
 
+
     # Your app's homepage.
     homepage: https://github.com/labi-le/belphegor
 
@@ -69,8 +72,3 @@ nfpms:
       - xsel
 
     version_metadata: git
-
-    # Makes a meta package - an empty package that contains only supporting
-    # files and dependencies.
-    # When set to `true`, the `builds` option is ignored.
-    meta: true
