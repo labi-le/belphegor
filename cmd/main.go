@@ -67,8 +67,6 @@ func main() {
 	// if debug {
 	//	go http.ListenAndServe("0.0.0.0:8080", nil)
 	// }
-	lock := MustLock()
-	defer Unlock(lock)
 
 	if debug {
 		log.Info().Msg("debug mode enabled")
@@ -94,6 +92,9 @@ func main() {
 		DiscoverDelay:      discoverDelay,
 		ClipboardScanDelay: scanDelay,
 	})
+
+	lock := MustLock()
+	defer Unlock(lock)
 
 	go func() {
 		if err := node.Start(); err != nil {
