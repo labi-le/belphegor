@@ -4,7 +4,7 @@ before:
     - go mod tidy
     - go generate ./...
 archives:
-  - format: zip
+  - format: binary
 builds:
   - main: "./cmd/"
     mod_timestamp: '{{ .CommitTimestamp }}'
