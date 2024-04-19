@@ -85,7 +85,6 @@ func main() {
 	go func() {
 		if err := nd.Start(); err != nil {
 			log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
-
 		}
 	}()
 
