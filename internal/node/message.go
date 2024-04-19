@@ -3,7 +3,6 @@ package node
 import (
 	"bytes"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/labi-le/belphegor/internal"
@@ -22,10 +21,6 @@ import (
 )
 
 type UniqueID = string
-
-var (
-	ErrVersionMismatch = errors.New("version mismatch")
-)
 
 var (
 	// thisDevice represents the current device.
@@ -110,16 +105,11 @@ func parseClipboardProvider(m clipboard.Manager) types.Clipboard {
 		return types.Clipboard_WindowsNT10
 
 	default:
-		panic("unimplemented device")
-	}
-}
-
-func HandShake(self *types.GreetMessage, other *types.GreetMessage) error {
-	if self.Version != other.Version {
-		log.Warn().Msgf("version mismatch: %s != %s", self.Version, other.Version)
+		log.Fatal().Msgf("unimplemented device: %s", m.Name())
 	}
 
-	return nil
+	// unreachable
+	return 0
 }
 
 // lastMessage which is stored in Node and serves to identify duplicate messages
@@ -155,7 +145,7 @@ func (m *lastMessage) Duplicate(new *types.Message, from *types.Device, self *ty
 			bytes.NewReader(new.Data.Raw),
 		)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to compare images")
+			log.Error().AnErr("image.EqualMSE", err).Msg("failed to compare images")
 		}
 
 		return identical

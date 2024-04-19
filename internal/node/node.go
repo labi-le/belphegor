@@ -125,11 +125,16 @@ func genPort() int {
 func (n *Node) ConnectTo(addr string) error {
 	conn, err := net.Dial("tcp4", addr)
 	if err != nil {
+		log.Error().AnErr("net.Dial", err).Msg("failed to handle connection")
 		return err
 	}
 
-	go n.handleConnection(conn)
-	return nil
+	connErr := n.handleConnection(conn)
+	if connErr != nil {
+		log.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
+	}
+
+	return connErr
 }
 
 func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
@@ -187,14 +192,20 @@ func (n *Node) Start() error {
 		}
 
 		log.Trace().Msgf("accepted connection from %s", conn.RemoteAddr().String())
-		go n.handleConnection(conn)
+		go func() {
+			connErr := n.handleConnection(conn)
+			if connErr != nil {
+				log.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
+			}
+		}()
 	}
 }
 
-func (n *Node) handleConnection(conn net.Conn) {
+func (n *Node) handleConnection(conn net.Conn) error {
 	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, n.bitSize)
 	if cipherErr != nil {
-		log.Fatal().Msgf("failed to generate private key: %s", cipherErr)
+		log.Error().AnErr("rsa.GenerateKey", cipherErr).Send()
+		return cipherErr
 	}
 
 	myGreet := greetPool.Acquire()
@@ -202,14 +213,9 @@ func (n *Node) handleConnection(conn net.Conn) {
 
 	hisHand, greetErr := n.greet(myGreet, conn)
 	if greetErr != nil {
-		log.Error().Err(greetErr).Msg("failed to greet")
-		return
+		log.Error().AnErr("node.greet", greetErr).Send()
+		return greetErr
 	}
-	//hisHand, errCatch := n.catchHand(conn)
-	//if errCatch != nil {
-	//	log.Error().Err(errCatch).Msg("failed to catch hand")
-	//	return
-	//}
 
 	peer, addErr := n.addPeer(
 		hisHand,
@@ -218,15 +224,17 @@ func (n *Node) handleConnection(conn net.Conn) {
 	)
 	if addErr != nil {
 		if errors.Is(addErr, ErrAlreadyConnected) {
-			return
+			return nil
 		}
-		log.Error().Err(addErr).Msg("failed to add peer")
-		return
+		log.Error().AnErr("node.addPeer", addErr).Send()
+		return addErr
 	}
 
 	log.Info().Msgf("connected to %s", peer.String())
 	peer.Receive(n.clipboard)
 	n.storage.Delete(peer.Device().GetUniqueID())
+
+	return nil
 }
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
@@ -258,25 +266,21 @@ func (n *Node) Broadcast(msg *types.Message, ignore UniqueID) {
 		// Set write timeout if the writer implements net.Conn
 		err := peer.Conn().SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err != nil {
-			log.Err(err).Msg("write timeout")
+			log.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
 			return
 		}
 		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
 
-		//if _, err := encodeWriter(msg, peer.Conn()); err != nil {
-		//	log.Err(err).Msg("failed to write message")
-		//}
-
 		encData, encErr := peer.cipher.Sign(rand.Reader, encode(msg), nil)
 		if encErr != nil {
-			log.Err(encErr).Msg("failed to encrypt message")
+			log.Error().AnErr("peer.cipher.Sign", encErr).Send()
 		}
 
-		if _, err := encodeWriter(
+		if _, writeErr := encodeWriter(
 			&types.EncryptedMessage{Message: encData},
 			peer.Conn(),
-		); err != nil {
-			log.Err(err).Msg("failed to write message")
+		); writeErr != nil {
+			log.Error().AnErr("encodeWriter", writeErr).Send()
 			n.storage.Delete(peer.Device().GetUniqueID())
 		}
 	})
@@ -350,22 +354,22 @@ func (n *Node) EnableNodeDiscover() {
 //}
 
 func (n *Node) greet(my *types.GreetMessage, conn net.Conn) (*types.GreetMessage, error) {
-	var incomingGreet types.GreetMessage
+	var incoming types.GreetMessage
 
 	log.Trace().Msgf("sending greeting to %s -> %s", prettyDevice(my.Device), conn.RemoteAddr().String())
 	if _, err := encodeWriter(my, conn); err != nil {
-		return &incomingGreet, err
+		return &incoming, err
 	}
 
-	if decodeErr := decodeReader(conn, &incomingGreet); decodeErr != nil {
-		return &incomingGreet, decodeErr
+	if decodeErr := decodeReader(conn, &incoming); decodeErr != nil {
+		return &incoming, decodeErr
 	}
-	log.Trace().Msgf("received greeting from %s -> %s", prettyDevice(incomingGreet.Device), conn.RemoteAddr().String())
+	log.Trace().Msgf("received greeting from %s -> %s", prettyDevice(incoming.Device), conn.RemoteAddr().String())
 
-	if my.Version != incomingGreet.Version {
-		log.Warn().Msgf("version mismatch: %s != %s", my.Version, incomingGreet.Version)
+	if my.Version != incoming.Version {
+		log.Warn().Msgf("version mismatch: %s != %s", my.Version, incoming.Version)
 	}
-	return &incomingGreet, nil
+	return &incoming, nil
 }
 
 // stats periodically log information about the nodes in the storage.

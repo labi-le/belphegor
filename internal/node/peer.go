@@ -128,17 +128,13 @@ func (p *Peer) Receive(cm clipboard.Manager) {
 
 // handleReceiveError handles errors when receiving data.
 func (p *Peer) handleReceiveError(err error) {
-	if errors.Is(err, io.EOF) {
-		log.Trace().Msg("connection closed by EOF (similar to invalid message)")
-		return
-	}
 	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		log.Trace().Err(opErr).Msg("connection closed by OpError")
+	if errors.As(err, &opErr) || errors.Is(err, io.EOF) {
+		log.Trace().AnErr("peer.handleReceiveError", opErr).Msg("connection closed")
 		return
 	}
 
-	log.Error().Err(err).Msg("failed to receive message")
+	log.Error().AnErr("peer.handleReceiveError", err).Msg("failed to receive message")
 }
 
 // receiveMessage receives a message from the node.
@@ -156,10 +152,4 @@ func (p *Peer) receiveMessage() (*types.Message, error) {
 	}
 
 	return &message, proto.Unmarshal(decrypt, &message)
-
-	//if err := p.cipher.DecryptReader(p.conn, &message); err != nil {
-	//	return nil, err
-	//}
-	//
-	//return &message, nil
 }

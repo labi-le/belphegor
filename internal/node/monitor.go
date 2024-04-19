@@ -52,7 +52,7 @@ func (cm *ClipboardMonitor) Receive() {
 			select {
 			case clip := <-cm.updateChan:
 				if len(clip) > 0 {
-					log.Trace().Msg("received external clipboard update")
+					log.Trace().Str("clipboardMonitor.Receive", "received external clipboard update").Send()
 					currentClipboard = clip
 				}
 			default:
@@ -66,7 +66,7 @@ func (cm *ClipboardMonitor) Receive() {
 	}()
 
 	for clip := range clipboardChan {
-		log.Trace().Msg("local clipboard data changed")
+		log.Trace().Str("clipboardMonitor.Receive", "received external clipboard update").Send()
 		cm.node.Broadcast(MessageFrom(clip), "")
 	}
 }

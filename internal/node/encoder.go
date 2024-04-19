@@ -14,7 +14,7 @@ const DataLength = 4
 func encode(src proto.Message) []byte {
 	encoded, err := proto.Marshal(src)
 	if err != nil {
-		log.Error().Msgf("failed to encode clipboard data: %s", err)
+		log.Error().AnErr("encode", err).Msg("failed to encode clipboard data")
 	}
 
 	return encoded

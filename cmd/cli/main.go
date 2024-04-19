@@ -84,14 +84,15 @@ func main() {
 
 	go func() {
 		if err := nd.Start(); err != nil {
-			log.Fatal().Err(err).Str("listener", "failed to start the node")
+			log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
+
 		}
 	}()
 
 	if addressIP != "" {
 		go func() {
 			if err := nd.ConnectTo(addressIP); err != nil {
-				log.Fatal().Err(err).Str("connect", "failed to connect to the node")
+				log.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
 			}
 		}()
 	}

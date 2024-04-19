@@ -32,7 +32,6 @@ Flags:
 	-connect string | ip:port to connect to the node (e.g. 192.168.0.12:7777)
 	-port int | the node will start on this port (e.g. 7777)
 	-node_discover bool | find local nodes on the network and connect to them
-	-noenc bool | do not encrypt messages
 	-enc-bitsize int | encryption bit size (default 1024)
 	-scan_delay string | delay between scan local clipboard (e.g. 5s)
 	-debug | show debug logs
