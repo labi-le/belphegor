@@ -95,13 +95,14 @@ func New(opts Options) *Node {
 	go stats(opts.Storage)
 
 	return &Node{
-		clipboard:      opts.Clipboard,
-		publicPort:     opts.Port,
-		storage:        opts.Storage,
-		discoverDelay:  opts.DiscoverDelay,
-		localClipboard: opts.ClipboardChannel,
-		bitSize:        opts.BitSize,
-		keepAliveDelay: opts.KeepAliveDelay,
+		clipboard:          opts.Clipboard,
+		publicPort:         opts.Port,
+		storage:            opts.Storage,
+		discoverDelay:      opts.DiscoverDelay,
+		localClipboard:     opts.ClipboardChannel,
+		bitSize:            opts.BitSize,
+		keepAliveDelay:     opts.KeepAliveDelay,
+		clipboardScanDelay: opts.ClipboardScanDelay,
 	}
 }
 
