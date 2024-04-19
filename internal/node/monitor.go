@@ -47,7 +47,7 @@ func (cm *ClipboardMonitor) Receive() {
 	defer close(clipboardChan)
 
 	go func() {
-		for range time.Tick(cm.scanInterval) {
+		for {
 			//log.Trace().Msg("scan local clipboard")
 			select {
 			case clip := <-cm.updateChan:
@@ -55,9 +55,8 @@ func (cm *ClipboardMonitor) Receive() {
 					log.Trace().Str("clipboardMonitor.Receive", "received external clipboard update").Send()
 					currentClipboard = clip
 				}
-			default:
-				newestClipboard := cm.fetchLocalClipboard()
-				if !bytes.Equal(newestClipboard, currentClipboard) {
+			case <-time.After(cm.scanInterval):
+				if newestClipboard := cm.fetchLocalClipboard(); !bytes.Equal(newestClipboard, currentClipboard) {
 					currentClipboard = newestClipboard
 					clipboardChan <- currentClipboard
 				}
