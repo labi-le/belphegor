@@ -2,6 +2,7 @@ package node
 
 import (
 	"bytes"
+	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/rs/zerolog/log"
 	"time"
@@ -19,7 +20,6 @@ type ClipboardMonitor struct {
 	scanInterval time.Duration
 }
 
-// NewClipboardMonitor creates a new instance of ClipboardMonitor.
 func NewClipboardMonitor(
 	node *Node,
 	cp clipboard.Manager,
@@ -36,9 +36,10 @@ func NewClipboardMonitor(
 
 // Receive starts monitoring the clipboard and subsequently sending data to other nodes
 func (cm *ClipboardMonitor) Receive() {
+	const op = "clipboardMonitor.Receive"
 	var (
-		clipboardChan    = make(chan []byte)
-		currentClipboard []byte
+		clipboardChan    = make(chan *types.Message)
+		currentClipboard = MessageFrom(cm.fetchLocalClipboard())
 	)
 
 	// first scan
@@ -51,13 +52,10 @@ func (cm *ClipboardMonitor) Receive() {
 			//log.Trace().Msg("scan local clipboard")
 			select {
 			case clip := <-cm.updateChan:
-				if len(clip) > 0 {
-					log.Trace().Str("clipboardMonitor.Receive", "received external clipboard update").Send()
-					currentClipboard = clip
-				}
+				currentClipboard = clip
 			case <-time.After(cm.scanInterval):
-				if newestClipboard := cm.fetchLocalClipboard(); !bytes.Equal(newestClipboard, currentClipboard) {
-					currentClipboard = newestClipboard
+				if newestClipboard := cm.fetchLocalClipboard(); !bytes.Equal(newestClipboard, currentClipboard.Data.Raw) {
+					currentClipboard = MessageFrom(newestClipboard)
 					clipboardChan <- currentClipboard
 				}
 			}
@@ -65,8 +63,8 @@ func (cm *ClipboardMonitor) Receive() {
 	}()
 
 	for clip := range clipboardChan {
-		log.Trace().Str("clipboardMonitor.Receive", "received external clipboard update").Send()
-		cm.node.Broadcast(MessageFrom(clip), "")
+		log.Trace().Str(op, "local clipboard data changed").Send()
+		cm.node.Broadcast(clip, clip.Header.From)
 	}
 }
 

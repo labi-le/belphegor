@@ -39,7 +39,6 @@ func AcquirePeer(
 	p.addr = addr
 	p.device = id
 	p.updates = updates
-	p.received = &lastMessage{Message: MessageFrom([]byte{})}
 	p.cipher = cipher
 
 	return p
@@ -50,9 +49,7 @@ type Peer struct {
 	addr    netip.AddrPort
 	device  *types.Device
 	updates Channel
-
-	received *lastMessage
-	cipher   *encrypter.Cipher
+	cipher  *encrypter.Cipher
 }
 
 func (p *Peer) Release() {
@@ -62,7 +59,6 @@ func (p *Peer) Release() {
 	p.addr = netip.AddrPort{}
 	p.conn = nil
 	p.updates = nil
-	p.received = nil
 
 	peerPool.Release(p)
 }
@@ -103,7 +99,7 @@ func prettyDevice(id *types.Device) string {
 	)
 }
 
-func (p *Peer) Receive(cm clipboard.Manager) {
+func (p *Peer) Receive(cm clipboard.Manager, last *LastMessage) {
 	for {
 		msg, err := p.receiveMessage()
 		if err != nil {
@@ -111,9 +107,9 @@ func (p *Peer) Receive(cm clipboard.Manager) {
 			break
 		}
 
-		p.received.Replace(msg)
 		_ = cm.Set(msg.Data.Raw)
-		p.updates <- msg.Data.Raw
+		last.update <- msg
+		p.updates <- msg
 
 		log.Debug().Msgf(
 			"received %s from %s by hash %x",
@@ -128,13 +124,15 @@ func (p *Peer) Receive(cm clipboard.Manager) {
 
 // handleReceiveError handles errors when receiving data.
 func (p *Peer) handleReceiveError(err error) {
+	const op = "peer.handleReceiveError"
+
 	var opErr *net.OpError
 	if errors.As(err, &opErr) || errors.Is(err, io.EOF) {
-		log.Trace().AnErr("peer.handleReceiveError", opErr).Msg("connection closed")
+		log.Trace().AnErr(op, opErr).Msg("connection closed")
 		return
 	}
 
-	log.Error().AnErr("peer.handleReceiveError", err).Msg("failed to receive message")
+	log.Error().AnErr(op, err).Msg("failed to receive message")
 }
 
 // receiveMessage receives a message from the node.

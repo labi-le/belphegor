@@ -33,7 +33,7 @@ type Node struct {
 	keepAliveDelay     time.Duration
 	clipboardScanDelay time.Duration
 
-	lastMessage *lastMessage
+	lastMessage *LastMessage
 }
 
 // Options represents options for Node
@@ -105,7 +105,7 @@ func New(opts Options) *Node {
 		bitSize:            opts.BitSize,
 		keepAliveDelay:     opts.KeepAliveDelay,
 		clipboardScanDelay: opts.ClipboardScanDelay,
-		lastMessage:        &lastMessage{Message: MessageFrom([]byte{})},
+		lastMessage:        NewLastMessage(),
 	}
 }
 
@@ -184,6 +184,7 @@ func (n *Node) Start() error {
 	defer l.Close()
 
 	go NewClipboardMonitor(n, n.clipboard, n.clipboardScanDelay, n.localClipboard).Receive()
+	go n.lastMessage.ListenUpdates()
 
 	for {
 		conn, netErr := l.Accept()
@@ -229,10 +230,10 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		log.Error().AnErr("node.addPeer", addErr).Send()
 		return addErr
 	}
+	defer n.storage.Delete(peer.Device().GetUniqueID())
 
 	log.Info().Msgf("connected to %s", peer.String())
-	peer.Receive(n.clipboard)
-	n.storage.Delete(peer.Device().GetUniqueID())
+	peer.Receive(n.clipboard, n.lastMessage)
 
 	return nil
 }

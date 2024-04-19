@@ -112,27 +112,38 @@ func parseClipboardProvider(m clipboard.Manager) types.Clipboard {
 	return 0
 }
 
-// lastMessage which is stored in Node and serves to identify duplicate messages
-type lastMessage struct {
-	*types.Message
-	mu sync.Mutex
+// LastMessage which is stored in Node and serves to identify duplicate messages
+type LastMessage struct {
+	msg    *types.Message
+	mu     sync.Mutex
+	update chan *types.Message
 }
 
-func (m *lastMessage) Get() *types.Message {
+func NewLastMessage() *LastMessage {
+	return &LastMessage{update: make(chan *types.Message)}
+}
+
+func (m *LastMessage) Get() *types.Message {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return m.Message
+	return m.msg
 }
 
-func (m *lastMessage) Replace(msg *types.Message) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.Message = msg
+// ListenUpdates updates the lastMessage with the latest message received
+func (m *LastMessage) ListenUpdates() {
+	for msg := range m.update {
+		m.mu.Lock()
+		m.msg = msg
+		m.mu.Unlock()
+	}
 }
 
-func (m *lastMessage) Duplicate(new *types.Message, from *types.Device, self *types.Device) bool {
+func (m *LastMessage) Duplicate(new *types.Message, from *types.Device, self *types.Device) bool {
+	if new == nil || m.msg == nil {
+		return false
+	}
+
 	message := m.Get()
 	if message.Header.MimeType == types.Mime_IMAGE && new.Header.MimeType == types.Mime_IMAGE {
 		if self.ClipboardProvider == from.ClipboardProvider {
