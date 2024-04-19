@@ -140,30 +140,27 @@ func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, co
 		return peer, ErrAlreadyConnected
 	}
 
-	rightErr := HandShake(greetPool.Acquire(), hisHand)
-	if rightErr == nil {
-		peer = AcquirePeer(
-			conn,
-			castAddrPort(conn),
-			hisHand.Device,
-			n.localClipboard,
-			cipher,
-		)
+	peer = AcquirePeer(
+		conn,
+		castAddrPort(conn),
+		hisHand.Device,
+		n.localClipboard,
+		cipher,
+	)
 
-		if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
-			return nil, aliveErr
-		}
-
-		if err := conn.(*net.TCPConn).SetKeepAlivePeriod(n.keepAliveDelay); err != nil {
-			return nil, err
-		}
-
-		n.storage.Add(
-			hisHand.Device.UniqueID,
-			peer,
-		)
+	if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
+		return nil, aliveErr
 	}
-	return peer, rightErr
+
+	if err := conn.(*net.TCPConn).SetKeepAlivePeriod(n.keepAliveDelay); err != nil {
+		return nil, err
+	}
+
+	n.storage.Add(
+		hisHand.Device.UniqueID,
+		peer,
+	)
+	return peer, nil
 }
 
 // Start starts the node by listening for incoming connections on the specified public port.
@@ -203,16 +200,16 @@ func (n *Node) handleConnection(conn net.Conn) {
 	myGreet := greetPool.Acquire()
 	myGreet.PublicKey = encrypter.PublicKey2Bytes(privateKey.Public())
 
-	greetErr := n.greet(myGreet, conn)
+	hisHand, greetErr := n.greet(myGreet, conn)
 	if greetErr != nil {
 		log.Error().Err(greetErr).Msg("failed to greet")
 		return
 	}
-	hisHand, errCatch := n.catchHand(conn)
-	if errCatch != nil {
-		log.Error().Err(errCatch).Msg("failed to catch hand")
-		return
-	}
+	//hisHand, errCatch := n.catchHand(conn)
+	//if errCatch != nil {
+	//	log.Error().Err(errCatch).Msg("failed to catch hand")
+	//	return
+	//}
 
 	peer, addErr := n.addPeer(
 		hisHand,
@@ -343,21 +340,32 @@ func (n *Node) EnableNodeDiscover() {
 	}
 }
 
-func (n *Node) catchHand(conn net.Conn) (*types.GreetMessage, error) {
-	var greet types.GreetMessage
-	if decodeErr := decodeReader(conn, &greet); decodeErr != nil {
-		return nil, decodeErr
-	}
-	log.Trace().Msgf("received greeting from %s -> %s", prettyDevice(greet.Device), conn.RemoteAddr().String())
-	return &greet, nil
-}
+//func (n *Node) catchHand(conn net.Conn) (*types.GreetMessage, error) {
+//	var greet types.GreetMessage
+//	if decodeErr := decodeReader(conn, &greet); decodeErr != nil {
+//		return nil, decodeErr
+//	}
+//	log.Trace().Msgf("received greeting from %s -> %s", prettyDevice(greet.Device), conn.RemoteAddr().String())
+//	return &greet, nil
+//}
 
-func (n *Node) greet(my *types.GreetMessage, conn net.Conn) error {
+func (n *Node) greet(my *types.GreetMessage, conn net.Conn) (*types.GreetMessage, error) {
+	var incomingGreet types.GreetMessage
+
 	log.Trace().Msgf("sending greeting to %s -> %s", prettyDevice(my.Device), conn.RemoteAddr().String())
 	if _, err := encodeWriter(my, conn); err != nil {
-		return err
+		return &incomingGreet, err
 	}
-	return nil
+
+	if decodeErr := decodeReader(conn, &incomingGreet); decodeErr != nil {
+		return &incomingGreet, decodeErr
+	}
+	log.Trace().Msgf("received greeting from %s -> %s", prettyDevice(incomingGreet.Device), conn.RemoteAddr().String())
+
+	if my.Version != incomingGreet.Version {
+		log.Warn().Msgf("version mismatch: %s != %s", my.Version, incomingGreet.Version)
+	}
+	return &incomingGreet, nil
 }
 
 // stats periodically log information about the nodes in the storage.

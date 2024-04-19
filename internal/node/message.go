@@ -116,7 +116,7 @@ func parseClipboardProvider(m clipboard.Manager) types.Clipboard {
 
 func HandShake(self *types.GreetMessage, other *types.GreetMessage) error {
 	if self.Version != other.Version {
-		return ErrVersionMismatch
+		log.Warn().Msgf("version mismatch: %s != %s", self.Version, other.Version)
 	}
 
 	return nil
