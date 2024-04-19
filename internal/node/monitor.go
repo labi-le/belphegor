@@ -50,7 +50,7 @@ func (cm *ClipboardMonitor) Receive() {
 		for range time.Tick(cm.scanInterval) {
 			//log.Trace().Msg("scan local clipboard")
 			select {
-			case clip := <-cm.updateChan.Read():
+			case clip := <-cm.updateChan:
 				if len(clip) > 0 {
 					log.Trace().Msg("received external clipboard update")
 					currentClipboard = clip

@@ -117,7 +117,7 @@ func (m *lastMessage) Get() *types.Message {
 	return m.Message
 }
 
-func (m *lastMessage) Set(msg *types.Message) {
+func (m *lastMessage) Replace(msg *types.Message) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -98,12 +98,12 @@ func (p *Peer) Receive(cm clipboard.Manager) {
 			break
 		}
 
-		p.received.Set(msg)
+		p.received.Replace(msg)
 		_ = cm.Set(msg.Data.Raw)
-		p.updates.Write(msg.Data.Raw)
+		p.updates <- msg.Data.Raw
 
 		log.Debug().Msgf(
-			"received %s from %s by hashBytes %x",
+			"received %s from %s by hash %x",
 			msg.Header.ID,
 			p.ID(),
 			shortHash(msg.Data.Hash),

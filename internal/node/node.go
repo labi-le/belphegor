@@ -63,7 +63,7 @@ func (o *Options) Prepare() {
 	}
 
 	if o.ClipboardChannel == nil {
-		o.ClipboardChannel = NewChannel()
+		o.ClipboardChannel = make(Channel)
 	}
 
 	if o.Storage == nil {
