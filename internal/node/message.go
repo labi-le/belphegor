@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/labi-le/belphegor/internal"
 	"github.com/labi-le/belphegor/internal/types"
@@ -13,6 +14,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"net/http"
+	"os"
+	"os/user"
 	"runtime"
 	"sync"
 	"time"
@@ -25,14 +28,31 @@ var (
 )
 
 var (
-	currentUniqueID = uuid.New()
 	// thisDevice represents the current device.
 	thisDevice = &types.Device{
+		Name:              deviceName(),
 		Arch:              runtime.GOARCH,
-		UniqueName:        currentUniqueID.String(),
+		UniqueID:          uuid.New().String(),
 		ClipboardProvider: parseClipboardProvider(clipboard.New()),
 	}
 )
+
+func deviceName() string {
+	hostname, hostErr := os.Hostname()
+	if hostErr != nil {
+		log.Error().AnErr("deviceName:hostname", hostErr)
+		return "unknown@unknown"
+	}
+
+	current, userErr := user.Current()
+	if userErr != nil {
+		log.Error().AnErr("deviceName:username", userErr)
+
+		return "unknown@unknown"
+	}
+
+	return fmt.Sprintf("%s@%s", current.Username, hostname)
+}
 
 var (
 	messagePool = initMessagePool()
@@ -43,9 +63,8 @@ func initGreetPool() *pool.ObjectPool[*types.GreetMessage] {
 	p := pool.NewObjectPool[*types.GreetMessage](10)
 	p.New = func() *types.GreetMessage {
 		return &types.GreetMessage{
-			UniqueID: currentUniqueID.String(),
-			Version:  internal.Version,
-			Device:   thisDevice,
+			Version: internal.Version,
+			Device:  thisDevice,
 		}
 	}
 
@@ -58,7 +77,6 @@ func initMessagePool() *pool.ObjectPool[*types.Message] {
 		return &types.Message{
 			Header: &types.Header{
 				ID:      uuid.New().String(),
-				Device:  thisDevice,
 				Created: timestamppb.New(time.Now()),
 			},
 			Data: &types.Data{},
@@ -124,6 +142,28 @@ func (m *lastMessage) Replace(msg *types.Message) {
 	m.Message = msg
 }
 
+func (m *lastMessage) Duplicate(new *types.Message, from *types.Device, self *types.Device) bool {
+	message := m.Get()
+	if message.Header.MimeType == types.Mime_IMAGE && new.Header.MimeType == types.Mime_IMAGE {
+		if self.ClipboardProvider == from.ClipboardProvider {
+			return bytes.Equal(message.Data.Hash, new.Data.Hash)
+		}
+
+		// mse: compare images
+		identical, err := image.EqualMSE(
+			bytes.NewReader(message.Data.Raw),
+			bytes.NewReader(new.Data.Raw),
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to compare images")
+		}
+
+		return identical
+	}
+
+	return message.Header.ID == new.Header.ID
+}
+
 func parseMimeType(ct string) types.Mime {
 	switch ct {
 	case "image/png":
@@ -144,33 +184,4 @@ func hashBytes(data []byte) []byte {
 // shortHash returns the first 4 bytes of the provided hash.
 func shortHash(oldHash []byte) []byte {
 	return oldHash[:4]
-}
-
-func MessageIsDuplicate(self *types.Message, from *types.Message) bool {
-	if self.Header.ID == from.Header.ID {
-		return true
-	}
-
-	if self.Header.MimeType == types.Mime_IMAGE && from.Header.MimeType == types.Mime_IMAGE {
-		if equalClipboardProviders(self, from) {
-			return bytes.Equal(self.Data.Hash, from.Data.Hash)
-		}
-
-		// mse: compare images
-		identical, err := image.EqualMSE(
-			bytes.NewReader(self.Data.Raw),
-			bytes.NewReader(from.Data.Raw),
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to compare images")
-		}
-
-		return identical
-	}
-
-	return false
-}
-
-func equalClipboardProviders(self *types.Message, from *types.Message) bool {
-	return self.Header.Device.ClipboardProvider == from.Header.Device.ClipboardProvider
 }

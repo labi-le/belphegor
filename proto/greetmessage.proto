@@ -8,7 +8,6 @@ option go_package = "internal/types";
 // GreetMessage represents the greeting message
 // Used to shake hands with other nodes
 message GreetMessage {
-  string UniqueID = 1;
   string Version = 2;
   Device Device = 3;
   uint32 Port = 5;

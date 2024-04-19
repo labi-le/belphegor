@@ -6,8 +6,9 @@ option go_package = "internal/types";
 
 // Device represents the device information
 message Device {
+  string Name = 1;
   string Arch = 2;
-  string UniqueName = 3;
+  string UniqueID = 3;
   Clipboard ClipboardProvider = 4;
 }
 

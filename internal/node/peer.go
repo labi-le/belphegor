@@ -3,6 +3,7 @@ package node
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
@@ -29,14 +30,14 @@ func initPeerPool() *pool.ObjectPool[*Peer] {
 func AcquirePeer(
 	conn net.Conn,
 	addr netip.AddrPort,
-	id UniqueID,
+	id *types.Device,
 	updates Channel,
 	cipher *encrypter.Cipher,
 ) *Peer {
 	p := peerPool.Acquire()
 	p.conn = conn
 	p.addr = addr
-	p.id = id
+	p.device = id
 	p.updates = updates
 	p.received = &lastMessage{Message: MessageFrom([]byte{})}
 	p.cipher = cipher
@@ -47,7 +48,7 @@ func AcquirePeer(
 type Peer struct {
 	conn    net.Conn
 	addr    netip.AddrPort
-	id      UniqueID
+	device  *types.Device
 	updates Channel
 
 	received *lastMessage
@@ -57,7 +58,7 @@ type Peer struct {
 func (p *Peer) Release() {
 	_ = p.Close()
 
-	p.id = ""
+	p.device = nil
 	p.addr = netip.AddrPort{}
 	p.conn = nil
 	p.updates = nil
@@ -70,8 +71,8 @@ func (p *Peer) Addr() netip.AddrPort {
 	return p.addr
 }
 
-func (p *Peer) ID() UniqueID {
-	return p.id
+func (p *Peer) Device() *types.Device {
+	return p.device
 }
 
 func (p *Peer) Conn() net.Conn {
@@ -87,7 +88,19 @@ func (p *Peer) Close() error {
 }
 
 func (p *Peer) String() string {
-	return p.addr.String()
+	return fmt.Sprintf(
+		"%s -> %s",
+		prettyDevice(p.device),
+		p.addr.String(),
+	)
+}
+
+func prettyDevice(id *types.Device) string {
+	return fmt.Sprintf(
+		"%s (%s)",
+		id.Name,
+		id.UniqueID,
+	)
 }
 
 func (p *Peer) Receive(cm clipboard.Manager) {
@@ -105,12 +118,12 @@ func (p *Peer) Receive(cm clipboard.Manager) {
 		log.Debug().Msgf(
 			"received %s from %s by hash %x",
 			msg.Header.ID,
-			p.ID(),
+			p.String(),
 			shortHash(msg.Data.Hash),
 		)
 	}
 
-	log.Info().Msgf("node %s disconnected", p.ID())
+	log.Info().Msgf("%s disconnected", p.String())
 }
 
 // handleReceiveError handles errors when receiving data.

@@ -32,6 +32,8 @@ type Node struct {
 	bitSize            int
 	keepAliveDelay     time.Duration
 	clipboardScanDelay time.Duration
+
+	lastMessage *lastMessage
 }
 
 // Options represents options for Node
@@ -103,6 +105,7 @@ func New(opts Options) *Node {
 		bitSize:            opts.BitSize,
 		keepAliveDelay:     opts.KeepAliveDelay,
 		clipboardScanDelay: opts.ClipboardScanDelay,
+		lastMessage:        &lastMessage{Message: MessageFrom([]byte{})},
 	}
 }
 
@@ -132,8 +135,8 @@ func (n *Node) ConnectTo(addr string) error {
 func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
 	var peer *Peer
 
-	if n.storage.Exist(hisHand.UniqueID) {
-		log.Trace().Msgf("node %s already connected, ignoring", hisHand.UniqueID)
+	if n.storage.Exist(hisHand.Device.UniqueID) {
+		log.Trace().Msgf("%s already connected, ignoring", prettyDevice(hisHand.Device))
 		return peer, ErrAlreadyConnected
 	}
 
@@ -142,7 +145,7 @@ func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, co
 		peer = AcquirePeer(
 			conn,
 			castAddrPort(conn),
-			hisHand.UniqueID,
+			hisHand.Device,
 			n.localClipboard,
 			cipher,
 		)
@@ -156,7 +159,7 @@ func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, co
 		}
 
 		n.storage.Add(
-			hisHand.UniqueID,
+			hisHand.Device.UniqueID,
 			peer,
 		)
 	}
@@ -224,9 +227,9 @@ func (n *Node) handleConnection(conn net.Conn) {
 		return
 	}
 
-	log.Info().Msgf("connected to the clipboard: %s", peer.ID())
+	log.Info().Msgf("connected to %s", peer.String())
 	peer.Receive(n.clipboard)
-	n.storage.Delete(peer.ID())
+	n.storage.Delete(peer.Device().GetUniqueID())
 }
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
@@ -244,14 +247,14 @@ func (n *Node) Broadcast(msg *types.Message, ignore UniqueID) {
 			return
 		}
 
-		if MessageIsDuplicate(peer.received.Get(), msg) {
+		if n.lastMessage.Duplicate(msg, peer.Device(), thisDevice) {
 			return
 		}
 
 		log.Debug().Msgf(
 			"sent %s to %s by hash %x",
 			msg.Header.ID,
-			peer.ID(),
+			peer.String(),
 			shortHash(msg.Data.Hash),
 		)
 
@@ -277,7 +280,7 @@ func (n *Node) Broadcast(msg *types.Message, ignore UniqueID) {
 			peer.Conn(),
 		); err != nil {
 			log.Err(err).Msg("failed to write message")
-			n.storage.Delete(peer.ID())
+			n.storage.Delete(peer.Device().GetUniqueID())
 		}
 	})
 }
@@ -326,10 +329,10 @@ func (n *Node) EnableNodeDiscover() {
 					peerIP.String(),
 					strconv.Itoa(int(greet.Port)),
 				)
-				log.Trace().Msgf("found node %s, check availability", peerAddr)
+				log.Trace().Msgf("found node %s -> %s, check availability", prettyDevice(greet.Device), peerAddr)
 				log.Trace().Msgf("payload: %s", greet.String())
 				if err := n.ConnectTo(peerAddr); err != nil {
-					log.Err(err).Msgf("failed to connect to %s", peerAddr)
+					log.Err(err).Msgf("failed to connect to %s -> %s", prettyDevice(greet.Device), peerAddr)
 				}
 			},
 		},
@@ -345,12 +348,12 @@ func (n *Node) catchHand(conn net.Conn) (*types.GreetMessage, error) {
 	if decodeErr := decodeReader(conn, &greet); decodeErr != nil {
 		return nil, decodeErr
 	}
-	log.Trace().Msgf("received greeting from %s", conn.RemoteAddr().String())
+	log.Trace().Msgf("received greeting from %s -> %s", prettyDevice(greet.Device), conn.RemoteAddr().String())
 	return &greet, nil
 }
 
 func (n *Node) greet(my *types.GreetMessage, conn net.Conn) error {
-	log.Trace().Msgf("sending greeting to %s", conn.RemoteAddr().String())
+	log.Trace().Msgf("sending greeting to %s -> %s", prettyDevice(my.Device), conn.RemoteAddr().String())
 	if _, err := encodeWriter(my, conn); err != nil {
 		return err
 	}
@@ -363,7 +366,7 @@ func (n *Node) greet(my *types.GreetMessage, conn net.Conn) error {
 func stats(storage *Storage) {
 	for range time.Tick(time.Minute) {
 		storage.Tap(func(metadata UniqueID, peer *Peer) {
-			log.Trace().Msgf("node %s is alive", metadata)
+			log.Trace().Msgf("%s is alive", peer.String())
 		})
 	}
 }
