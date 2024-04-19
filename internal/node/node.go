@@ -1,4 +1,4 @@
-package internal
+package node
 
 import (
 	"crypto/rand"
@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	gen "github.com/labi-le/belphegor/internal/types"
+	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/ip"
@@ -25,7 +25,7 @@ var (
 
 type Node struct {
 	clipboard          clipboard.Manager
-	storage            *NodeStorage
+	storage            *Storage
 	localClipboard     Channel
 	publicPort         int
 	discoverDelay      time.Duration
@@ -34,11 +34,11 @@ type Node struct {
 	clipboardScanDelay time.Duration
 }
 
-// NodeOptions represents options for Node
+// Options represents options for Node
 // If no options are specified, default values will be used
-type NodeOptions struct {
+type Options struct {
 	Clipboard          clipboard.Manager
-	Storage            *NodeStorage
+	Storage            *Storage
 	Port               int
 	DiscoverDelay      time.Duration
 	ClipboardChannel   Channel
@@ -47,7 +47,7 @@ type NodeOptions struct {
 	ClipboardScanDelay time.Duration
 }
 
-func (o *NodeOptions) Prepare() {
+func (o *Options) Prepare() {
 	if o.Port <= 0 || o.Port > 65535 {
 		newPort := genPort()
 		log.Warn().Msgf(
@@ -87,8 +87,8 @@ func (o *NodeOptions) Prepare() {
 	}
 }
 
-// NewNode creates a new instance of Node with the specified settings.
-func NewNode(opts NodeOptions) *Node {
+// New creates a new instance of Node with the specified settings.
+func New(opts Options) *Node {
 	opts.Prepare()
 
 	// todo rewrite to unixsocket calling method
@@ -128,7 +128,7 @@ func (n *Node) ConnectTo(addr string) error {
 	return nil
 }
 
-func (n *Node) addPeer(hisHand *gen.GreetMessage, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
+func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
 	var peer *Peer
 
 	if n.storage.Exist(hisHand.UniqueID) {
@@ -140,7 +140,7 @@ func (n *Node) addPeer(hisHand *gen.GreetMessage, cipher *encrypter.Cipher, conn
 	if rightErr == nil {
 		peer = AcquirePeer(
 			conn,
-			castAddrPortFromConn(conn),
+			castAddrPort(conn),
 			hisHand.UniqueID,
 			n.localClipboard,
 			cipher,
@@ -235,8 +235,8 @@ func (n *Node) handleConnection(conn net.Conn) {
 // The method logs the sent messages and their hashes for debugging purposes.
 // The 'msg' parameter is the message to be broadcast.
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
-func (n *Node) Broadcast(msg *gen.Message, ignore UniqueID) {
-	defer ReleaseMessage(msg)
+func (n *Node) Broadcast(msg *types.Message, ignore UniqueID) {
+	defer messagePool.Release(msg)
 
 	n.storage.Tap(func(id UniqueID, peer *Peer) {
 		if id == ignore {
@@ -272,7 +272,7 @@ func (n *Node) Broadcast(msg *gen.Message, ignore UniqueID) {
 		}
 
 		if _, err := encodeWriter(
-			&gen.EncryptedMessage{Message: encData},
+			&types.EncryptedMessage{Message: encData},
 			peer.Conn(),
 		); err != nil {
 			log.Err(err).Msg("failed to write message")
@@ -339,8 +339,8 @@ func (n *Node) EnableNodeDiscover() {
 	}
 }
 
-func (n *Node) catchHand(conn net.Conn) (*gen.GreetMessage, error) {
-	var greet gen.GreetMessage
+func (n *Node) catchHand(conn net.Conn) (*types.GreetMessage, error) {
+	var greet types.GreetMessage
 	if decodeErr := decodeReader(conn, &greet); decodeErr != nil {
 		return nil, decodeErr
 	}
@@ -348,7 +348,7 @@ func (n *Node) catchHand(conn net.Conn) (*gen.GreetMessage, error) {
 	return &greet, nil
 }
 
-func (n *Node) greet(my *gen.GreetMessage, conn net.Conn) error {
+func (n *Node) greet(my *types.GreetMessage, conn net.Conn) error {
 	log.Trace().Msgf("sending greeting to %s", conn.RemoteAddr().String())
 	if _, err := encodeWriter(my, conn); err != nil {
 		return err
@@ -359,7 +359,7 @@ func (n *Node) greet(my *gen.GreetMessage, conn net.Conn) error {
 // stats periodically log information about the nodes in the storage.
 // It retrieves the list of nodes from the provided storage and logs the count of nodes
 // as well as information about each node, including its Address and port.
-func stats(storage *NodeStorage) {
+func stats(storage *Storage) {
 	for range time.Tick(time.Minute) {
 		storage.Tap(func(metadata UniqueID, peer *Peer) {
 			log.Trace().Msgf("node %s is alive", metadata)

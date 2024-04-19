@@ -1,4 +1,4 @@
-package internal
+package node
 
 import (
 	"bytes"
@@ -67,7 +67,7 @@ func (cm *ClipboardMonitor) Receive() {
 
 	for clip := range clipboardChan {
 		log.Trace().Msg("local clipboard data changed")
-		cm.node.Broadcast(AcquireMessage(clip), "")
+		cm.node.Broadcast(MessageFrom(clip), "")
 	}
 }
 

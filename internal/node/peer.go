@@ -1,9 +1,9 @@
-package internal
+package node
 
 import (
 	"crypto/rand"
 	"errors"
-	gen "github.com/labi-le/belphegor/internal/types"
+	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/pool"
@@ -38,7 +38,7 @@ func AcquirePeer(
 	p.addr = addr
 	p.id = id
 	p.updates = updates
-	p.received = &lastMessage{Message: AcquireMessage([]byte{})}
+	p.received = &lastMessage{Message: MessageFrom([]byte{})}
 	p.cipher = cipher
 
 	return p
@@ -129,10 +129,10 @@ func (p *Peer) handleReceiveError(err error) {
 }
 
 // receiveMessage receives a message from the node.
-func (p *Peer) receiveMessage() (*gen.Message, error) {
-	var message gen.Message
+func (p *Peer) receiveMessage() (*types.Message, error) {
+	var message types.Message
 
-	var encrypt gen.EncryptedMessage
+	var encrypt types.EncryptedMessage
 	if decodeEnc := decodeReader(p.Conn(), &encrypt); decodeEnc != nil {
 		return &message, decodeEnc
 	}

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
+	"github.com/labi-le/belphegor/internal/node"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -17,21 +18,6 @@ import (
 const LockFile = "belphegor.lck"
 
 var (
-	helpMsg = `belphegor - 
-A cross-platform clipboard sharing utility
-
-Usage:
-	belphegor [flags]
-
-Flags:
-	-connect string | ip:port to connect to the node (e.g. 192.168.0.12:7777)
-	-port int | the node will start on this port (e.g. 7777)
-    -node_discover bool | find local nodes on the network and connect to them
-	-scan_delay string | delay between scan local clipboard (e.g. 5s)
-	-debug | show debug logs
-	-version | show version
-	-help | show help
-`
 	addressIP     string
 	port          int
 	nodeDiscover  bool
@@ -83,11 +69,11 @@ func main() {
 	}
 
 	if showHelp {
-		_, _ = fmt.Fprint(os.Stderr, helpMsg)
+		_, _ = fmt.Fprint(os.Stderr, internal.HelpMsg)
 		return
 	}
 
-	node := internal.NewNode(internal.NodeOptions{
+	nd := node.New(node.Options{
 		Port:               port,
 		DiscoverDelay:      discoverDelay,
 		ClipboardScanDelay: scanDelay,
@@ -97,21 +83,21 @@ func main() {
 	defer Unlock(lock)
 
 	go func() {
-		if err := node.Start(); err != nil {
-			log.Panic().Err(err).Msg("failed to start the node")
+		if err := nd.Start(); err != nil {
+			log.Fatal().Err(err).Str("listener", "failed to start the node")
 		}
 	}()
 
 	if addressIP != "" {
 		go func() {
-			if err := node.ConnectTo(addressIP); err != nil {
-				log.Fatal().Err(err).Msg("failed to connect to the node")
+			if err := nd.ConnectTo(addressIP); err != nil {
+				log.Fatal().Err(err).Str("connect", "failed to connect to the node")
 			}
 		}()
 	}
 
 	if nodeDiscover {
-		go node.EnableNodeDiscover()
+		go nd.EnableNodeDiscover()
 	}
 
 	select {}

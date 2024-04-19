@@ -1,12 +1,12 @@
-// Package belphegor provides functionality for managing clipboard data between nodes.
-package internal
+package node
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
 	"github.com/google/uuid"
-	gen "github.com/labi-le/belphegor/internal/types"
+	"github.com/labi-le/belphegor/internal"
+	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/image"
 	"github.com/labi-le/belphegor/pkg/pool"
@@ -27,7 +27,7 @@ var (
 var (
 	currentUniqueID = uuid.New()
 	// thisDevice represents the current device.
-	thisDevice = &gen.Device{
+	thisDevice = &types.Device{
 		Arch:              runtime.GOARCH,
 		UniqueName:        currentUniqueID.String(),
 		ClipboardProvider: parseClipboardProvider(clipboard.New()),
@@ -39,12 +39,12 @@ var (
 	greetPool   = initGreetPool()
 )
 
-func initGreetPool() *pool.ObjectPool[*gen.GreetMessage] {
-	p := pool.NewObjectPool[*gen.GreetMessage](10)
-	p.New = func() *gen.GreetMessage {
-		return &gen.GreetMessage{
+func initGreetPool() *pool.ObjectPool[*types.GreetMessage] {
+	p := pool.NewObjectPool[*types.GreetMessage](10)
+	p.New = func() *types.GreetMessage {
+		return &types.GreetMessage{
 			UniqueID: currentUniqueID.String(),
-			Version:  Version,
+			Version:  internal.Version,
 			Device:   thisDevice,
 		}
 	}
@@ -52,23 +52,23 @@ func initGreetPool() *pool.ObjectPool[*gen.GreetMessage] {
 	return p
 }
 
-func initMessagePool() *pool.ObjectPool[*gen.Message] {
-	p := pool.NewObjectPool[*gen.Message](10)
-	p.New = func() *gen.Message {
-		return &gen.Message{
-			Header: &gen.Header{
+func initMessagePool() *pool.ObjectPool[*types.Message] {
+	p := pool.NewObjectPool[*types.Message](10)
+	p.New = func() *types.Message {
+		return &types.Message{
+			Header: &types.Header{
 				ID:      uuid.New().String(),
 				Device:  thisDevice,
 				Created: timestamppb.New(time.Now()),
 			},
-			Data: &gen.Data{},
+			Data: &types.Data{},
 		}
 	}
 	return p
 }
 
-// AcquireMessage creates a new Message with the provided data.
-func AcquireMessage(data []byte) *gen.Message {
+// MessageFrom creates a new Message with the provided data.
+func MessageFrom(data []byte) *types.Message {
 	msg := messagePool.Acquire()
 	msg.Data.Raw = data
 	msg.Data.Hash = hashBytes(data)
@@ -78,30 +78,25 @@ func AcquireMessage(data []byte) *gen.Message {
 	return msg
 }
 
-// ReleaseMessage returns the Message to the messagePool for reuse.
-func ReleaseMessage(m *gen.Message) {
-	messagePool.Release(m)
-}
-
-func parseClipboardProvider(m clipboard.Manager) gen.Clipboard {
+func parseClipboardProvider(m clipboard.Manager) types.Clipboard {
 	switch m.Name() {
 	case clipboard.XSel:
-		return gen.Clipboard_XSel
+		return types.Clipboard_XSel
 	case clipboard.XClip:
-		return gen.Clipboard_XClip
+		return types.Clipboard_XClip
 	case clipboard.WlClipboard:
-		return gen.Clipboard_WlClipboard
+		return types.Clipboard_WlClipboard
 	case clipboard.MasOsStd:
-		return gen.Clipboard_MasOsStd
+		return types.Clipboard_MasOsStd
 	case clipboard.WindowsNT10:
-		return gen.Clipboard_WindowsNT10
+		return types.Clipboard_WindowsNT10
 
 	default:
 		panic("unimplemented device")
 	}
 }
 
-func HandShake(self *gen.GreetMessage, other *gen.GreetMessage) error {
+func HandShake(self *types.GreetMessage, other *types.GreetMessage) error {
 	if self.Version != other.Version {
 		return ErrVersionMismatch
 	}
@@ -111,30 +106,30 @@ func HandShake(self *gen.GreetMessage, other *gen.GreetMessage) error {
 
 // lastMessage which is stored in Node and serves to identify duplicate messages
 type lastMessage struct {
-	*gen.Message
+	*types.Message
 	mu sync.Mutex
 }
 
-func (m *lastMessage) Get() *gen.Message {
+func (m *lastMessage) Get() *types.Message {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	return m.Message
 }
 
-func (m *lastMessage) Set(msg *gen.Message) {
+func (m *lastMessage) Set(msg *types.Message) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.Message = msg
 }
 
-func parseMimeType(ct string) gen.Mime {
+func parseMimeType(ct string) types.Mime {
 	switch ct {
 	case "image/png":
-		return gen.Mime_IMAGE
+		return types.Mime_IMAGE
 	default:
-		return gen.Mime_TEXT
+		return types.Mime_TEXT
 	}
 }
 
@@ -151,18 +146,18 @@ func shortHash(oldHash []byte) []byte {
 	return oldHash[:4]
 }
 
-func MessageIsDuplicate(self *gen.Message, from *gen.Message) bool {
+func MessageIsDuplicate(self *types.Message, from *types.Message) bool {
 	if self.Header.ID == from.Header.ID {
 		return true
 	}
 
-	if self.Header.MimeType == gen.Mime_IMAGE && from.Header.MimeType == gen.Mime_IMAGE {
+	if self.Header.MimeType == types.Mime_IMAGE && from.Header.MimeType == types.Mime_IMAGE {
 		if equalClipboardProviders(self, from) {
 			return bytes.Equal(self.Data.Hash, from.Data.Hash)
 		}
 
 		// mse: compare images
-		identical, err := image.Equal(
+		identical, err := image.EqualMSE(
 			bytes.NewReader(self.Data.Raw),
 			bytes.NewReader(from.Data.Raw),
 		)
@@ -176,6 +171,6 @@ func MessageIsDuplicate(self *gen.Message, from *gen.Message) bool {
 	return false
 }
 
-func equalClipboardProviders(self *gen.Message, from *gen.Message) bool {
+func equalClipboardProviders(self *types.Message, from *types.Message) bool {
 	return self.Header.Device.ClipboardProvider == from.Header.Device.ClipboardProvider
 }
