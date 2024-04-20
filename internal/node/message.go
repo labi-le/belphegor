@@ -87,6 +87,7 @@ func MessageFrom(data []byte) *types.Message {
 	msg.Data.Hash = hashBytes(data)
 
 	msg.Header.MimeType = parseMimeType(http.DetectContentType(data))
+	msg.Header.From = thisDevice.UniqueID
 
 	return msg
 }
