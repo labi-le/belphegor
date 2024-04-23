@@ -63,25 +63,15 @@ func (p *Peer) Release() {
 	peerPool.Release(p)
 }
 
-func (p *Peer) Addr() netip.AddrPort {
-	return p.addr
-}
+func (p *Peer) Addr() netip.AddrPort { return p.addr }
 
-func (p *Peer) Device() *types.Device {
-	return p.device
-}
+func (p *Peer) Device() *types.Device { return p.device }
 
-func (p *Peer) Conn() net.Conn {
-	return p.conn
-}
+func (p *Peer) Conn() net.Conn { return p.conn }
 
-func (p *Peer) Updates() Channel {
-	return p.updates
-}
+func (p *Peer) Updates() Channel { return p.updates }
 
-func (p *Peer) Close() error {
-	return p.conn.Close()
-}
+func (p *Peer) Close() error { return p.conn.Close() }
 
 func (p *Peer) String() string {
 	return fmt.Sprintf(
@@ -136,18 +126,18 @@ func (p *Peer) handleReceiveError(err error) {
 }
 
 // receiveMessage receives a message from the node.
-func (p *Peer) receiveMessage() (*types.Message, error) {
+func (p *Peer) receiveMessage() (*Message, error) {
 	var message types.Message
 
 	var encrypt types.EncryptedMessage
 	if decodeEnc := decodeReader(p.Conn(), &encrypt); decodeEnc != nil {
-		return &message, decodeEnc
+		return &Message{}, decodeEnc
 	}
 
 	decrypt, decErr := p.cipher.Decrypt(rand.Reader, encrypt.Message, nil)
 	if decErr != nil {
-		return &message, decErr
+		return &Message{}, decErr
 	}
 
-	return &message, proto.Unmarshal(decrypt, &message)
+	return MessageFromProto(&message), proto.Unmarshal(decrypt, &message)
 }

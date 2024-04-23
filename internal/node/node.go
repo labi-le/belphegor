@@ -248,7 +248,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 // The method logs the sent messages and their hashes for debugging purposes.
 // The 'msg' parameter is the message to be broadcast.
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
-func (n *Node) Broadcast(msg *types.Message, ignore UniqueID) {
+func (n *Node) Broadcast(msg *Message, ignore UniqueID) {
 	const op = "node.Broadcast"
 
 	defer messagePool.Release(msg)
@@ -259,7 +259,7 @@ func (n *Node) Broadcast(msg *types.Message, ignore UniqueID) {
 			return
 		}
 
-		if n.lastMessage.Duplicate(msg, peer.Device(), thisDevice) {
+		if n.lastMessage.Duplicate(msg) {
 			return
 		}
 

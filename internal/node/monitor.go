@@ -1,8 +1,6 @@
 package node
 
 import (
-	"bytes"
-	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/rs/zerolog/log"
 	"time"
@@ -38,12 +36,9 @@ func NewClipboardMonitor(
 func (cm *ClipboardMonitor) Receive() {
 	const op = "clipboardMonitor.Receive"
 	var (
-		clipboardChan    = make(chan *types.Message)
-		currentClipboard = MessageFrom(cm.fetchLocalClipboard())
+		clipboardChan    = make(chan *Message)
+		currentClipboard = cm.fetchLocalClipboard()
 	)
-
-	// first scan
-	//clipboardChan <- cm.fetchLocalClipboard()
 
 	defer close(clipboardChan)
 
@@ -54,9 +49,10 @@ func (cm *ClipboardMonitor) Receive() {
 			case clip := <-cm.updateChan:
 				currentClipboard = clip
 			case <-time.After(cm.scanInterval):
-				if newestClipboard := cm.fetchLocalClipboard(); !bytes.Equal(newestClipboard, currentClipboard.Data.Raw) {
-					currentClipboard = MessageFrom(newestClipboard)
+				newClipboard := cm.fetchLocalClipboard()
+				if !newClipboard.Duplicate(currentClipboard) {
 					clipboardChan <- currentClipboard
+					currentClipboard = newClipboard
 				}
 			}
 		}
@@ -68,8 +64,7 @@ func (cm *ClipboardMonitor) Receive() {
 	}
 }
 
-// fetchLocalClipboard returns the current value of the local clipboard.
-func (cm *ClipboardMonitor) fetchLocalClipboard() []byte {
+func (cm *ClipboardMonitor) fetchLocalClipboard() *Message {
 	clip, _ := cm.cm.Get()
-	return clip
+	return MessageFrom(clip)
 }

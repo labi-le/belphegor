@@ -25,11 +25,12 @@ type UniqueID = string
 var (
 	// thisDevice represents the current device.
 	thisDevice = &types.Device{
-		Name:              deviceName(),
-		Arch:              runtime.GOARCH,
-		UniqueID:          uuid.New().String(),
-		ClipboardProvider: parseClipboardProvider(clipboard.New()),
+		Name:     deviceName(),
+		Arch:     runtime.GOARCH,
+		UniqueID: uuid.New().String(),
 	}
+
+	clipboardManager = parseClipboardProvider(clipboard.New())
 )
 
 func deviceName() string {
@@ -66,22 +67,28 @@ func initGreetPool() *pool.ObjectPool[*types.GreetMessage] {
 	return p
 }
 
-func initMessagePool() *pool.ObjectPool[*types.Message] {
-	p := pool.NewObjectPool[*types.Message](10)
-	p.New = func() *types.Message {
-		return &types.Message{
+func initMessagePool() *pool.ObjectPool[*Message] {
+	p := pool.NewObjectPool[*Message](10)
+	p.New = func() *Message {
+		return MessageFromProto(&types.Message{
 			Header: &types.Header{
-				ID:      uuid.New().String(),
-				Created: timestamppb.New(time.Now()),
+				From:              thisDevice.UniqueID,
+				ID:                uuid.New().String(),
+				Created:           timestamppb.New(time.Now()),
+				ClipboardProvider: clipboardManager,
 			},
 			Data: &types.Data{},
-		}
+		})
 	}
 	return p
 }
 
+type Message struct {
+	*types.Message
+}
+
 // MessageFrom creates a new Message with the provided data.
-func MessageFrom(data []byte) *types.Message {
+func MessageFrom(data []byte) *Message {
 	msg := messagePool.Acquire()
 	msg.Data.Raw = data
 	msg.Data.Hash = hashBytes(data)
@@ -90,6 +97,10 @@ func MessageFrom(data []byte) *types.Message {
 	msg.Header.From = thisDevice.UniqueID
 
 	return msg
+}
+
+func MessageFromProto(m *types.Message) *Message {
+	return &Message{Message: m}
 }
 
 func parseClipboardProvider(m clipboard.Manager) types.Clipboard {
@@ -115,45 +126,44 @@ func parseClipboardProvider(m clipboard.Manager) types.Clipboard {
 
 // LastMessage which is stored in Node and serves to identify duplicate messages
 type LastMessage struct {
-	msg    *types.Message
+	*Message
 	mu     sync.Mutex
-	update chan *types.Message
+	update chan *Message
 }
 
 func NewLastMessage() *LastMessage {
-	return &LastMessage{update: make(chan *types.Message)}
+	return &LastMessage{update: make(chan *Message)}
 }
 
-func (m *LastMessage) Get() *types.Message {
+func (m *LastMessage) Get() *Message {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return m.msg
+	return m.Message
 }
 
 // ListenUpdates updates the lastMessage with the latest message received
 func (m *LastMessage) ListenUpdates() {
 	for msg := range m.update {
 		m.mu.Lock()
-		m.msg = msg
+		m.Message = msg
 		m.mu.Unlock()
 	}
 }
 
-func (m *LastMessage) Duplicate(new *types.Message, from *types.Device, self *types.Device) bool {
-	if new == nil || m.msg == nil {
+func (m *Message) Duplicate(new *Message) bool {
+	if new == nil || m == nil {
 		return false
 	}
 
-	message := m.Get()
-	if message.Header.MimeType == types.Mime_IMAGE && new.Header.MimeType == types.Mime_IMAGE {
-		if self.ClipboardProvider == from.ClipboardProvider {
-			return bytes.Equal(message.Data.Hash, new.Data.Hash)
+	if m.Header.MimeType == types.Mime_IMAGE && new.Header.MimeType == types.Mime_IMAGE {
+		if m.Header.ClipboardProvider == new.Header.ClipboardProvider {
+			return bytes.Equal(m.Data.Hash, new.Data.Hash)
 		}
 
 		// mse: compare images
 		identical, err := image.EqualMSE(
-			bytes.NewReader(message.Data.Raw),
+			bytes.NewReader(m.Data.Raw),
 			bytes.NewReader(new.Data.Raw),
 		)
 		if err != nil {
@@ -163,7 +173,11 @@ func (m *LastMessage) Duplicate(new *types.Message, from *types.Device, self *ty
 		return identical
 	}
 
-	return message.Header.ID == new.Header.ID
+	return m.Header.ID == new.Header.ID || bytes.Equal(m.Data.Hash, new.Data.Hash)
+}
+
+func (m *Message) Me() bool {
+	return m.Header.From == thisDevice.UniqueID
 }
 
 func parseMimeType(ct string) types.Mime {
