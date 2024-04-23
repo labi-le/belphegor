@@ -102,10 +102,9 @@ func (p *Peer) Receive(cm clipboard.Manager, last *LastMessage) {
 		p.updates <- msg
 
 		log.Debug().Msgf(
-			"received %s from %s by hash %x",
+			"received %s from %s",
 			msg.Header.ID,
 			p.String(),
-			shortHash(msg.Data.Hash),
 		)
 	}
 

@@ -196,8 +196,3 @@ func hashBytes(data []byte) []byte {
 
 	return sha.Sum(nil)
 }
-
-// shortHash returns the first 4 bytes of the provided hash.
-func shortHash(oldHash []byte) []byte {
-	return oldHash[:4]
-}

@@ -263,10 +263,9 @@ func (n *Node) Broadcast(msg *Message, ignore UniqueID) {
 		}
 
 		log.Debug().Msgf(
-			"sent %s to %s by hash %x",
+			"sent %s to %s",
 			msg.Header.ID,
 			peer.String(),
-			shortHash(msg.Data.Hash),
 		)
 
 		// Set write timeout if the writer implements net.Conn
