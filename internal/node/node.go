@@ -25,7 +25,7 @@ var (
 
 type Node struct {
 	clipboard          clipboard.Manager
-	storage            *Storage
+	peers              *Storage
 	localClipboard     Channel
 	publicPort         int
 	discoverDelay      time.Duration
@@ -40,7 +40,7 @@ type Node struct {
 // If no options are specified, default values will be used
 type Options struct {
 	Clipboard          clipboard.Manager
-	Storage            *Storage
+	Peers              *Storage
 	Port               int
 	DiscoverDelay      time.Duration
 	ClipboardChannel   Channel
@@ -68,8 +68,8 @@ func (o *Options) Prepare() {
 		o.ClipboardChannel = make(Channel)
 	}
 
-	if o.Storage == nil {
-		o.Storage = storage.NewSyncMapStorage[UniqueID, *Peer]()
+	if o.Peers == nil {
+		o.Peers = storage.NewSyncMapStorage[UniqueID, *Peer]()
 	}
 
 	if o.Clipboard == nil {
@@ -94,12 +94,12 @@ func New(opts Options) *Node {
 	opts.Prepare()
 
 	// todo rewrite to unixsocket calling method
-	go stats(opts.Storage)
+	go stats(opts.Peers)
 
 	return &Node{
 		clipboard:          opts.Clipboard,
 		publicPort:         opts.Port,
-		storage:            opts.Storage,
+		peers:              opts.Peers,
 		discoverDelay:      opts.DiscoverDelay,
 		localClipboard:     opts.ClipboardChannel,
 		bitSize:            opts.BitSize,
@@ -138,20 +138,10 @@ func (n *Node) ConnectTo(addr string) error {
 }
 
 func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
-	var peer *Peer
-
-	if n.storage.Exist(hisHand.Device.UniqueID) {
+	if n.peers.Exist(hisHand.Device.UniqueID) {
 		log.Trace().Msgf("%s already connected, ignoring", prettyDevice(hisHand.Device))
-		return peer, ErrAlreadyConnected
+		return nil, ErrAlreadyConnected
 	}
-
-	peer = AcquirePeer(
-		conn,
-		castAddrPort(conn),
-		hisHand.Device,
-		n.localClipboard,
-		cipher,
-	)
 
 	if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
 		return nil, aliveErr
@@ -161,7 +151,15 @@ func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, co
 		return nil, err
 	}
 
-	n.storage.Add(
+	peer := AcquirePeer(
+		conn,
+		castAddrPort(conn),
+		hisHand.Device,
+		n.localClipboard,
+		cipher,
+	)
+
+	n.peers.Add(
 		hisHand.Device.UniqueID,
 		peer,
 	)
@@ -233,7 +231,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		log.Error().AnErr("node.addPeer", addErr).Send()
 		return addErr
 	}
-	defer n.storage.Delete(peer.Device().GetUniqueID())
+	defer n.peers.Delete(peer.Device().GetUniqueID())
 
 	log.Info().Msgf("connected to %s", peer.String())
 	peer.Receive(n.clipboard, n.lastMessage)
@@ -253,7 +251,7 @@ func (n *Node) Broadcast(msg *Message, ignore UniqueID) {
 
 	defer messagePool.Release(msg)
 
-	n.storage.Tap(func(id UniqueID, peer *Peer) {
+	n.peers.Tap(func(id UniqueID, peer *Peer) {
 		if id == ignore {
 			log.Trace().Msgf("%s: ignoring %s", op, peer.String())
 			return
@@ -288,7 +286,7 @@ func (n *Node) Broadcast(msg *Message, ignore UniqueID) {
 			peer.Conn(),
 		); writeErr != nil {
 			log.Error().AnErr("encodeWriter", writeErr).Send()
-			n.storage.Delete(peer.Device().GetUniqueID())
+			n.peers.Delete(peer.Device().GetUniqueID())
 		}
 	})
 }
