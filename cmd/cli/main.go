@@ -82,12 +82,6 @@ func main() {
 	lock := MustLock()
 	defer Unlock(lock)
 
-	go func() {
-		if err := nd.Start(); err != nil {
-			log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
-		}
-	}()
-
 	if addressIP != "" {
 		go func() {
 			if err := nd.ConnectTo(addressIP); err != nil {
@@ -100,7 +94,9 @@ func main() {
 		go nd.EnableNodeDiscover()
 	}
 
-	select {}
+	if err := nd.Start(); err != nil {
+		log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
+	}
 }
 
 func initLogger(debug bool) {

@@ -36,7 +36,7 @@ type Node struct {
 	lastMessage *LastMessage
 }
 
-// Options represents options for Node
+// An Options represents options for Node
 // If no options are specified, default values will be used
 type Options struct {
 	Clipboard          clipboard.Manager
@@ -94,7 +94,7 @@ func New(opts Options) *Node {
 	opts.Prepare()
 
 	// todo rewrite to unixsocket calling method
-	go stats(opts.Peers)
+	//go stats(opts.Peers)
 
 	return &Node{
 		clipboard:          opts.Clipboard,
@@ -184,7 +184,8 @@ func (n *Node) Start() error {
 
 	defer l.Close()
 
-	go NewClipboardMonitor(n, n.clipboard, n.clipboardScanDelay, n.localClipboard).Receive()
+	//go NewClipboardMonitor(n, n.clipboard, n.clipboardScanDelay, n.localClipboard).MonitorBuffer()
+	go n.MonitorBuffer()
 	go n.lastMessage.ListenUpdates()
 
 	for {
@@ -349,15 +350,6 @@ func (n *Node) EnableNodeDiscover() {
 	}
 }
 
-//func (n *Node) catchHand(conn net.Conn) (*types.GreetMessage, error) {
-//	var greet types.GreetMessage
-//	if decodeErr := decodeReader(conn, &greet); decodeErr != nil {
-//		return nil, decodeErr
-//	}
-//	log.Trace().Msgf("received greeting from %s -> %s", prettyDevice(greet.Device), conn.RemoteAddr().String())
-//	return &greet, nil
-//}
-
 func (n *Node) greet(my *types.GreetMessage, conn net.Conn) (*types.GreetMessage, error) {
 	var incoming types.GreetMessage
 
@@ -386,4 +378,41 @@ func stats(storage *Storage) {
 			log.Trace().Msgf("%s is alive", peer.String())
 		})
 	}
+}
+
+// MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
+func (n *Node) MonitorBuffer() {
+	const op = "node.MonitorBuffer"
+	var (
+		clipboardChan    = make(chan *Message)
+		currentClipboard = n.fetchLocalClipboard()
+	)
+
+	defer close(clipboardChan)
+
+	go func() {
+		for {
+			//log.Trace().Msg("scan local clipboard")
+			select {
+			case clip := <-n.localClipboard:
+				currentClipboard = clip
+			case <-time.After(n.clipboardScanDelay):
+				newClipboard := n.fetchLocalClipboard()
+				if !newClipboard.Duplicate(currentClipboard) {
+					clipboardChan <- currentClipboard
+					currentClipboard = newClipboard
+				}
+			}
+		}
+	}()
+
+	for clip := range clipboardChan {
+		log.Trace().Str(op, "local clipboard data changed").Send()
+		n.Broadcast(clip, clip.Header.From)
+	}
+}
+
+func (n *Node) fetchLocalClipboard() *Message {
+	clip, _ := n.clipboard.Get()
+	return MessageFrom(clip)
 }
