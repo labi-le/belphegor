@@ -174,12 +174,15 @@ func (n *Node) addPeer(hisHand *types.GreetMessage, cipher *encrypter.Cipher, co
 // The 'scanDelay' parameter determines the interval at which the clipboard is scanned and updated.
 // The method returns an error if it fails to start listening.
 func (n *Node) Start() error {
+	const op = "node.Start"
+
 	l, err := net.Listen("tcp4", fmt.Sprintf(":%d", n.publicPort))
 	if err != nil {
 		return err
 	}
 
-	log.Info().Msgf("listening on %s", l.Addr().String())
+	log.Info().Str(op, "listen").Msgf("on %s", l.Addr().String())
+	log.Info().Str(op, "metadata").Msg(prettyDevice(thisDevice))
 
 	defer l.Close()
 
@@ -192,7 +195,7 @@ func (n *Node) Start() error {
 			return err
 		}
 
-		log.Trace().Msgf("accepted connection from %s", conn.RemoteAddr().String())
+		log.Trace().Str(op, "accept connection").Msgf("from %s", conn.RemoteAddr().String())
 		go func() {
 			connErr := n.handleConnection(conn)
 			if connErr != nil {
