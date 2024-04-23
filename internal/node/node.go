@@ -61,7 +61,7 @@ func (o *Options) Prepare() {
 	}
 
 	if o.DiscoverDelay == 0 {
-		o.DiscoverDelay = 1 * time.Minute
+		o.DiscoverDelay = 5 * time.Minute
 	}
 
 	if o.ClipboardChannel == nil {
