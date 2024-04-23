@@ -184,7 +184,6 @@ func (n *Node) Start() error {
 
 	defer l.Close()
 
-	//go NewClipboardMonitor(n, n.clipboard, n.clipboardScanDelay, n.localClipboard).MonitorBuffer()
 	go n.MonitorBuffer()
 	go n.lastMessage.ListenUpdates()
 
@@ -235,7 +234,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 	defer n.peers.Delete(peer.Device().GetUniqueID())
 
 	log.Info().Msgf("connected to %s", peer.String())
-	peer.Receive(n.clipboard, n.lastMessage)
+	peer.Receive(n.lastMessage)
 
 	return nil
 }
@@ -383,35 +382,31 @@ func stats(storage *Storage) {
 func (n *Node) MonitorBuffer() {
 	const op = "node.MonitorBuffer"
 	var (
-		clipboardChan    = make(chan *Message)
-		currentClipboard = n.fetchLocalClipboard()
+		currentClipboard = n.fetchClipboardData()
 	)
 
-	defer close(clipboardChan)
-
 	go func() {
-		for {
-			//log.Trace().Msg("scan local clipboard")
-			select {
-			case clip := <-n.localClipboard:
-				currentClipboard = clip
-			case <-time.After(n.clipboardScanDelay):
-				newClipboard := n.fetchLocalClipboard()
-				if !newClipboard.Duplicate(currentClipboard) {
-					clipboardChan <- currentClipboard
-					currentClipboard = newClipboard
-				}
+		for range time.Tick(n.clipboardScanDelay) {
+			newClipboard := n.fetchClipboardData()
+			if !newClipboard.Duplicate(currentClipboard) {
+				log.Trace().Str(op, "local clipboard data changed").Send()
+
+				currentClipboard = newClipboard
+				n.localClipboard <- currentClipboard
 			}
 		}
 	}()
-
-	for clip := range clipboardChan {
-		log.Trace().Str(op, "local clipboard data changed").Send()
-		n.Broadcast(clip, clip.Header.From)
+	for msg := range n.localClipboard {
+		n.setClipboardData(msg)
+		n.Broadcast(msg, msg.Header.From)
 	}
 }
 
-func (n *Node) fetchLocalClipboard() *Message {
+func (n *Node) fetchClipboardData() *Message {
 	clip, _ := n.clipboard.Get()
 	return MessageFrom(clip)
+}
+
+func (n *Node) setClipboardData(m *Message) {
+	_ = n.clipboard.Set(m.GetData().GetRaw())
 }

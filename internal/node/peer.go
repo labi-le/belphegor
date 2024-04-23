@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/types"
-	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
@@ -38,18 +37,18 @@ func AcquirePeer(
 	p.conn = conn
 	p.addr = addr
 	p.device = id
-	p.updates = updates
+	p.localClipboard = updates
 	p.cipher = cipher
 
 	return p
 }
 
 type Peer struct {
-	conn    net.Conn
-	addr    netip.AddrPort
-	device  *types.Device
-	updates Channel
-	cipher  *encrypter.Cipher
+	conn           net.Conn
+	addr           netip.AddrPort
+	device         *types.Device
+	localClipboard Channel
+	cipher         *encrypter.Cipher
 }
 
 func (p *Peer) Release() {
@@ -58,7 +57,7 @@ func (p *Peer) Release() {
 	p.device = nil
 	p.addr = netip.AddrPort{}
 	p.conn = nil
-	p.updates = nil
+	p.localClipboard = nil
 
 	peerPool.Release(p)
 }
@@ -69,7 +68,7 @@ func (p *Peer) Device() *types.Device { return p.device }
 
 func (p *Peer) Conn() net.Conn { return p.conn }
 
-func (p *Peer) Updates() Channel { return p.updates }
+func (p *Peer) Updates() Channel { return p.localClipboard }
 
 func (p *Peer) Close() error { return p.conn.Close() }
 
@@ -89,7 +88,7 @@ func prettyDevice(id *types.Device) string {
 	)
 }
 
-func (p *Peer) Receive(cm clipboard.Manager, last *LastMessage) {
+func (p *Peer) Receive(last *LastMessage) {
 	for {
 		msg, err := p.receiveMessage()
 		if err != nil {
@@ -97,9 +96,8 @@ func (p *Peer) Receive(cm clipboard.Manager, last *LastMessage) {
 			break
 		}
 
-		_ = cm.Set(msg.Data.Raw)
 		last.update <- msg
-		p.updates <- msg
+		p.localClipboard <- msg
 
 		log.Debug().Msgf(
 			"received %s from %s",
