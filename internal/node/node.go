@@ -253,7 +253,7 @@ func (n *Node) Broadcast(msg *Message, ignore UniqueID) {
 
 	n.peers.Tap(func(id UniqueID, peer *Peer) {
 		if id == ignore {
-			log.Trace().Msgf("%s: ignoring %s", op, peer.String())
+			log.Trace().Str(op, "exclude sending to creator node").Msg(peer.String())
 			return
 		}
 
