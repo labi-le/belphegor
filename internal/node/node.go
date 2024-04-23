@@ -246,10 +246,13 @@ func (n *Node) handleConnection(conn net.Conn) error {
 // The 'msg' parameter is the message to be broadcast.
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
 func (n *Node) Broadcast(msg *types.Message, ignore UniqueID) {
+	const op = "node.Broadcast"
+
 	defer messagePool.Release(msg)
 
 	n.storage.Tap(func(id UniqueID, peer *Peer) {
 		if id == ignore {
+			log.Trace().Msgf("%s: ignoring %s", op, peer.String())
 			return
 		}
 
