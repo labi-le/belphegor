@@ -6,7 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
+	"github.com/labi-le/belphegor/internal/discovering"
+	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
+	"github.com/labi-le/belphegor/internal/node/data"
+	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -23,6 +28,10 @@ var (
 	nodeDiscover  bool
 	scanDelay     time.Duration
 	discoverDelay time.Duration
+	keepAlive     time.Duration
+	writeTimeout  time.Duration
+	maxPeers      int
+	bitSize       int
 	debug         bool
 	showVersion   bool
 	showHelp      bool
@@ -36,10 +45,14 @@ var (
 
 func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
-	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
+	flag.IntVar(&port, "port", netstack.RandomPort(), "Port to use. Default: random")
 	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
 	flag.DurationVar(&discoverDelay, "discover_delay", 0, "Delay between node discovery")
-	flag.DurationVar(&scanDelay, "scan_delay", 0, "Delay between scan local clipboard")
+	flag.DurationVar(&scanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
+	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
+	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
+	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
+	flag.IntVar(&bitSize, "bit_size", 2048, "RSA key bit size")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
@@ -73,11 +86,17 @@ func main() {
 		return
 	}
 
-	nd := node.New(node.Options{
-		Port:               port,
-		DiscoverDelay:      discoverDelay,
-		ClipboardScanDelay: scanDelay,
-	})
+	nd := node.New(
+		clipboard.NewThreadSafe(),
+		storage.NewSyncMapStorage[node.UniqueID, *node.Peer](),
+		make(node.Channel),
+		port,
+		bitSize,
+		keepAlive,
+		scanDelay,
+		writeTimeout,
+		data.NewLastMessage(),
+	)
 
 	lock := MustLock()
 	defer Unlock(lock)
@@ -91,7 +110,11 @@ func main() {
 	}
 
 	if nodeDiscover {
-		go nd.EnableNodeDiscover()
+		go discovering.New(
+			maxPeers,
+			discoverDelay,
+			port,
+		).Discover(nd)
 	}
 
 	if err := nd.Start(); err != nil {

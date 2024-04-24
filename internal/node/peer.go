@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/pool"
@@ -88,7 +89,7 @@ func prettyDevice(id *types.Device) string {
 	)
 }
 
-func (p *Peer) Receive(last *LastMessage) {
+func (p *Peer) Receive(last *data.LastMessage) {
 	for {
 		msg, err := p.receiveMessage()
 		if err != nil {
@@ -96,7 +97,7 @@ func (p *Peer) Receive(last *LastMessage) {
 			break
 		}
 
-		last.update <- msg
+		last.Update <- msg
 		p.localClipboard <- msg
 
 		log.Debug().Msgf(
@@ -123,18 +124,18 @@ func (p *Peer) handleReceiveError(err error) {
 }
 
 // receiveMessage receives a message from the node.
-func (p *Peer) receiveMessage() (*Message, error) {
+func (p *Peer) receiveMessage() (*data.Message, error) {
 	var message types.Message
 
 	var encrypt types.EncryptedMessage
 	if decodeEnc := decodeReader(p.Conn(), &encrypt); decodeEnc != nil {
-		return &Message{}, decodeEnc
+		return &data.Message{}, decodeEnc
 	}
 
 	decrypt, decErr := p.cipher.Decrypt(rand.Reader, encrypt.Message, nil)
 	if decErr != nil {
-		return &Message{}, decErr
+		return &data.Message{}, decErr
 	}
 
-	return MessageFromProto(&message), proto.Unmarshal(decrypt, &message)
+	return data.MessageFromProto(&message), proto.Unmarshal(decrypt, &message)
 }

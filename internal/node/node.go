@@ -3,19 +3,18 @@ package node
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
-	"github.com/labi-le/belphegor/pkg/ip"
-	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/rs/zerolog/log"
-	"github.com/schollz/peerdiscovery"
-	"google.golang.org/protobuf/proto"
 	"net"
-	"strconv"
+	"os"
+	"os/user"
+	"runtime"
 	"time"
 )
 
@@ -23,99 +22,52 @@ var (
 	ErrAlreadyConnected = errors.New("already connected")
 )
 
+type UniqueID = string
+
 type Node struct {
 	clipboard          clipboard.Manager
 	peers              *Storage
 	localClipboard     Channel
 	publicPort         int
-	discoverDelay      time.Duration
 	bitSize            int
 	keepAliveDelay     time.Duration
 	clipboardScanDelay time.Duration
 
-	lastMessage *LastMessage
-}
+	lastMessage  *data.LastMessage
+	writeTimeout time.Duration
 
-// An Options represents options for Node
-// If no options are specified, default values will be used
-type Options struct {
-	Clipboard          clipboard.Manager
-	Peers              *Storage
-	Port               int
-	DiscoverDelay      time.Duration
-	ClipboardChannel   Channel
-	BitSize            int
-	KeepAliveDelay     time.Duration
-	ClipboardScanDelay time.Duration
-}
-
-func (o *Options) Prepare() {
-	if o.Port <= 0 || o.Port > 65535 {
-		newPort := genPort()
-		log.Warn().Msgf(
-			"invalid port specified: %d, use random port: %d",
-			o.Port,
-			newPort,
-		)
-		o.Port = newPort
-	}
-
-	if o.DiscoverDelay == 0 {
-		o.DiscoverDelay = 5 * time.Minute
-	}
-
-	if o.ClipboardChannel == nil {
-		o.ClipboardChannel = make(Channel)
-	}
-
-	if o.Peers == nil {
-		o.Peers = storage.NewSyncMapStorage[UniqueID, *Peer]()
-	}
-
-	if o.Clipboard == nil {
-		o.Clipboard = clipboard.NewThreadSafe()
-	}
-
-	if o.BitSize == 0 {
-		o.BitSize = 2048
-	}
-
-	if o.KeepAliveDelay == 0 {
-		o.KeepAliveDelay = 10 * time.Second
-	}
-
-	if o.ClipboardScanDelay == 0 {
-		o.ClipboardScanDelay = 2 * time.Second
-	}
+	// represents the current device
+	metadata *types.Device
 }
 
 // New creates a new instance of Node with the specified settings.
-func New(opts Options) *Node {
-	opts.Prepare()
-
-	// todo rewrite to unixsocket calling method
-	//go stats(opts.Peers)
-
+func New(
+	clipboard clipboard.Manager,
+	peers *Storage,
+	localClipboard Channel,
+	publicPort int,
+	bitSize int,
+	keepAliveDelay time.Duration,
+	clipboardScanDelay time.Duration,
+	writeTimeout time.Duration,
+	lastMessage *data.LastMessage,
+) *Node {
 	return &Node{
-		clipboard:          opts.Clipboard,
-		publicPort:         opts.Port,
-		peers:              opts.Peers,
-		discoverDelay:      opts.DiscoverDelay,
-		localClipboard:     opts.ClipboardChannel,
-		bitSize:            opts.BitSize,
-		keepAliveDelay:     opts.KeepAliveDelay,
-		clipboardScanDelay: opts.ClipboardScanDelay,
-		lastMessage:        NewLastMessage(),
+		clipboard:          clipboard,
+		peers:              peers,
+		localClipboard:     localClipboard,
+		publicPort:         publicPort,
+		bitSize:            bitSize,
+		keepAliveDelay:     keepAliveDelay,
+		clipboardScanDelay: clipboardScanDelay,
+		writeTimeout:       writeTimeout,
+		lastMessage:        lastMessage,
+		metadata: &types.Device{
+			Name:     deviceName(),
+			Arch:     runtime.GOARCH,
+			UniqueID: uuid.New().String(),
+		},
 	}
-}
-
-// genPort generates a random port number between 7000 and 7999.
-func genPort() int {
-	var b [8]byte
-	_, _ = rand.Read(b[:])
-
-	seed := binary.BigEndian.Uint64(b[:])
-	return int(seed%1000) + 7000
 }
 
 // ConnectTo establishes a TCP connection to a remote clipboard at the specified address.
@@ -180,7 +132,7 @@ func (n *Node) Start() error {
 	}
 
 	log.Info().Str(op, "listen").Msgf("on %s", l.Addr().String())
-	log.Info().Str(op, "metadata").Msg(prettyDevice(thisDevice))
+	log.Info().Str(op, "metadata").Msg(prettyDevice(n.Metadata()))
 
 	defer l.Close()
 
@@ -210,10 +162,12 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		return cipherErr
 	}
 
-	myGreet := greetPool.Acquire()
-	myGreet.PublicKey = encrypter.PublicKey2Bytes(privateKey.Public())
+	myHand := data.NewGreet(n.metadata)
+	defer myHand.Release()
 
-	hisHand, greetErr := n.greet(myGreet, conn)
+	myHand.PublicKey = encrypter.PublicKey2Bytes(privateKey.Public())
+
+	hisHand, greetErr := n.greet(myHand, conn)
 	if greetErr != nil {
 		log.Error().AnErr("node.greet", greetErr).Send()
 		return greetErr
@@ -246,10 +200,10 @@ func (n *Node) handleConnection(conn net.Conn) error {
 // The method logs the sent messages and their hashes for debugging purposes.
 // The 'msg' parameter is the message to be broadcast.
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
-func (n *Node) Broadcast(msg *Message, ignore UniqueID) {
+func (n *Node) Broadcast(msg *data.Message, ignore UniqueID) {
 	const op = "node.Broadcast"
 
-	defer messagePool.Release(msg)
+	defer msg.Release()
 
 	n.peers.Tap(func(id UniqueID, peer *Peer) {
 		if id == ignore {
@@ -268,7 +222,7 @@ func (n *Node) Broadcast(msg *Message, ignore UniqueID) {
 		)
 
 		// Set write timeout if the writer implements net.Conn
-		err := peer.Conn().SetWriteDeadline(time.Now().Add(5 * time.Second))
+		err := peer.Conn().SetWriteDeadline(time.Now().Add(n.writeTimeout))
 		if err != nil {
 			log.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
 			return
@@ -290,65 +244,7 @@ func (n *Node) Broadcast(msg *Message, ignore UniqueID) {
 	})
 }
 
-// EnableNodeDiscover enables node discovery.
-// It creates a new peer discovery instance with the specified settings, including payload,
-// discovery limits, time limits, delay, and whether to allow self-discovery.
-// When a new node is discovered, it checks if the node already exists in the storage.
-// If the node is not in the storage, it connects to the discovered node.
-// If the connection attempt fails, an error is logged.
-// If an error occurs while creating the peer discovery instance, the program exits with a fatal error message.
-func (n *Node) EnableNodeDiscover() {
-	_, err := peerdiscovery.NewPeerDiscovery(
-		peerdiscovery.Settings{
-			PayloadFunc: func() []byte {
-				greet := greetPool.Acquire()
-				defer greetPool.Release(greet)
-
-				greet.Port = uint32(n.publicPort)
-
-				byt, _ := proto.Marshal(greet)
-				return byt
-			},
-			Limit:     -1,
-			TimeLimit: -1,
-			Delay:     n.discoverDelay,
-			AllowSelf: false,
-
-			Notify: func(d peerdiscovery.Discovered) {
-				peerIP := net.ParseIP(d.Address)
-				// For some reason the library calls Notify ignoring AllowSelf:false
-				if ip.IsLocalIP(peerIP) {
-					return
-				}
-
-				greet := greetPool.Acquire()
-				defer greetPool.Release(greet)
-
-				if protoErr := proto.Unmarshal(d.Payload, greet); protoErr != nil {
-					log.Error().Err(protoErr).Msg("failed to unmarshal payload")
-					return
-				}
-
-				peerAddr := fmt.Sprintf(
-					"%s:%s",
-					peerIP.String(),
-					strconv.Itoa(int(greet.Port)),
-				)
-				log.Trace().Msgf("found node %s -> %s, check availability", prettyDevice(greet.Device), peerAddr)
-				log.Trace().Msgf("payload: %s", greet.String())
-				if err := n.ConnectTo(peerAddr); err != nil {
-					log.Err(err).Msgf("failed to connect to %s -> %s", prettyDevice(greet.Device), peerAddr)
-				}
-			},
-		},
-	)
-
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to discover nodes")
-	}
-}
-
-func (n *Node) greet(my *types.GreetMessage, conn net.Conn) (*types.GreetMessage, error) {
+func (n *Node) greet(my *data.Greet, conn net.Conn) (*types.GreetMessage, error) {
 	var incoming types.GreetMessage
 
 	log.Trace().Msgf("sending greeting to %s -> %s", prettyDevice(my.Device), conn.RemoteAddr().String())
@@ -402,11 +298,32 @@ func (n *Node) MonitorBuffer() {
 	}
 }
 
-func (n *Node) fetchClipboardData() *Message {
+func (n *Node) fetchClipboardData() *data.Message {
 	clip, _ := n.clipboard.Get()
-	return MessageFrom(clip)
+	return data.MessageFrom(clip, n.Metadata())
 }
 
-func (n *Node) setClipboardData(m *Message) {
+func (n *Node) setClipboardData(m *data.Message) {
 	_ = n.clipboard.Set(m.GetData().GetRaw())
+}
+
+func (n *Node) Metadata() *types.Device {
+	return n.metadata
+}
+
+func deviceName() string {
+	hostname, hostErr := os.Hostname()
+	if hostErr != nil {
+		log.Error().AnErr("deviceName:hostname", hostErr)
+		return "unknown@unknown"
+	}
+
+	current, userErr := user.Current()
+	if userErr != nil {
+		log.Error().AnErr("deviceName:username", userErr)
+
+		return "unknown@unknown"
+	}
+
+	return fmt.Sprintf("%s@%s", current.Username, hostname)
 }
