@@ -28,8 +28,9 @@ run:
 build: clean
 	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
 
-build-windows: clean
-	GOOS=windows go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE).exe $(MAIN_PATH)
+build-windows: clean-windows
+	set GOOS=windows
+	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE).exe $(MAIN_PATH)
 
 install-windows:build-windows
 	powershell.exe -command "Copy-Item -Path '$(BUILD_PATH)$(PACKAGE).exe' \
@@ -46,7 +47,7 @@ clean:
 	rm -rf $(FULL_PATH)
 
 clean-windows:
-	-powershell.exe -command Remove-Item -Path $(BUILD_PATH)$(PACKAGE).exe -ErrorAction SilentlyContinue
+	powershell.exe -command "if (Test-Path $(FULL_PATH).exe) { Remove-Item -Recurse -Force -Path $(FULL_PATH).exe }"
 
 tests:
 	go test ./...
