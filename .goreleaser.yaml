@@ -6,7 +6,7 @@ before:
 archives:
   - format: binary
 builds:
-  - main: "./cmd/"
+  - main: "./cmd/cli/"
     mod_timestamp: '{{ .CommitTimestamp }}'
     goos:
       - windows
