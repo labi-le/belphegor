@@ -47,7 +47,7 @@ func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
 	flag.IntVar(&port, "port", netstack.RandomPort(), "Port to use. Default: random")
 	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.DurationVar(&discoverDelay, "discover_delay", 0, "Delay between node discovery")
+	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
 	flag.DurationVar(&scanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
 	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
 	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
