@@ -27,6 +27,7 @@ builds:
       - -X {{ .ModulePath }}/internal.Version={{ .Version }}
       - -X {{ .ModulePath }}/internal.CommitHash={{ .Commit }}
       - -X {{ .ModulePath }}/internal.BuildTime={{ .CommitDate }}
+      - '{{ if eq .Os "windows" }}-H windowsgui{{ end }}'
 checksum:
   name_template: 'checksums.txt'
 snapshot:
