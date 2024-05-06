@@ -35,8 +35,8 @@ func calculateMSE(img1 image.Image, img2 image.Image) float64 {
 	return mse
 }
 
-// Equal comparing two images by mean square error (MSE)
-func Equal(img1 io.Reader, img2 io.Reader) (bool, error) {
+// EqualMSE comparing two images by mean square error (MSE)
+func EqualMSE(img1 io.Reader, img2 io.Reader) (bool, error) {
 	png1, err := png.Decode(img1)
 	if err != nil {
 		return false, err

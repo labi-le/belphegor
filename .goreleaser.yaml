@@ -6,7 +6,7 @@ before:
 archives:
   - format: binary
 builds:
-  - main: "./cmd/"
+  - main: "./cmd/cli/"
     mod_timestamp: '{{ .CommitTimestamp }}'
     goos:
       - windows
@@ -27,6 +27,7 @@ builds:
       - -X {{ .ModulePath }}/internal.Version={{ .Version }}
       - -X {{ .ModulePath }}/internal.CommitHash={{ .Commit }}
       - -X {{ .ModulePath }}/internal.BuildTime={{ .CommitDate }}
+      - '{{ if eq .Os "windows" }}-H windowsgui{{ end }}'
 checksum:
   name_template: 'checksums.txt'
 snapshot:

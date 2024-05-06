@@ -6,6 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
+	"github.com/labi-le/belphegor/internal/discovering"
+	"github.com/labi-le/belphegor/internal/netstack"
+	"github.com/labi-le/belphegor/internal/node"
+	"github.com/labi-le/belphegor/internal/node/data"
+	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -17,26 +23,15 @@ import (
 const LockFile = "belphegor.lck"
 
 var (
-	helpMsg = `belphegor - 
-A cross-platform clipboard sharing utility
-
-Usage:
-	belphegor [flags]
-
-Flags:
-	-connect string | ip:port to connect to the node (e.g. 192.168.0.12:7777)
-	-port int | the node will start on this port (e.g. 7777)
-    -node_discover bool | find local nodes on the network and connect to them
-	-scan_delay string | delay between scan local clipboard (e.g. 5s)
-	-debug | show debug logs
-	-version | show version
-	-help | show help
-`
 	addressIP     string
 	port          int
 	nodeDiscover  bool
 	scanDelay     time.Duration
 	discoverDelay time.Duration
+	keepAlive     time.Duration
+	writeTimeout  time.Duration
+	maxPeers      int
+	bitSize       int
 	debug         bool
 	showVersion   bool
 	showHelp      bool
@@ -50,10 +45,14 @@ var (
 
 func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
-	flag.IntVar(&port, "port", 0, "Port to use. Default: random")
+	flag.IntVar(&port, "port", netstack.RandomPort(), "Port to use. Default: random")
 	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.DurationVar(&discoverDelay, "discover_delay", 0, "Delay between node discovery")
-	flag.DurationVar(&scanDelay, "scan_delay", 0, "Delay between scan local clipboard")
+	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
+	flag.DurationVar(&scanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
+	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
+	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
+	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
+	flag.IntVar(&bitSize, "bit_size", 2048, "RSA key bit size")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
@@ -83,38 +82,44 @@ func main() {
 	}
 
 	if showHelp {
-		_, _ = fmt.Fprint(os.Stderr, helpMsg)
+		_, _ = fmt.Fprint(os.Stderr, internal.HelpMsg)
 		return
 	}
 
-	node := internal.NewNode(internal.NodeOptions{
-		Port:               port,
-		DiscoverDelay:      discoverDelay,
-		ClipboardScanDelay: scanDelay,
-	})
+	nd := node.New(
+		clipboard.NewThreadSafe(),
+		storage.NewSyncMapStorage[node.UniqueID, *node.Peer](),
+		make(node.Channel),
+		port,
+		bitSize,
+		keepAlive,
+		scanDelay,
+		writeTimeout,
+		data.NewLastMessage(),
+	)
 
 	lock := MustLock()
 	defer Unlock(lock)
 
-	go func() {
-		if err := node.Start(); err != nil {
-			log.Panic().Err(err).Msg("failed to start the node")
-		}
-	}()
-
 	if addressIP != "" {
 		go func() {
-			if err := node.ConnectTo(addressIP); err != nil {
-				log.Fatal().Err(err).Msg("failed to connect to the node")
+			if err := nd.ConnectTo(addressIP); err != nil {
+				log.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
 			}
 		}()
 	}
 
 	if nodeDiscover {
-		go node.EnableNodeDiscover()
+		go discovering.New(
+			maxPeers,
+			discoverDelay,
+			port,
+		).Discover(nd)
 	}
 
-	select {}
+	if err := nd.Start(); err != nil {
+		log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
+	}
 }
 
 func initLogger(debug bool) {

@@ -6,17 +6,7 @@ option go_package = "internal/types";
 
 // Device represents the device information
 message Device {
+  string Name = 1;
   string Arch = 2;
-  string UniqueName = 3;
-  Clipboard ClipboardProvider = 4;
-}
-
-// ClipboardProvider represents the clipboard provider
-// Used to identify the clipboard provider
-enum Clipboard {
-  XClip = 0;
-  XSel = 1;
-  WlClipboard = 2;
-  MasOsStd = 4;
-  WindowsNT10 = 5;
+  string UniqueID = 3;
 }

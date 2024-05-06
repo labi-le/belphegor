@@ -1,6 +1,6 @@
 PACKAGE = belphegor
 
-MAIN_PATH = cmd/main.go
+MAIN_PATH = cmd/cli/main.go
 BUILD_PATH = build/package/
 
 INSTALL_PATH = /usr/bin/
@@ -13,9 +13,10 @@ COMMIT_HASH=$(shell git rev-parse --short HEAD)
 BUILD_TIMESTAMP=$(shell date '+%Y-%m-%dT%H:%M:%S')
 
 FULL_PACKAGE=$(shell go list -m)
-LDFLAGS=-ldflags="-X '${FULL_PACKAGE}/internal.Version=${VERSION}' \
-                  -X '${FULL_PACKAGE}/internal.CommitHash=${COMMIT_HASH}' \
-                  -X '${FULL_PACKAGE}/internal.BuildTime=${BUILD_TIMESTAMP}' \
+METADATA_PACKAGE=${FULL_PACKAGE}/internal
+LDFLAGS=-ldflags="-X '${METADATA_PACKAGE}.Version=${VERSION}' \
+                  -X '${METADATA_PACKAGE}.CommitHash=${COMMIT_HASH}' \
+                  -X '${METADATA_PACKAGE}.BuildTime=${BUILD_TIMESTAMP}' \
                   -s -w \
                   -extldflags '-static'"
 
@@ -27,8 +28,9 @@ run:
 build: clean
 	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
 
-build-windows: clean
-	GOOS=windows go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE).exe $(MAIN_PATH)
+build-windows: clean-windows
+	set GOOS=windows
+	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE).exe $(MAIN_PATH)
 
 install-windows:build-windows
 	powershell.exe -command "Copy-Item -Path '$(BUILD_PATH)$(PACKAGE).exe' \
@@ -45,7 +47,7 @@ clean:
 	rm -rf $(FULL_PATH)
 
 clean-windows:
-	-powershell.exe -command Remove-Item -Path $(BUILD_PATH)$(PACKAGE).exe -ErrorAction SilentlyContinue
+	powershell.exe -command "if (Test-Path $(FULL_PATH).exe) { Remove-Item -Recurse -Force -Path $(FULL_PATH).exe }"
 
 tests:
 	go test ./...
@@ -58,7 +60,7 @@ profiling:
 	go tool pprof heap.out
 
 gen-proto:install-proto
-	protoc --proto_path=proto --go_out=. proto/*
+	@protoc --proto_path=proto --go_out=. proto/*
 
 install-proto:
 	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest

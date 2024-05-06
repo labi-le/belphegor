@@ -1,6 +1,5 @@
 syntax = "proto3";
 import "google/protobuf/timestamp.proto";
-import "device.proto";
 
 package belphegor;
 
@@ -8,13 +7,24 @@ option go_package = "internal/types";
 
 // Header represents the header of a message
 message Header {
+  string From = 1;
   Mime MimeType = 2;
-  Device Device = 1;
   string ID = 3;
   google.protobuf.Timestamp Created = 4;
+  Clipboard ClipboardProvider = 5;
 }
 
 enum Mime {
   TEXT = 0;
   IMAGE = 1;
+}
+
+// ClipboardProvider represents the clipboard provider
+// Used to identify the clipboard provider
+enum Clipboard {
+  XClip = 0;
+  XSel = 1;
+  WlClipboard = 2;
+  MasOsStd = 4;
+  WindowsNT10 = 5;
 }

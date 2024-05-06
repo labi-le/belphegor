@@ -1,4 +1,4 @@
-package internal
+package node
 
 import (
 	"github.com/labi-le/belphegor/pkg/storage"
@@ -6,8 +6,8 @@ import (
 	"net/netip"
 )
 
-func castAddrPortFromConn(conn net.Conn) netip.AddrPort {
+func castAddrPort(conn net.Conn) netip.AddrPort {
 	return conn.RemoteAddr().(*net.TCPAddr).AddrPort()
 }
 
-type NodeStorage = storage.SyncMap[UniqueID, *Peer]
+type Storage = storage.SyncMap[UniqueID, *Peer]
