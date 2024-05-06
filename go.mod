@@ -7,7 +7,7 @@ require (
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/rs/zerolog v1.32.0
 	github.com/schollz/peerdiscovery v1.7.2
-	golang.org/x/image v0.15.0
+	golang.org/x/image v0.16.0
 	google.golang.org/protobuf v1.34.0
 )
 
