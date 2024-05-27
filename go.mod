@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/google/uuid v1.6.0
 	github.com/nightlyone/lockfile v1.0.0
-	github.com/rs/zerolog v1.32.0
+	github.com/rs/zerolog v1.33.0
 	github.com/schollz/peerdiscovery v1.7.2
 	golang.org/x/image v0.16.0
 	google.golang.org/protobuf v1.34.1
