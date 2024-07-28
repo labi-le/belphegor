@@ -2,6 +2,8 @@ package data
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rand"
 	"crypto/sha256"
 	"github.com/google/uuid"
 	"github.com/labi-le/belphegor/internal/types"
@@ -9,13 +11,17 @@ import (
 	"github.com/labi-le/belphegor/pkg/image"
 	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"io"
+	"net"
 	"net/http"
 	"time"
 )
 
 var (
-	messagePool = initMessagePool()
+	messagePool     = initMessagePool()
+	currentProvider = parseClipboardProvider(clipboard.New())
 )
 
 func initMessagePool() *pool.ObjectPool[*Message] {
@@ -25,7 +31,7 @@ func initMessagePool() *pool.ObjectPool[*Message] {
 			Header: &types.Header{
 				ID:                uuid.New().String(),
 				Created:           timestamppb.New(time.Now()),
-				ClipboardProvider: parseClipboardProvider(clipboard.New()),
+				ClipboardProvider: currentProvider,
 			},
 			Data: &types.Data{},
 		})
@@ -34,23 +40,25 @@ func initMessagePool() *pool.ObjectPool[*Message] {
 }
 
 type Message struct {
-	*types.Message
+	proto *types.Message
+
+	cachedFrom UniqueID
 }
 
 // MessageFrom creates a new Message with the provided data.
-func MessageFrom(data []byte, metadata *types.Device) *Message {
+func MessageFrom(data []byte, metadata *MetaData) *Message {
 	msg := messagePool.Acquire()
-	msg.Data.Raw = data
-	msg.Data.Hash = hashBytes(data)
+	msg.proto.Data.Raw = data
+	msg.proto.Data.Hash = hashBytes(data)
 
-	msg.Header.MimeType = parseMimeType(http.DetectContentType(data))
-	msg.Header.From = metadata.UniqueID
+	msg.proto.Header.MimeType = parseMimeType(http.DetectContentType(data))
+	msg.proto.Header.From = metadata.UniqueID().String()
 
 	return msg
 }
 
 func MessageFromProto(m *types.Message) *Message {
-	return &Message{Message: m}
+	return &Message{proto: m}
 }
 
 func (m *Message) Release() {
@@ -62,15 +70,15 @@ func (m *Message) Duplicate(new *Message) bool {
 		return false
 	}
 
-	if m.Header.MimeType == types.Mime_IMAGE && new.Header.MimeType == types.Mime_IMAGE {
-		if m.Header.ClipboardProvider == new.Header.ClipboardProvider {
-			return bytes.Equal(m.Data.Hash, new.Data.Hash)
+	if m.proto.Header.MimeType == types.Mime_IMAGE && new.proto.Header.MimeType == types.Mime_IMAGE {
+		if m.proto.Header.ClipboardProvider == new.proto.Header.ClipboardProvider {
+			return bytes.Equal(m.proto.Data.Hash, new.proto.Data.Hash)
 		}
 
 		// mse: compare images
 		identical, err := image.EqualMSE(
-			bytes.NewReader(m.Data.Raw),
-			bytes.NewReader(new.Data.Raw),
+			bytes.NewReader(m.proto.Data.Raw),
+			bytes.NewReader(new.proto.Data.Raw),
 		)
 		if err != nil {
 			log.Error().AnErr("image.EqualMSE", err).Msg("failed to compare images")
@@ -79,7 +87,61 @@ func (m *Message) Duplicate(new *Message) bool {
 		return identical
 	}
 
-	return m.Header.ID == new.Header.ID || bytes.Equal(m.Data.Hash, new.Data.Hash)
+	return m.proto.Header.ID == new.proto.Header.ID || bytes.Equal(m.proto.Data.Hash, new.proto.Data.Hash)
+}
+
+func (m *Message) From() UniqueID {
+	if m.cachedFrom == uuid.Nil {
+		m.cachedFrom = uuid.MustParse(m.proto.Header.From)
+	}
+
+	return m.cachedFrom
+}
+
+func (m *Message) ID() UniqueID {
+	if m.cachedFrom == uuid.Nil {
+		m.cachedFrom = uuid.MustParse(m.proto.Header.From)
+	}
+
+	return m.cachedFrom
+}
+
+func (m *Message) RawData() []byte {
+	return m.proto.Data.Raw
+}
+
+func (m *Message) Kind() proto.Message {
+	return m.proto
+}
+
+func (m *Message) WriteEncrypted(signer crypto.Signer, writer io.Writer) (int, error) {
+	dat, _ := proto.Marshal(m.Kind())
+	encrypted, err := signer.Sign(rand.Reader, dat, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	return EncodeWriter(&types.EncryptedMessage{Message: encrypted}, writer)
+}
+
+func ReceiveMessage(conn net.Conn, decrypter crypto.Decrypter) (*Message, error) {
+	var message types.Message
+
+	var encrypt types.EncryptedMessage
+	if decodeEnc := DecodeReader(conn, &encrypt); decodeEnc != nil {
+		return &Message{}, decodeEnc
+	}
+
+	decrypt, decErr := decrypter.Decrypt(rand.Reader, encrypt.Message, nil)
+	if decErr != nil {
+		return &Message{}, decErr
+	}
+
+	if err := proto.Unmarshal(decrypt, &message); err != nil {
+		return &Message{}, err
+	}
+
+	return MessageFromProto(&message), nil
 }
 
 func parseMimeType(ct string) types.Mime {

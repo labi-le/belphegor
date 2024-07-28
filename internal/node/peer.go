@@ -1,15 +1,13 @@
 package node
 
 import (
-	"crypto/rand"
+	"crypto"
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/node/data"
-	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/protobuf/proto"
 	"io"
 	"net"
 	"net/netip"
@@ -30,14 +28,14 @@ func initPeerPool() *pool.ObjectPool[*Peer] {
 func AcquirePeer(
 	conn net.Conn,
 	addr netip.AddrPort,
-	id *types.Device,
-	updates Channel,
+	meta *data.MetaData,
+	updates data.Channel,
 	cipher *encrypter.Cipher,
 ) *Peer {
 	p := peerPool.Acquire()
 	p.conn = conn
 	p.addr = addr
-	p.device = id
+	p.metaData = meta
 	p.localClipboard = updates
 	p.cipher = cipher
 
@@ -47,15 +45,15 @@ func AcquirePeer(
 type Peer struct {
 	conn           net.Conn
 	addr           netip.AddrPort
-	device         *types.Device
-	localClipboard Channel
+	metaData       *data.MetaData
+	localClipboard data.Channel
 	cipher         *encrypter.Cipher
 }
 
 func (p *Peer) Release() {
 	_ = p.Close()
 
-	p.device = nil
+	p.metaData = nil
 	p.addr = netip.AddrPort{}
 	p.conn = nil
 	p.localClipboard = nil
@@ -65,33 +63,27 @@ func (p *Peer) Release() {
 
 func (p *Peer) Addr() netip.AddrPort { return p.addr }
 
-func (p *Peer) Device() *types.Device { return p.device }
+func (p *Peer) MetaData() *data.MetaData { return p.metaData }
 
 func (p *Peer) Conn() net.Conn { return p.conn }
 
-func (p *Peer) Updates() Channel { return p.localClipboard }
+func (p *Peer) Updates() data.Channel { return p.localClipboard }
+
+func (p *Peer) Signer() crypto.Signer { return p.cipher }
 
 func (p *Peer) Close() error { return p.conn.Close() }
 
 func (p *Peer) String() string {
 	return fmt.Sprintf(
 		"%s -> %s",
-		prettyDevice(p.device),
+		p.MetaData().String(),
 		p.addr.String(),
-	)
-}
-
-func prettyDevice(id *types.Device) string {
-	return fmt.Sprintf(
-		"%s (%s)",
-		id.Name,
-		id.UniqueID,
 	)
 }
 
 func (p *Peer) Receive(last *data.LastMessage) {
 	for {
-		msg, err := p.receiveMessage()
+		msg, err := data.ReceiveMessage(p.Conn(), p.cipher)
 		if err != nil {
 			p.handleReceiveError(err)
 			break
@@ -102,7 +94,7 @@ func (p *Peer) Receive(last *data.LastMessage) {
 
 		log.Debug().Msgf(
 			"received %s from %s",
-			msg.Header.ID,
+			msg.ID(),
 			p.String(),
 		)
 	}
@@ -121,21 +113,4 @@ func (p *Peer) handleReceiveError(err error) {
 	}
 
 	log.Error().AnErr(op, err).Msg("failed to receive message")
-}
-
-// receiveMessage receives a message from the node.
-func (p *Peer) receiveMessage() (*data.Message, error) {
-	var message types.Message
-
-	var encrypt types.EncryptedMessage
-	if decodeEnc := decodeReader(p.Conn(), &encrypt); decodeEnc != nil {
-		return &data.Message{}, decodeEnc
-	}
-
-	decrypt, decErr := p.cipher.Decrypt(rand.Reader, encrypt.Message, nil)
-	if decErr != nil {
-		return &data.Message{}, decErr
-	}
-
-	return data.MessageFromProto(&message), proto.Unmarshal(decrypt, &message)
 }

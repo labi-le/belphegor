@@ -131,7 +131,7 @@ func TestCipher_Encrypt(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.fields.Sign(rand.Reader, tt.args, crypto.SHA256)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Encrypt() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("WriteEncrypted() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 

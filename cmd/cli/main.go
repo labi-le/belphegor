@@ -86,16 +86,20 @@ func main() {
 		return
 	}
 
+	opts := &node.Options{
+		PublicPort:         uint16(port),
+		BitSize:            uint16(bitSize),
+		KeepAlive:          keepAlive,
+		ClipboardScanDelay: scanDelay,
+		WriteTimeout:       writeTimeout,
+		Metadata:           data.SelfMetaData(),
+	}
+
 	nd := node.New(
 		clipboard.NewThreadSafe(),
-		storage.NewSyncMapStorage[node.UniqueID, *node.Peer](),
-		make(node.Channel),
-		port,
-		bitSize,
-		keepAlive,
-		scanDelay,
-		writeTimeout,
-		data.NewLastMessage(),
+		storage.NewSyncMapStorage[data.UniqueID, *node.Peer](),
+		make(data.Channel),
+		opts,
 	)
 
 	lock := MustLock()

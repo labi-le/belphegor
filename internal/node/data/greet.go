@@ -4,6 +4,7 @@ import (
 	"github.com/labi-le/belphegor/internal"
 	"github.com/labi-le/belphegor/internal/types"
 	"github.com/labi-le/belphegor/pkg/pool"
+	"io"
 )
 
 var (
@@ -25,17 +26,30 @@ type Greet struct {
 	*types.GreetMessage
 }
 
-func NewGreet(metadata *types.Device) *Greet {
+func NewGreet(metadata *MetaData) *Greet {
 	gp := greetPool.Acquire()
-	gp.Device = metadata
+	gp.Device = metadata.Kind()
 
 	return gp
 }
 
-func (m *Greet) Release() {
-	greetPool.Release(m)
+func NewGreetFromReader(reader io.Reader) (*Greet, error) {
+	var g Greet
+	if err := DecodeReader(reader, &g); err != nil {
+		return &g, err
+	}
+
+	return &g, nil
+}
+
+func (g *Greet) Release() {
+	greetPool.Release(g)
 }
 
 func NewGreetFromProto(m *types.GreetMessage) *Greet {
 	return &Greet{GreetMessage: m}
+}
+
+func (g *Greet) MetaData() *MetaData {
+	return MetaDataFromKind(g.Device)
 }
