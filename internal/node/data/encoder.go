@@ -1,14 +1,19 @@
-package node
+package data
 
 import (
 	"encoding/binary"
+	"errors"
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"io"
 )
 
-const DataLength = 4
+// todo: make these values customizable
+const (
+	Length         = 4
+	MaxMessageSize = 16 << 20
+)
 
 // encode encodes the source interface and returns the encoded byte slice.
 func encode(src proto.Message) []byte {
@@ -20,11 +25,11 @@ func encode(src proto.Message) []byte {
 	return encoded
 }
 
-// encodeWriter encodes the source interface writes it to the destination io.Writer.
-func encodeWriter(src proto.Message, w io.Writer) (int, error) {
+// EncodeWriter encodes the source interface writes it to the destination io.Writer.
+func EncodeWriter(src proto.Message, w io.Writer) (int, error) {
 	encoded := encode(src)
 
-	lenBytes := byteslice.Get(DataLength)
+	lenBytes := byteslice.Get(Length)
 	defer byteslice.Put(lenBytes)
 
 	binary.BigEndian.PutUint32(lenBytes, uint32(len(encoded)))
@@ -37,16 +42,20 @@ func encodeWriter(src proto.Message, w io.Writer) (int, error) {
 	return w.Write(encoded)
 }
 
-func decodeReader(r io.Reader, dst proto.Message) error {
+func DecodeReader(r io.Reader, dst proto.Message) error {
 	length, err := dataLen(r)
 	if err != nil {
 		return err
 	}
 
+	if length > MaxMessageSize {
+		return errors.New("message too large")
+	}
+
 	data := byteslice.Get(length)
 	defer byteslice.Put(data)
 
-	if decodeErr := decodeBytes(r, data); decodeErr != nil {
+	if _, decodeErr := io.ReadFull(r, data); decodeErr != nil {
 		return decodeErr
 	}
 
@@ -54,19 +63,11 @@ func decodeReader(r io.Reader, dst proto.Message) error {
 }
 
 func dataLen(r io.Reader) (int, error) {
-	lenBytes := byteslice.Get(DataLength)
+	lenBytes := byteslice.Get(Length)
 	defer byteslice.Put(lenBytes)
 
 	if _, err := io.ReadFull(r, lenBytes); err != nil {
 		return 0, err
 	}
 	return int(binary.BigEndian.Uint32(lenBytes)), nil
-}
-
-func decodeBytes(r io.Reader, dst []byte) error {
-	if _, err := io.ReadFull(r, dst); err != nil {
-		return err
-	}
-
-	return nil
 }
