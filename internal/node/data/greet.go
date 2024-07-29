@@ -34,12 +34,13 @@ func NewGreet(metadata *MetaData) *Greet {
 }
 
 func NewGreetFromReader(reader io.Reader) (*Greet, error) {
-	var g Greet
-	if err := DecodeReader(reader, &g); err != nil {
-		return &g, err
+	gp := greetPool.Acquire()
+
+	if err := DecodeReader(reader, gp); err != nil {
+		return gp, err
 	}
 
-	return &g, nil
+	return gp, nil
 }
 
 func (g *Greet) Release() {
