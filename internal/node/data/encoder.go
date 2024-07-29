@@ -9,65 +9,60 @@ import (
 	"io"
 )
 
-// todo: make these values customizable
 const (
 	Length         = 4
 	MaxMessageSize = 16 << 20
 )
 
-// encode encodes the source interface and returns the encoded byte slice.
-func encode(src proto.Message) []byte {
+func encode(src proto.Message) ([]byte, error) {
 	encoded, err := proto.Marshal(src)
 	if err != nil {
 		log.Error().AnErr("encode", err).Msg("failed to encode clipboard data")
+		return nil, err
 	}
 
-	return encoded
+	return encoded, nil
 }
 
-// EncodeWriter encodes the source interface writes it to the destination io.Writer.
 func EncodeWriter(src proto.Message, w io.Writer) (int, error) {
-	encoded := encode(src)
-
-	lenBytes := byteslice.Get(Length)
-	defer byteslice.Put(lenBytes)
-
-	binary.BigEndian.PutUint32(lenBytes, uint32(len(encoded)))
-
-	n, err := w.Write(lenBytes)
+	encoded, err := encode(src)
 	if err != nil {
-		return n, err
+		return 0, err
 	}
 
-	return w.Write(encoded)
+	totalLength := Length + len(encoded)
+	packet := byteslice.Get(totalLength)
+	defer byteslice.Put(packet)
+
+	binary.BigEndian.PutUint32(packet[:Length], uint32(len(encoded)))
+	copy(packet[Length:], encoded)
+
+	log.Debug().Msgf("sent %d bytes", len(encoded))
+
+	return w.Write(packet)
 }
 
 func DecodeReader(r io.Reader, dst proto.Message) error {
-	length, err := dataLen(r)
-	if err != nil {
+	header := byteslice.Get(Length)
+	defer byteslice.Put(header)
+
+	if _, err := io.ReadFull(r, header); err != nil {
 		return err
 	}
 
+	length := binary.BigEndian.Uint32(header)
 	if length > MaxMessageSize {
 		return errors.New("message too large")
 	}
 
-	data := byteslice.Get(length)
+	data := byteslice.Get(int(length))
 	defer byteslice.Put(data)
 
-	if _, decodeErr := io.ReadFull(r, data); decodeErr != nil {
-		return decodeErr
+	if _, err := io.ReadFull(r, data); err != nil {
+		return err
 	}
+
+	log.Debug().Msgf("received %d bytes", length)
 
 	return proto.Unmarshal(data, dst)
-}
-
-func dataLen(r io.Reader) (int, error) {
-	lenBytes := byteslice.Get(Length)
-	defer byteslice.Put(lenBytes)
-
-	if _, err := io.ReadFull(r, lenBytes); err != nil {
-		return 0, err
-	}
-	return int(binary.BigEndian.Uint32(lenBytes)), nil
 }

@@ -65,6 +65,14 @@ func New(
 	}
 }
 
+func gracefulShutdown(ctx context.Context, peers *Storage) {
+	<-ctx.Done()
+	log.Warn().Str("node.gracefulShutdown", "ctx done").Msg("close connections...")
+	peers.Tap(func(id data.UniqueID, peer *Peer) {
+		peer.Release()
+	})
+}
+
 func defaultOptions() *Options {
 	return &Options{
 		PublicPort:         uint16(netstack.RandomPort()),
@@ -81,6 +89,8 @@ func defaultOptions() *Options {
 // The 'addr' parameter should be in the format "host:port" to specify the remote clipboard's address.
 // If the connection is successfully established, it returns nil; otherwise, it returns an error.
 func (n *Node) ConnectTo(ctx context.Context, addr string) error {
+	go gracefulShutdown(ctx, n.peers)
+
 	conn, err := quic.DialAddr(ctx, addr, generateTLSConfig(), generateQuicConfig(n.options.KeepAlive))
 	if err != nil {
 		log.Error().AnErr("quic.Dial", err).Msg("failed to handle connection")
@@ -122,6 +132,8 @@ func (n *Node) addPeer(hisHand *data.Greet, conn quic.Connection, stream quic.St
 // The method returns an error if it fails to start listening.
 func (n *Node) Start(ctx context.Context) error {
 	const op = "node.Start"
+
+	go gracefulShutdown(ctx, n.peers)
 
 	listener, err := quic.ListenAddr(fmt.Sprintf(":%d", n.options.PublicPort), generateTLSConfig(), generateQuicConfig(n.options.KeepAlive))
 	if err != nil {
@@ -290,13 +302,9 @@ func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
 			peer.String(),
 		)
 
-		// Set write timeout if the writer implements net.Conn
-		//err := peer.Stream().SetWriteDeadline(time.Now().Add(n.options.WriteTimeout))
-		//if err != nil {
-		//	log.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
-		//	return
-		//}
-		//defer peer.Stream().SetWriteDeadline(time.Time{}) // Reset the deadline when done
+		// Set write timeout
+		reset := addWriteTimeout(peer.Stream(), n.options.WriteTimeout)
+		defer reset() // Reset the deadline when done
 
 		_, encErr := msg.Write(peer.Stream())
 		if encErr != nil {
@@ -304,6 +312,13 @@ func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
 	})
+}
+
+func addWriteTimeout(stream quic.Stream, timeout time.Duration) func() error {
+	if err := stream.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
+		log.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
+	}
+	return func() error { return stream.SetWriteDeadline(time.Time{}) }
 }
 
 // stats periodically log information about the nodes in the storage.

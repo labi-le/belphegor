@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	//_ "net/http/pprof"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"time"
 )
@@ -64,9 +64,8 @@ func init() {
 }
 
 func main() {
-	// if debug {
-	//	go http.ListenAndServe("0.0.0.0:8080", nil)
-	// }
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 
 	if debug {
 		log.Info().Msg("debug mode enabled")
@@ -105,8 +104,6 @@ func main() {
 
 	lock := MustLock()
 	defer Unlock(lock)
-
-	ctx := context.Background()
 
 	if addressIP != "" {
 		go func() {

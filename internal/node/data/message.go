@@ -40,6 +40,7 @@ type Message struct {
 	proto *types.Message
 
 	cachedFrom UniqueID
+	cachedID   uuid.UUID
 }
 
 // MessageFrom creates a new Message with the provided data.
@@ -87,6 +88,7 @@ func (m *Message) Duplicate(new *Message) bool {
 	return m.proto.Header.ID == new.proto.Header.ID || bytes.Equal(m.proto.Data.Hash, new.proto.Data.Hash)
 }
 
+// From who is the owner of this message
 func (m *Message) From() UniqueID {
 	if m.cachedFrom == uuid.Nil {
 		m.cachedFrom = uuid.MustParse(m.proto.Header.From)
@@ -95,12 +97,13 @@ func (m *Message) From() UniqueID {
 	return m.cachedFrom
 }
 
+// ID unique message id
 func (m *Message) ID() UniqueID {
-	if m.cachedFrom == uuid.Nil {
-		m.cachedFrom = uuid.MustParse(m.proto.Header.From)
+	if m.cachedID == uuid.Nil {
+		m.cachedID = uuid.MustParse(m.proto.Header.ID)
 	}
 
-	return m.cachedFrom
+	return m.cachedID
 }
 
 func (m *Message) RawData() []byte {

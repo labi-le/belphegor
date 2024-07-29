@@ -58,7 +58,7 @@ func (p *Peer) Stream() quic.Stream { return p.stream }
 
 func (p *Peer) Updates() data.Channel { return p.localClipboard }
 
-func (p *Peer) Close() error { return p.conn.CloseWithError(0, "Close by peer") }
+func (p *Peer) Close() error { return p.conn.CloseWithError(ErrCodeNoError, "Close by peer") }
 
 func (p *Peer) String() string {
 	return fmt.Sprintf(
@@ -99,5 +99,10 @@ func (p *Peer) handleReceiveError(err error) {
 		return
 	}
 
+	var appErr *quic.ApplicationError
+	if errors.As(err, &appErr) && appErr.ErrorCode == ErrCodeNoError {
+		log.Trace().AnErr(op, opErr).Msg("connection closed")
+		return
+	}
 	log.Error().AnErr(op, err).Msg("failed to receive message")
 }
