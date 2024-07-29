@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	//_ "net/http/pprof"
 	"errors"
 	"flag"
@@ -105,9 +106,11 @@ func main() {
 	lock := MustLock()
 	defer Unlock(lock)
 
+	ctx := context.Background()
+
 	if addressIP != "" {
 		go func() {
-			if err := nd.ConnectTo(addressIP); err != nil {
+			if err := nd.ConnectTo(ctx, addressIP); err != nil {
 				log.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
 			}
 		}()
@@ -121,7 +124,7 @@ func main() {
 		).Discover(nd)
 	}
 
-	if err := nd.Start(); err != nil {
+	if err := nd.Start(ctx); err != nil {
 		log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
 	}
 }

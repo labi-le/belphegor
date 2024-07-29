@@ -1,17 +1,24 @@
 package node
 
 import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/pkg/clipboard"
-	"github.com/labi-le/belphegor/pkg/encrypter"
+	"github.com/labi-le/belphegor/pkg/ip"
 	"github.com/rs/zerolog/log"
-	"net"
+	"math/big"
 	"time"
+
+	"github.com/quic-go/quic-go"
 )
 
 var (
@@ -73,14 +80,14 @@ func defaultOptions() *Options {
 // It adds the connection to the node's storage and starts handling the connection using 'handleConnection'.
 // The 'addr' parameter should be in the format "host:port" to specify the remote clipboard's address.
 // If the connection is successfully established, it returns nil; otherwise, it returns an error.
-func (n *Node) ConnectTo(addr string) error {
-	conn, err := net.Dial("tcp4", addr)
+func (n *Node) ConnectTo(ctx context.Context, addr string) error {
+	conn, err := quic.DialAddr(ctx, addr, generateTLSConfig(), generateQuicConfig(n.options.KeepAlive))
 	if err != nil {
-		log.Error().AnErr("net.Dial", err).Msg("failed to handle connection")
+		log.Error().AnErr("quic.Dial", err).Msg("failed to handle connection")
 		return err
 	}
 
-	connErr := n.handleConnection(conn)
+	connErr := n.handleConnection(conn, true)
 	if connErr != nil {
 		log.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
 	}
@@ -88,27 +95,17 @@ func (n *Node) ConnectTo(addr string) error {
 	return connErr
 }
 
-func (n *Node) addPeer(hisHand *data.Greet, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
+func (n *Node) addPeer(hisHand *data.Greet, conn quic.Connection, stream quic.Stream) (*Peer, error) {
 	metadata := data.MetaDataFromKind(hisHand.Device)
 	if n.peers.Exist(metadata.UniqueID()) {
 		log.Trace().Msgf("%s already connected, ignoring", metadata.String())
 		return nil, ErrAlreadyConnected
 	}
-
-	if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
-		return nil, aliveErr
-	}
-
-	if err := conn.(*net.TCPConn).SetKeepAlivePeriod(n.options.KeepAlive); err != nil {
-		return nil, err
-	}
-
 	peer := AcquirePeer(
 		conn,
-		castAddrPort(conn),
+		stream,
 		metadata,
 		n.localClipboard,
-		cipher,
 	)
 
 	n.peers.Add(
@@ -123,31 +120,33 @@ func (n *Node) addPeer(hisHand *data.Greet, cipher *encrypter.Cipher, conn net.C
 // When a new connection is accepted, it invokes the 'handleConnection' method to handle the connection.
 // The 'scanDelay' parameter determines the interval at which the clipboard is scanned and updated.
 // The method returns an error if it fails to start listening.
-func (n *Node) Start() error {
+func (n *Node) Start(ctx context.Context) error {
 	const op = "node.Start"
 
-	l, err := net.Listen("tcp4", fmt.Sprintf(":%d", n.options.PublicPort))
+	listener, err := quic.ListenAddr(fmt.Sprintf(":%d", n.options.PublicPort), generateTLSConfig(), generateQuicConfig(n.options.KeepAlive))
 	if err != nil {
 		return err
 	}
+	defer listener.Close()
 
-	log.Info().Str(op, "listen").Msgf("on %s", l.Addr().String())
+	log.Info().Str(op, "listen").Msgf("on %s", listener.Addr().String())
 	log.Info().Str(op, "metadata").Msg(n.Metadata().String())
 
-	defer l.Close()
+	defer listener.Close()
 
 	go n.MonitorBuffer()
 	go n.lastMessage.ListenUpdates()
 
 	for {
-		conn, netErr := l.Accept()
+		conn, netErr := listener.Accept(ctx)
 		if netErr != nil {
 			return err
 		}
 
 		log.Trace().Str(op, "accept connection").Msgf("from %s", conn.RemoteAddr().String())
+
 		go func() {
-			connErr := n.handleConnection(conn)
+			connErr := n.handleConnection(conn, false)
 			if connErr != nil {
 				log.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
 			}
@@ -155,28 +154,98 @@ func (n *Node) Start() error {
 	}
 }
 
-func (n *Node) handleConnection(conn net.Conn) error {
-	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, int(n.options.BitSize))
-	if cipherErr != nil {
-		log.Error().AnErr("rsa.GenerateKey", cipherErr).Send()
-		return cipherErr
+func generateTLSConfig() *tls.Config {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		log.Fatal().Err(err).Send()
+	}
+
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		log.Fatal().Err(err).Send()
+	}
+
+	ips, _ := ip.GetLocalIPs()
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+		IPAddresses:  ips,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		log.Fatal().Err(err).Send()
+	}
+
+	privBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		log.Fatal().Err(err).Send()
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
+	// Создаем пару ключ-сертификат
+	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		log.Fatal().Err(err).Send()
+	}
+
+	// Настраиваем конфигурацию TLS
+	return &tls.Config{
+		Certificates:       []tls.Certificate{tlsCert},
+		NextProtos:         []string{"quic-echo-example"},
+		MinVersion:         tls.VersionTLS13,
+		InsecureSkipVerify: true,
+	}
+}
+
+func generateQuicConfig(keepAlive time.Duration) *quic.Config {
+	return &quic.Config{
+		KeepAlivePeriod: keepAlive,
+	}
+}
+
+func (n *Node) handleConnection(conn quic.Connection, client bool) error {
+	var (
+		stream quic.Stream
+		err    error
+	)
+	if client {
+		stream, err = conn.OpenStreamSync(conn.Context())
+	} else {
+		stream, err = conn.AcceptStream(conn.Context())
+	}
+	if err != nil {
+		return err
 	}
 
 	myHand := data.NewGreet(n.options.Metadata)
 	defer myHand.Release()
 
-	myHand.PublicKey = encrypter.PublicKey2Bytes(privateKey.Public())
+	log.Trace().Msgf("sending greeting to %s -> %s", myHand.Device.String(), conn.RemoteAddr())
+	nw, err := data.EncodeWriter(myHand, stream)
+	_ = nw
+	if err != nil {
+		return err
+	}
 
-	hisHand, greetErr := n.greet(myHand, conn)
-	if greetErr != nil {
-		log.Error().AnErr("node.greet", greetErr).Send()
-		return greetErr
+	incoming, decodeErr := data.NewGreetFromReader(stream)
+	if decodeErr != nil {
+		return decodeErr
+	}
+
+	log.Trace().Msgf("received greeting from %s -> %s", incoming.MetaData().String(), conn.RemoteAddr().String())
+
+	if myHand.Version != incoming.Version {
+		log.Warn().Msgf("version mismatch: %s != %s", myHand.Version, incoming.Version)
 	}
 
 	peer, addErr := n.addPeer(
-		hisHand,
-		encrypter.NewCipher(privateKey, encrypter.Bytes2PublicKey(hisHand.PublicKey)),
+		incoming,
 		conn,
+		stream,
 	)
 	if addErr != nil {
 		if errors.Is(addErr, ErrAlreadyConnected) {
@@ -222,38 +291,19 @@ func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
 		)
 
 		// Set write timeout if the writer implements net.Conn
-		err := peer.Conn().SetWriteDeadline(time.Now().Add(n.options.WriteTimeout))
-		if err != nil {
-			log.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
-			return
-		}
-		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
+		//err := peer.Stream().SetWriteDeadline(time.Now().Add(n.options.WriteTimeout))
+		//if err != nil {
+		//	log.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
+		//	return
+		//}
+		//defer peer.Stream().SetWriteDeadline(time.Time{}) // Reset the deadline when done
 
-		_, encErr := msg.WriteEncrypted(peer.Signer(), peer.Conn())
+		_, encErr := msg.Write(peer.Stream())
 		if encErr != nil {
 			log.Error().AnErr("message.WriteEncrypted", encErr).Send()
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
 	})
-}
-
-func (n *Node) greet(my *data.Greet, conn net.Conn) (*data.Greet, error) {
-	log.Trace().Msgf("sending greeting to %s -> %s", my.Device.String(), conn.RemoteAddr().String())
-	if _, err := data.EncodeWriter(my, conn); err != nil {
-		return nil, err
-	}
-
-	incoming, decodeErr := data.NewGreetFromReader(conn)
-	if decodeErr != nil {
-		return incoming, decodeErr
-	}
-
-	log.Trace().Msgf("received greeting from %s -> %s", incoming.MetaData().String(), conn.RemoteAddr().String())
-
-	if my.Version != incoming.Version {
-		log.Warn().Msgf("version mismatch: %s != %s", my.Version, incoming.Version)
-	}
-	return incoming, nil
 }
 
 // stats periodically log information about the nodes in the storage.

@@ -2,8 +2,6 @@ package data
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rand"
 	"crypto/sha256"
 	"github.com/google/uuid"
 	"github.com/labi-le/belphegor/internal/types"
@@ -14,7 +12,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
-	"net"
 	"net/http"
 	"time"
 )
@@ -114,34 +111,17 @@ func (m *Message) Kind() proto.Message {
 	return m.proto
 }
 
-func (m *Message) WriteEncrypted(signer crypto.Signer, writer io.Writer) (int, error) {
-	dat, _ := proto.Marshal(m.Kind())
-	encrypted, err := signer.Sign(rand.Reader, dat, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	return EncodeWriter(&types.EncryptedMessage{Message: encrypted}, writer)
+func (m *Message) Write(writer io.Writer) (int, error) {
+	return EncodeWriter(m.Kind(), writer)
 }
 
-func ReceiveMessage(conn net.Conn, decrypter crypto.Decrypter) (*Message, error) {
-	var message types.Message
-
-	var encrypt types.EncryptedMessage
-	if decodeEnc := DecodeReader(conn, &encrypt); decodeEnc != nil {
-		return &Message{}, decodeEnc
-	}
-
-	decrypt, decErr := decrypter.Decrypt(rand.Reader, encrypt.Message, nil)
-	if decErr != nil {
-		return &Message{}, decErr
-	}
-
-	if err := proto.Unmarshal(decrypt, &message); err != nil {
+func ReceiveMessage(conn io.Reader) (*Message, error) {
+	message := messagePool.Acquire()
+	if err := DecodeReader(conn, message.proto); err != nil {
 		return &Message{}, err
 	}
 
-	return MessageFromProto(&message), nil
+	return MessageFromProto(message.proto), nil
 }
 
 func parseMimeType(ct string) types.Mime {

@@ -1,16 +1,14 @@
 package node
 
 import (
-	"crypto"
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/node/data"
-	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/pool"
+	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net"
-	"net/netip"
 )
 
 var (
@@ -25,65 +23,54 @@ func initPeerPool() *pool.ObjectPool[*Peer] {
 	return p
 }
 
-func AcquirePeer(
-	conn net.Conn,
-	addr netip.AddrPort,
-	meta *data.MetaData,
-	updates data.Channel,
-	cipher *encrypter.Cipher,
-) *Peer {
+func AcquirePeer(conn quic.Connection, stream quic.Stream, meta *data.MetaData, updates data.Channel) *Peer {
 	p := peerPool.Acquire()
+	p.stream = stream
 	p.conn = conn
-	p.addr = addr
 	p.metaData = meta
 	p.localClipboard = updates
-	p.cipher = cipher
 
 	return p
 }
 
 type Peer struct {
-	conn           net.Conn
-	addr           netip.AddrPort
+	conn           quic.Connection
+	stream         quic.Stream
 	metaData       *data.MetaData
 	localClipboard data.Channel
-	cipher         *encrypter.Cipher
 }
 
 func (p *Peer) Release() {
 	_ = p.Close()
 
 	p.metaData = nil
-	p.addr = netip.AddrPort{}
 	p.conn = nil
 	p.localClipboard = nil
 
 	peerPool.Release(p)
 }
 
-func (p *Peer) Addr() netip.AddrPort { return p.addr }
-
 func (p *Peer) MetaData() *data.MetaData { return p.metaData }
 
-func (p *Peer) Conn() net.Conn { return p.conn }
+func (p *Peer) Conn() quic.Connection { return p.conn }
+
+func (p *Peer) Stream() quic.Stream { return p.stream }
 
 func (p *Peer) Updates() data.Channel { return p.localClipboard }
 
-func (p *Peer) Signer() crypto.Signer { return p.cipher }
-
-func (p *Peer) Close() error { return p.conn.Close() }
+func (p *Peer) Close() error { return p.conn.CloseWithError(0, "Close by peer") }
 
 func (p *Peer) String() string {
 	return fmt.Sprintf(
 		"%s -> %s",
 		p.MetaData().String(),
-		p.addr.String(),
+		p.Conn().RemoteAddr().String(),
 	)
 }
 
 func (p *Peer) Receive(last *data.LastMessage) {
 	for {
-		msg, err := data.ReceiveMessage(p.Conn(), p.cipher)
+		msg, err := data.ReceiveMessage(p.stream)
 		if err != nil {
 			p.handleReceiveError(err)
 			break

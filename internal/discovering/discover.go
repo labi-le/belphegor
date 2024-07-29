@@ -1,6 +1,7 @@
 package discovering
 
 import (
+	"context"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/node/data"
@@ -65,7 +66,7 @@ func (d *Discover) Discover(n *node.Node) {
 					strconv.Itoa(int(greet.Port)),
 				)
 
-				go n.ConnectTo(peerAddr)
+				go n.ConnectTo(context.Background(), peerAddr)
 			},
 		},
 	)
