@@ -2,20 +2,12 @@ package node
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/labi-le/belphegor/internal/netstack"
+	"github.com/labi-le/belphegor/internal/discovering"
 	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/pkg/clipboard"
-	"github.com/labi-le/belphegor/pkg/ip"
 	"github.com/rs/zerolog/log"
-	"math/big"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -25,6 +17,10 @@ var (
 	ErrAlreadyConnected = errors.New("already connected")
 )
 
+type Connector interface {
+	Connect(ctx context.Context, addr string) error
+}
+
 type Node struct {
 	clipboard      clipboard.Manager
 	peers          *Storage
@@ -33,16 +29,6 @@ type Node struct {
 	lastMessage *data.LastMessage
 
 	options *Options
-}
-
-type Options struct {
-	PublicPort         uint16
-	BitSize            uint16
-	KeepAlive          time.Duration
-	ClipboardScanDelay time.Duration
-	WriteTimeout       time.Duration
-	// represents the current device
-	Metadata *data.MetaData
 }
 
 // New creates a new instance of Node with the specified settings.
@@ -73,25 +59,11 @@ func gracefulShutdown(ctx context.Context, peers *Storage) {
 	})
 }
 
-func defaultOptions() *Options {
-	return &Options{
-		PublicPort:         uint16(netstack.RandomPort()),
-		BitSize:            2048,
-		KeepAlive:          time.Minute,
-		ClipboardScanDelay: 2 * time.Second,
-		WriteTimeout:       5 * time.Second,
-		Metadata:           data.SelfMetaData(),
-	}
-}
-
-// ConnectTo establishes a TCP connection to a remote clipboard at the specified address.
-// It adds the connection to the node's storage and starts handling the connection using 'handleConnection'.
-// The 'addr' parameter should be in the format "host:port" to specify the remote clipboard's address.
-// If the connection is successfully established, it returns nil; otherwise, it returns an error.
-func (n *Node) ConnectTo(ctx context.Context, addr string) error {
-	go gracefulShutdown(ctx, n.peers)
-
-	conn, err := quic.DialAddr(ctx, addr, generateTLSConfig(), generateQuicConfig(n.options.KeepAlive))
+// Connect establishes a connection to a remote clipboard at the specified address.
+// The 'addr' parameter should be in the format "host:port" to specify the remote clipboard's address
+// If the connection is successfully established, it returns nil; otherwise, it returns an error
+func (n *Node) Connect(ctx context.Context, addr string) error {
+	conn, err := quic.DialAddr(ctx, addr, generateTLSConfig(n.options.Encryption), generateQuicConfig(n.options.KeepAlive))
 	if err != nil {
 		log.Error().AnErr("quic.Dial", err).Msg("failed to handle connection")
 		return err
@@ -125,17 +97,18 @@ func (n *Node) addPeer(hisHand *data.Greet, conn quic.Connection, stream quic.St
 	return peer, nil
 }
 
-// Start starts the node by listening for incoming connections on the specified public port.
-// It also starts a clipboard monitor to periodically scan and update the local clipboard.
-// When a new connection is accepted, it invokes the 'handleConnection' method to handle the connection.
-// The 'scanDelay' parameter determines the interval at which the clipboard is scanned and updated.
-// The method returns an error if it fails to start listening.
+// Start starts the node by listening for incoming connections
 func (n *Node) Start(ctx context.Context) error {
 	const op = "node.Start"
 
 	go gracefulShutdown(ctx, n.peers)
+	go discoverIfCan(ctx, n.options.Discovering, n.Metadata(), n)
 
-	listener, err := quic.ListenAddr(fmt.Sprintf(":%d", n.options.PublicPort), generateTLSConfig(), generateQuicConfig(n.options.KeepAlive))
+	listener, err := quic.ListenAddr(
+		fmt.Sprintf(":%d", n.options.PublicPort),
+		generateTLSConfig(n.options.Encryption),
+		generateQuicConfig(n.options.KeepAlive),
+	)
 	if err != nil {
 		return err
 	}
@@ -166,50 +139,13 @@ func (n *Node) Start(ctx context.Context) error {
 	}
 }
 
-func generateTLSConfig() *tls.Config {
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		log.Fatal().Err(err).Send()
-	}
-
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		log.Fatal().Err(err).Send()
-	}
-
-	ips, _ := ip.GetLocalIPs()
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		IPAddresses:  ips,
-	}
-
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		log.Fatal().Err(err).Send()
-	}
-
-	privBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	if err != nil {
-		log.Fatal().Err(err).Send()
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-
-	// Создаем пару ключ-сертификат
-	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		log.Fatal().Err(err).Send()
-	}
-
-	// Настраиваем конфигурацию TLS
-	return &tls.Config{
-		Certificates:       []tls.Certificate{tlsCert},
-		NextProtos:         []string{"quic-echo-example"},
-		MinVersion:         tls.VersionTLS13,
-		InsecureSkipVerify: true,
+func discoverIfCan(ctx context.Context, options DiscoverOptions, metaData *data.MetaData, connector Connector) {
+	if options.Enable {
+		go discovering.New(
+			options.MaxPeers,
+			options.SearchDelay,
+			options.Port,
+		).Discover(ctx, metaData, connector)
 	}
 }
 
@@ -308,7 +244,7 @@ func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
 
 		_, encErr := msg.Write(peer.Stream())
 		if encErr != nil {
-			log.Error().AnErr("message.WriteEncrypted", encErr).Send()
+			log.Error().AnErr("message.Write", encErr).Send()
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
 	})
@@ -316,20 +252,9 @@ func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
 
 func addWriteTimeout(stream quic.Stream, timeout time.Duration) func() error {
 	if err := stream.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
-		log.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
+		log.Error().AnErr("quic.Stream.SetWriteDeadline", err).Send()
 	}
 	return func() error { return stream.SetWriteDeadline(time.Time{}) }
-}
-
-// stats periodically log information about the nodes in the storage.
-// It retrieves the list of nodes from the provided storage and logs the count of nodes
-// as well as information about each node, including its Address and port.
-func stats(storage *Storage) {
-	for range time.Tick(time.Minute) {
-		storage.Tap(func(metadata data.UniqueID, peer *Peer) {
-			log.Trace().Msgf("%s is alive", peer.String())
-		})
-	}
 }
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes

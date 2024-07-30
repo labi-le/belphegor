@@ -1,5 +1,4 @@
 syntax = "proto3";
-import "google/protobuf/timestamp.proto";
 
 package belphegor;
 
@@ -10,7 +9,6 @@ message Header {
   string From = 1;
   Mime MimeType = 2;
   string ID = 3;
-  google.protobuf.Timestamp Created = 4;
   Clipboard ClipboardProvider = 5;
 }
 

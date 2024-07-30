@@ -33,8 +33,6 @@ github.com/quic-go/quic-go v0.45.1/go.mod h1:1dLehS7TIR64+vxGR70GDcatWTOtMX2PUtn
 github.com/rs/xid v1.5.0/go.mod h1:trrq9SKmegXys3aeAKXMUTdJsYXVwGY3RLcfgqegfbg=
 github.com/rs/zerolog v1.33.0 h1:1cU2KZkvPxNyfgEmhHAz/1A9Bz+llsdYzklWFzgp0r8=
 github.com/rs/zerolog v1.33.0/go.mod h1:/7mN4D5sKwJLZQ2b/znpjC3/GQWY/xaDXUM0kKWRHss=
-github.com/schollz/peerdiscovery v1.7.3 h1:/pt1G0rZ80fSPoI/FgGC5P7MxpkRXD6u0pe6PJbYcIE=
-github.com/schollz/peerdiscovery v1.7.3/go.mod h1:mVlPNJ5DWbMi52VzpXxGbqXKdFANx3qw0Jsp3EQMCrE=
 github.com/schollz/peerdiscovery v1.7.4 h1:XTgdtdWxtrj+Z9mlCkvKkxawQLLwRL8ElssuLlIYP/4=
 github.com/schollz/peerdiscovery v1.7.4/go.mod h1:iKfn3SwRPiHYbyo6YCRjHNwRwDZM8ruJxzTBwO6g36c=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

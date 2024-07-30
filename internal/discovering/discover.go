@@ -3,7 +3,6 @@ package discovering
 import (
 	"context"
 	"fmt"
-	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/pkg/ip"
 	"github.com/rs/zerolog/log"
@@ -13,6 +12,10 @@ import (
 	"strconv"
 	"time"
 )
+
+type Connector interface {
+	Connect(ctx context.Context, addr string) error
+}
 
 type Discover struct {
 	maxPeers int
@@ -28,11 +31,11 @@ func New(maxPeers int, delay time.Duration, port int) *Discover {
 	}
 }
 
-func (d *Discover) Discover(n *node.Node) {
+func (d *Discover) Discover(ctx context.Context, metadata *data.MetaData, connector Connector) {
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
 			PayloadFunc: func() []byte {
-				greet := data.NewGreet(n.Metadata())
+				greet := data.NewGreet(metadata)
 				defer greet.Release()
 
 				greet.Port = uint32(d.port)
@@ -52,7 +55,7 @@ func (d *Discover) Discover(n *node.Node) {
 					return
 				}
 
-				greet := data.NewGreet(n.Metadata())
+				greet := data.NewGreet(metadata)
 				defer greet.Release()
 
 				if protoErr := proto.Unmarshal(d.Payload, greet); protoErr != nil {
@@ -66,7 +69,7 @@ func (d *Discover) Discover(n *node.Node) {
 					strconv.Itoa(int(greet.Port)),
 				)
 
-				go n.ConnectTo(context.Background(), peerAddr)
+				go connector.Connect(ctx, peerAddr)
 			},
 		},
 	)

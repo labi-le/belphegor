@@ -85,8 +85,6 @@ func (p *Peer) Receive(last *data.LastMessage) {
 			p.String(),
 		)
 	}
-
-	log.Info().Msgf("%s disconnected", p.String())
 }
 
 // handleReceiveError handles errors when receiving data.
@@ -101,7 +99,7 @@ func (p *Peer) handleReceiveError(err error) {
 
 	var appErr *quic.ApplicationError
 	if errors.As(err, &appErr) && appErr.ErrorCode == ErrCodeNoError {
-		log.Trace().AnErr(op, opErr).Msg("connection closed")
+		log.Info().Msgf("%s disconnected", p.String())
 		return
 	}
 	log.Error().AnErr(op, err).Msg("failed to receive message")

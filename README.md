@@ -55,6 +55,8 @@ Usage of belphegor:
         Delay between scan local clipboard
   -version
         Show version
+  -noenc
+        Disable enc
 ```
 ### Todo
 [x] Create github actions for build binary and running tests
@@ -65,4 +67,4 @@ Usage of belphegor:
 
 [ ] Publish to aur package
 
-[ ] Add disable cipher option
+[x] Add disable cipher option

@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
-	"github.com/labi-le/belphegor/internal/discovering"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/node/data"
@@ -24,18 +23,15 @@ import (
 const LockFile = "belphegor.lck"
 
 var (
-	addressIP     string
-	port          int
-	nodeDiscover  bool
-	scanDelay     time.Duration
-	discoverDelay time.Duration
-	keepAlive     time.Duration
-	writeTimeout  time.Duration
-	maxPeers      int
-	bitSize       int
-	debug         bool
-	showVersion   bool
-	showHelp      bool
+	addressIP   string
+	debug       bool
+	showVersion bool
+	showHelp    bool
+	port        int
+
+	options = &node.Options{
+		Metadata: data.SelfMetaData(),
+	}
 )
 
 var (
@@ -45,20 +41,28 @@ var (
 )
 
 func init() {
-	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
 	flag.IntVar(&port, "port", netstack.RandomPort(), "Port to use. Default: random")
-	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
-	flag.DurationVar(&scanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
-	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
-	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
-	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
-	flag.IntVar(&bitSize, "bit_size", 2048, "RSA key bit size")
+
+	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
+
+	flag.BoolVar(&options.Discovering.Enable, "node_discover", true, "Find local nodes on the network and connect to them")
+	flag.DurationVar(&options.Discovering.SearchDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
+	flag.IntVar(&options.Discovering.MaxPeers, "max_peers", 5, "Maximum number of peers to connect to")
+
+	flag.DurationVar(&options.ClipboardScanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
+	flag.DurationVar(&options.KeepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
+	flag.DurationVar(&options.WriteTimeout, "write_timeout", 5*time.Second, "Write timeout")
+
+	flag.BoolVar(&options.Encryption.Enable, "enable_enc", false, "Enable encryption")
+
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 
 	flag.Parse()
+
+	options.PublicPort = port
+	options.Discovering.Port = port
 
 	initLogger(debug)
 }
@@ -86,20 +90,11 @@ func main() {
 		return
 	}
 
-	opts := &node.Options{
-		PublicPort:         uint16(port),
-		BitSize:            uint16(bitSize),
-		KeepAlive:          keepAlive,
-		ClipboardScanDelay: scanDelay,
-		WriteTimeout:       writeTimeout,
-		Metadata:           data.SelfMetaData(),
-	}
-
 	nd := node.New(
 		clipboard.NewThreadSafe(),
 		storage.NewSyncMapStorage[data.UniqueID, *node.Peer](),
 		make(data.Channel),
-		opts,
+		options,
 	)
 
 	lock := MustLock()
@@ -107,18 +102,10 @@ func main() {
 
 	if addressIP != "" {
 		go func() {
-			if err := nd.ConnectTo(ctx, addressIP); err != nil {
-				log.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
+			if err := nd.Connect(ctx, addressIP); err != nil {
+				log.Fatal().AnErr("node.Connect", err).Msg("failed to connect to the node")
 			}
 		}()
-	}
-
-	if nodeDiscover {
-		go discovering.New(
-			maxPeers,
-			discoverDelay,
-			port,
-		).Discover(nd)
 	}
 
 	if err := nd.Start(ctx); err != nil {

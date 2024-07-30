@@ -10,10 +10,8 @@ import (
 	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
 	"net/http"
-	"time"
 )
 
 var (
@@ -27,7 +25,6 @@ func initMessagePool() *pool.ObjectPool[*Message] {
 		return MessageFromProto(&types.Message{
 			Header: &types.Header{
 				ID:                uuid.New().String(),
-				Created:           timestamppb.New(time.Now()),
 				ClipboardProvider: currentProvider,
 			},
 			Data: &types.Data{},
