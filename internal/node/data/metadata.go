@@ -50,6 +50,10 @@ func (meta *MetaData) String() string {
 	)
 }
 
+func (meta *MetaData) Name() string {
+	return meta.proto.Name
+}
+
 func DeviceName() string {
 	hostname, hostErr := os.Hostname()
 	if hostErr != nil {

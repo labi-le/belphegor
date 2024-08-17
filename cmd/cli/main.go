@@ -1,7 +1,6 @@
 package main
 
 import (
-	//_ "net/http/pprof"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/node/data"
+	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
@@ -35,6 +35,7 @@ var (
 	debug         bool
 	showVersion   bool
 	showHelp      bool
+	notify        bool
 )
 
 var (
@@ -54,6 +55,7 @@ func init() {
 	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
 	flag.IntVar(&bitSize, "bit_size", 2048, "RSA key bit size")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
+	flag.BoolVar(&notify, "notify", true, "Enable notifications")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 
@@ -63,10 +65,6 @@ func init() {
 }
 
 func main() {
-	// if debug {
-	//	go http.ListenAndServe("0.0.0.0:8080", nil)
-	// }
-
 	if debug {
 		log.Info().Msg("debug mode enabled")
 	}
@@ -93,6 +91,7 @@ func main() {
 		ClipboardScanDelay: scanDelay,
 		WriteTimeout:       writeTimeout,
 		Metadata:           data.SelfMetaData(),
+		Notifier:           notificationProvider(notify),
 	}
 
 	nd := node.New(
@@ -124,6 +123,16 @@ func main() {
 	if err := nd.Start(); err != nil {
 		log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
 	}
+}
+
+func notificationProvider(enable bool) notification.Notifier {
+	if enable {
+		return notification.BeepDecorator{
+			Title: "Belphegor",
+		}
+	}
+
+	return new(notification.NullNotifier)
 }
 
 func initLogger(debug bool) {

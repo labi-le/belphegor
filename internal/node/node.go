@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node/data"
+	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/rs/zerolog/log"
@@ -36,6 +37,8 @@ type Options struct {
 	WriteTimeout       time.Duration
 	// represents the current device
 	Metadata *data.MetaData
+
+	Notifier notification.Notifier
 }
 
 // New creates a new instance of Node with the specified settings.
@@ -66,6 +69,7 @@ func defaultOptions() *Options {
 		ClipboardScanDelay: 2 * time.Second,
 		WriteTimeout:       5 * time.Second,
 		Metadata:           data.SelfMetaData(),
+		Notifier:           new(notification.BeepDecorator),
 	}
 }
 
@@ -131,6 +135,8 @@ func (n *Node) Start() error {
 		return err
 	}
 
+	n.Notify("started on %s", l.Addr().String())
+
 	log.Info().Str(op, "listen").Msgf("on %s", l.Addr().String())
 	log.Info().Str(op, "metadata").Msg(n.Metadata().String())
 
@@ -186,6 +192,8 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		return addErr
 	}
 	defer n.peers.Delete(peer.MetaData().UniqueID())
+	n.Notify("connected to %s", peer.MetaData().Name())
+	defer n.Notify("Node disconnected %s", peer.MetaData().Name())
 
 	log.Info().Msgf("connected to %s", peer.String())
 	peer.Receive(n.lastMessage)
@@ -256,17 +264,6 @@ func (n *Node) greet(my *data.Greet, conn net.Conn) (*data.Greet, error) {
 	return incoming, nil
 }
 
-// stats periodically log information about the nodes in the storage.
-// It retrieves the list of nodes from the provided storage and logs the count of nodes
-// as well as information about each node, including its Address and port.
-func stats(storage *Storage) {
-	for range time.Tick(time.Minute) {
-		storage.Tap(func(metadata data.UniqueID, peer *Peer) {
-			log.Trace().Msgf("%s is alive", peer.String())
-		})
-	}
-}
-
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
 func (n *Node) MonitorBuffer() {
 	const op = "node.MonitorBuffer"
@@ -302,4 +299,8 @@ func (n *Node) setClipboardData(m *data.Message) {
 
 func (n *Node) Metadata() *data.MetaData {
 	return n.options.Metadata
+}
+
+func (n *Node) Notify(message string, v ...any) {
+	n.options.Notifier.Notify(message, v...)
 }
