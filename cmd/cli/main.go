@@ -23,19 +23,12 @@ import (
 const LockFile = "belphegor.lck"
 
 var (
-	addressIP     string
-	port          int
-	nodeDiscover  bool
-	scanDelay     time.Duration
-	discoverDelay time.Duration
-	keepAlive     time.Duration
-	writeTimeout  time.Duration
-	maxPeers      int
-	bitSize       int
-	debug         bool
-	showVersion   bool
-	showHelp      bool
-	notify        bool
+	addressIP   string
+	debug       bool
+	showVersion bool
+	showHelp    bool
+	notify      bool
+	opt         node.Options
 )
 
 var (
@@ -46,14 +39,14 @@ var (
 
 func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
-	flag.IntVar(&port, "port", netstack.RandomPort(), "Port to use. Default: random")
-	flag.BoolVar(&nodeDiscover, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
-	flag.DurationVar(&scanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
-	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
-	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
-	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
-	flag.IntVar(&bitSize, "bit_size", 2048, "RSA key bit size")
+	flag.IntVar(&opt.PublicPort, "port", netstack.RandomPort(), "Port to use. Default: random")
+	flag.BoolVar(&opt.Discovering.Enable, "node_discover", true, "Find local nodes on the network and connect to them")
+	flag.DurationVar(&opt.Discovering.Delay, "discover_delay", 5*time.Minute, "Delay between node discovery")
+	flag.DurationVar(&opt.ClipboardScanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
+	flag.DurationVar(&opt.KeepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
+	flag.DurationVar(&opt.WriteTimeout, "write_timeout", 5*time.Second, "Write timeout")
+	flag.IntVar(&opt.Discovering.MaxPeers, "max_peers", 5, "Maximum number of peers to connect to")
+	flag.IntVar(&opt.BitSize, "bit_size", 2048, "RSA key bit size")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&notify, "notify", true, "Enable notifications")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
@@ -70,7 +63,8 @@ func main() {
 	}
 
 	if showVersion {
-		_, _ = fmt.Fprintf(os.Stderr,
+		_, _ = fmt.Fprintf(
+			os.Stderr,
 			"version %s | commit %s | build time %s",
 			internal.Version,
 			internal.CommitHash,
@@ -80,25 +74,18 @@ func main() {
 	}
 
 	if showHelp {
-		_, _ = fmt.Fprint(os.Stderr, internal.HelpMsg)
+		flag.Usage()
 		return
 	}
 
-	opts := &node.Options{
-		PublicPort:         uint16(port),
-		BitSize:            uint16(bitSize),
-		KeepAlive:          keepAlive,
-		ClipboardScanDelay: scanDelay,
-		WriteTimeout:       writeTimeout,
-		Metadata:           data.SelfMetaData(),
-		Notifier:           notificationProvider(notify),
-	}
+	opt.Metadata = data.SelfMetaData()
+	opt.Notifier = notificationProvider(notify)
 
 	nd := node.New(
 		clipboard.NewThreadSafe(),
 		storage.NewSyncMapStorage[data.UniqueID, *node.Peer](),
 		make(data.Channel),
-		opts,
+		&opt,
 	)
 
 	lock := MustLock()
@@ -112,11 +99,11 @@ func main() {
 		}()
 	}
 
-	if nodeDiscover {
+	if opt.Discovering.Enable {
 		go discovering.New(
-			maxPeers,
-			discoverDelay,
-			port,
+			opt.Discovering.MaxPeers,
+			opt.Discovering.Delay,
+			opt.PublicPort,
 		).Discover(nd)
 	}
 

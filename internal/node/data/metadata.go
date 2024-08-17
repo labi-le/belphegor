@@ -24,11 +24,16 @@ func (meta *MetaData) UniqueID() UniqueID {
 	return meta.cachedID
 }
 
+var (
+	currentName = DeviceName()
+	currentUID  = uuid.New().String()
+)
+
 func SelfMetaData() *MetaData {
 	return &MetaData{proto: &types.Device{
-		Name:     DeviceName(),
+		Name:     currentName,
 		Arch:     runtime.GOARCH,
-		UniqueID: uuid.New().String(),
+		UniqueID: currentUID,
 	}}
 }
 

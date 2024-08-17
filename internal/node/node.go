@@ -30,8 +30,8 @@ type Node struct {
 }
 
 type Options struct {
-	PublicPort         uint16
-	BitSize            uint16
+	PublicPort         int
+	BitSize            int
 	KeepAlive          time.Duration
 	ClipboardScanDelay time.Duration
 	WriteTimeout       time.Duration
@@ -39,6 +39,14 @@ type Options struct {
 	Metadata *data.MetaData
 
 	Notifier notification.Notifier
+
+	Discovering DiscoverOptions
+}
+
+type DiscoverOptions struct {
+	Enable   bool
+	Delay    time.Duration
+	MaxPeers int
 }
 
 // New creates a new instance of Node with the specified settings.
@@ -63,13 +71,18 @@ func New(
 
 func defaultOptions() *Options {
 	return &Options{
-		PublicPort:         uint16(netstack.RandomPort()),
+		PublicPort:         netstack.RandomPort(),
 		BitSize:            2048,
 		KeepAlive:          time.Minute,
 		ClipboardScanDelay: 2 * time.Second,
 		WriteTimeout:       5 * time.Second,
 		Metadata:           data.SelfMetaData(),
 		Notifier:           new(notification.BeepDecorator),
+		Discovering: DiscoverOptions{
+			Enable:   true,
+			Delay:    5 * time.Minute,
+			MaxPeers: 5,
+		},
 	}
 }
 
