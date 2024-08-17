@@ -39,22 +39,32 @@ sudo make install
 ### Usage
 ```
 Usage of belphegor:
+  -bit_size int
+        RSA key bit size (default 2048)
   -connect string
         Address in ip:port format to connect to the node
   -debug
         Show debug logs
   -discover_delay duration
-        Delay between node discovery
+        Delay between node discovery (default 5m0s)
   -help
         Show help
+  -keep_alive duration
+        Interval for checking connections between nodes (default 1m0s)
+  -max_peers int
+        Maximum number of peers to connect to (default 5)
   -node_discover
         Find local nodes on the network and connect to them (default true)
+  -notify
+        Enable notifications (default true)
   -port int
-        Port to use. Default: random
+        Port to use. Default: random (default 7663)
   -scan_delay duration
-        Delay between scan local clipboard
+        Delay between scan local clipboard (default 2s)
   -version
         Show version
+  -write_timeout duration
+        Write timeout (default 5s)
 ```
 ### Todo
 [x] Create github actions for build binary and running tests
