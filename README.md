@@ -21,9 +21,8 @@ ___
 
 
 ### Installation
-
-#### Prebuilt binaries
-- https://github.com/labi-le/belphegor/releases
+- [Prebuilt binaries](https://github.com/labi-le/belphegor/releases)
+- [Nix package](https://github.com/labi-le/nixos/blob/main/pkgs/belphegor.nix)
 
 #### Build from source
 - Go 1.22
