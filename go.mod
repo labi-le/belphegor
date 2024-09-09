@@ -3,17 +3,17 @@ module github.com/labi-le/belphegor
 go 1.22
 
 require (
+	github.com/gen2brain/beeep v0.0.0-20240516210008-9c006672e7f4
 	github.com/google/uuid v1.6.0
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/rs/zerolog v1.33.0
 	github.com/schollz/peerdiscovery v1.7.4
-	golang.org/x/image v0.19.0
+	golang.org/x/image v0.20.0
 	google.golang.org/protobuf v1.34.2
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/gen2brain/beeep v0.0.0-20240516210008-9c006672e7f4 // indirect
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
