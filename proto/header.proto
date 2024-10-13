@@ -27,4 +27,5 @@ enum Clipboard {
   WlClipboard = 2;
   MasOsStd = 4;
   WindowsNT10 = 5;
+  Null = 6;
 }

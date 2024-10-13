@@ -12,12 +12,13 @@ type Manager interface {
 }
 
 const (
-	XClip       = "xclip"
-	XSel        = "xsel"
-	WlClipboard = "wl-clipboard"
-	Termux      = "termux"
-	WindowsNT10 = "nt10"
-	MasOsStd    = "masos-std"
+	XClip         = "xclip"
+	XSel          = "xsel"
+	WlClipboard   = "wl-clipboard"
+	Termux        = "termux"
+	WindowsNT10   = "nt10"
+	MasOsStd      = "masos-std"
+	NullClipboard = "null-clipboard"
 )
 
 func clipboardGet(cmd *exec.Cmd) ([]byte, error) {

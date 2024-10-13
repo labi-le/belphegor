@@ -173,6 +173,8 @@ func parseClipboardProvider(m clipboard.Manager) types.Clipboard {
 		return types.Clipboard_MasOsStd
 	case clipboard.WindowsNT10:
 		return types.Clipboard_WindowsNT10
+	case clipboard.NullClipboard:
+		return types.Clipboard_Null
 
 	default:
 		log.Fatal().Msgf("unimplemented device: %s", m.Name())
