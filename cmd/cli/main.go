@@ -125,6 +125,18 @@ func notificationProvider(enable bool) notification.Notifier {
 func initLogger(debug bool) {
 	if debug {
 		log.Logger = log.With().Caller().Logger()
+
+		zerolog.CallerMarshalFunc = func(_ uintptr, file string, line int) string {
+			short := file
+			for i := len(file) - 1; i > 0; i-- {
+				if file[i] == '/' {
+					short = file[i+1:]
+					break
+				}
+			}
+			file = short
+			return fmt.Sprintf("%s:%d", file, line)
+		}
 		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 		return
 	}
