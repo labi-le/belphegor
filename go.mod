@@ -9,7 +9,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/schollz/peerdiscovery v1.7.5
 	golang.org/x/image v0.21.0
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/protobuf v1.35.1
 )
 
 require (
