@@ -28,7 +28,16 @@ var (
 	showVersion bool
 	showHelp    bool
 	notify      bool
-	opt         node.Options
+
+	// Флаги для конфигурации
+	port           int
+	discoverEnable bool
+	discoverDelay  time.Duration
+	scanDelay      time.Duration
+	keepAlive      time.Duration
+	writeTimeout   time.Duration
+	maxPeers       int
+	bitSize        int
 )
 
 var (
@@ -39,14 +48,14 @@ var (
 
 func init() {
 	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
-	flag.IntVar(&opt.PublicPort, "port", netstack.RandomPort(), "Port to use. Default: random")
-	flag.BoolVar(&opt.Discovering.Enable, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.DurationVar(&opt.Discovering.Delay, "discover_delay", 5*time.Minute, "Delay between node discovery")
-	flag.DurationVar(&opt.ClipboardScanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
-	flag.DurationVar(&opt.KeepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
-	flag.DurationVar(&opt.WriteTimeout, "write_timeout", 5*time.Second, "Write timeout")
-	flag.IntVar(&opt.Discovering.MaxPeers, "max_peers", 5, "Maximum number of peers to connect to")
-	flag.IntVar(&opt.BitSize, "bit_size", 2048, "RSA key bit size")
+	flag.IntVar(&port, "port", netstack.RandomPort(), "Port to use. Default: random")
+	flag.BoolVar(&discoverEnable, "node_discover", true, "Find local nodes on the network and connect to them")
+	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
+	flag.DurationVar(&scanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
+	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
+	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
+	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
+	flag.IntVar(&bitSize, "bit_size", 2048, "RSA key bit size")
 	flag.BoolVar(&debug, "debug", false, "Show debug logs")
 	flag.BoolVar(&notify, "notify", true, "Enable notifications")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
@@ -78,14 +87,23 @@ func main() {
 		return
 	}
 
-	opt.Metadata = data.SelfMetaData()
-	opt.Notifier = notificationProvider(notify)
-
+	// Создаем Node с использованием функциональных опций
 	nd := node.New(
 		clipboard.NewThreadSafe(),
 		storage.NewSyncMapStorage[data.UniqueID, *node.Peer](),
 		make(data.Channel),
-		&opt,
+		node.WithPublicPort(port),
+		node.WithBitSize(bitSize),
+		node.WithKeepAlive(keepAlive),
+		node.WithClipboardScanDelay(scanDelay),
+		node.WithWriteTimeout(writeTimeout),
+		node.WithMetadata(data.SelfMetaData()),
+		node.WithNotifier(notificationProvider(notify)),
+		node.WithDiscovering(node.DiscoverOptions{
+			Enable:   discoverEnable,
+			Delay:    discoverDelay,
+			MaxPeers: maxPeers,
+		}),
 	)
 
 	lock := MustLock()
@@ -99,11 +117,12 @@ func main() {
 		}()
 	}
 
-	if opt.Discovering.Enable {
+	// Используем функциональные опции для discovering
+	if discoverEnable {
 		go discovering.New(
-			opt.Discovering.MaxPeers,
-			opt.Discovering.Delay,
-			opt.PublicPort,
+			discovering.WithMaxPeers(maxPeers),
+			discovering.WithDelay(discoverDelay),
+			discovering.WithPort(port),
 		).Discover(nd)
 	}
 

@@ -20,7 +20,6 @@ import (
 )
 
 var (
-	messagePool     = initMessagePool()
 	currentProvider = parseClipboardProvider(clipboard.New())
 )
 
@@ -47,7 +46,15 @@ type Message struct {
 
 // MessageFrom creates a new Message with the provided data.
 func MessageFrom(data []byte, metadata *MetaData) *Message {
-	msg := messagePool.Acquire()
+	msg := MessageFromProto(&types.Message{
+		Header: &types.Header{
+			ID:                uuid.New().String(),
+			Created:           timestamppb.New(time.Now()),
+			ClipboardProvider: currentProvider,
+		},
+		Data: &types.Data{},
+	})
+
 	msg.proto.Data.Raw = data
 	msg.proto.Data.Hash = hashBytes(data)
 
@@ -59,10 +66,6 @@ func MessageFrom(data []byte, metadata *MetaData) *Message {
 
 func MessageFromProto(m *types.Message) *Message {
 	return &Message{proto: m}
-}
-
-func (m *Message) Release() {
-	messagePool.Release(m)
 }
 
 func (m *Message) Duplicate(new *Message) bool {

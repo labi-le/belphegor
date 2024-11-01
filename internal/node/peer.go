@@ -6,39 +6,44 @@ import (
 	"fmt"
 	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/pkg/encrypter"
-	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net"
 	"net/netip"
 )
 
-var (
-	peerPool = initPeerPool()
-)
+type PeerOption func(*Peer)
 
-func initPeerPool() *pool.ObjectPool[*Peer] {
-	p := pool.NewObjectPool[*Peer](10)
-	p.New = func() *Peer {
-		return &Peer{}
+func WithConn(conn net.Conn) PeerOption {
+	return func(p *Peer) {
+		p.conn = conn
+		p.addr = conn.RemoteAddr().(*net.TCPAddr).AddrPort()
 	}
-	return p
 }
 
-func AcquirePeer(
-	conn net.Conn,
-	addr netip.AddrPort,
-	meta *data.MetaData,
-	updates data.Channel,
-	cipher *encrypter.Cipher,
-) *Peer {
-	p := peerPool.Acquire()
-	p.conn = conn
-	p.addr = addr
-	p.metaData = meta
-	p.localClipboard = updates
-	p.cipher = cipher
+func WithMetaData(meta *data.MetaData) PeerOption {
+	return func(p *Peer) {
+		p.metaData = meta
+	}
+}
 
+func WithLocalClipboard(updates data.Channel) PeerOption {
+	return func(p *Peer) {
+		p.localClipboard = updates
+	}
+}
+
+func WithCipher(cipher *encrypter.Cipher) PeerOption {
+	return func(p *Peer) {
+		p.cipher = cipher
+	}
+}
+
+func AcquirePeer(opts ...PeerOption) *Peer {
+	p := &Peer{}
+	for _, opt := range opts {
+		opt(p)
+	}
 	return p
 }
 
@@ -50,24 +55,11 @@ type Peer struct {
 	cipher         *encrypter.Cipher
 }
 
-func (p *Peer) Release() {
-	_ = p.Close()
-
-	p.metaData = nil
-	p.addr = netip.AddrPort{}
-	p.conn = nil
-	p.localClipboard = nil
-
-	peerPool.Release(p)
-}
-
 func (p *Peer) Addr() netip.AddrPort { return p.addr }
 
 func (p *Peer) MetaData() *data.MetaData { return p.metaData }
 
 func (p *Peer) Conn() net.Conn { return p.conn }
-
-func (p *Peer) Updates() data.Channel { return p.localClipboard }
 
 func (p *Peer) Signer() crypto.Signer { return p.cipher }
 
@@ -102,7 +94,6 @@ func (p *Peer) Receive(last *data.LastMessage) {
 	log.Info().Msgf("%s disconnected", p.String())
 }
 
-// handleReceiveError handles errors when receiving data.
 func (p *Peer) handleReceiveError(err error) {
 	const op = "peer.handleReceiveError"
 

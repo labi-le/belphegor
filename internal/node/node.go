@@ -23,10 +23,8 @@ type Node struct {
 	clipboard      clipboard.Manager
 	peers          *Storage
 	localClipboard data.Channel
-
-	lastMessage *data.LastMessage
-
-	options *Options
+	lastMessage    *data.LastMessage
+	options        *Options
 }
 
 type Options struct {
@@ -35,12 +33,9 @@ type Options struct {
 	KeepAlive          time.Duration
 	ClipboardScanDelay time.Duration
 	WriteTimeout       time.Duration
-	// represents the current device
-	Metadata *data.MetaData
-
-	Notifier notification.Notifier
-
-	Discovering DiscoverOptions
+	Metadata           *data.MetaData
+	Notifier           notification.Notifier
+	Discovering        DiscoverOptions
 }
 
 type DiscoverOptions struct {
@@ -49,40 +44,105 @@ type DiscoverOptions struct {
 	MaxPeers int
 }
 
+// Option defines the method to configure Options
+type Option func(*Options)
+
+func WithPublicPort(port int) Option {
+	return func(o *Options) {
+		o.PublicPort = port
+	}
+}
+
+func WithBitSize(size int) Option {
+	return func(o *Options) {
+		o.BitSize = size
+	}
+}
+
+func WithKeepAlive(duration time.Duration) Option {
+	return func(o *Options) {
+		o.KeepAlive = duration
+	}
+}
+
+func WithClipboardScanDelay(delay time.Duration) Option {
+	return func(o *Options) {
+		o.ClipboardScanDelay = delay
+	}
+}
+
+func WithWriteTimeout(timeout time.Duration) Option {
+	return func(o *Options) {
+		o.WriteTimeout = timeout
+	}
+}
+
+func WithMetadata(metadata *data.MetaData) Option {
+	return func(o *Options) {
+		o.Metadata = metadata
+	}
+}
+
+func WithNotifier(notifier notification.Notifier) Option {
+	return func(o *Options) {
+		o.Notifier = notifier
+	}
+}
+
+func WithDiscovering(opt DiscoverOptions) Option {
+	return func(o *Options) {
+		o.Discovering = opt
+	}
+}
+
+var defaultOptions = &Options{
+	PublicPort:         netstack.RandomPort(),
+	BitSize:            2048,
+	KeepAlive:          time.Minute,
+	ClipboardScanDelay: 2 * time.Second,
+	WriteTimeout:       5 * time.Second,
+	Metadata:           data.SelfMetaData(),
+	Notifier:           new(notification.BeepDecorator),
+	Discovering: DiscoverOptions{
+		Enable:   true,
+		Delay:    5 * time.Minute,
+		MaxPeers: 5,
+	},
+}
+
+// NewOptions creates Options with provided options
+func NewOptions(opts ...Option) *Options {
+	options := &Options{
+		PublicPort:         defaultOptions.PublicPort,
+		BitSize:            defaultOptions.BitSize,
+		KeepAlive:          defaultOptions.KeepAlive,
+		ClipboardScanDelay: defaultOptions.ClipboardScanDelay,
+		WriteTimeout:       defaultOptions.WriteTimeout,
+		Metadata:           defaultOptions.Metadata,
+		Notifier:           defaultOptions.Notifier,
+		Discovering:        defaultOptions.Discovering,
+	}
+
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	return options
+}
+
 // New creates a new instance of Node with the specified settings.
 func New(
 	clipboard clipboard.Manager,
 	peers *Storage,
 	localClipboard data.Channel,
-	opt *Options,
+	opts ...Option,
 ) *Node {
-	if opt == nil {
-		opt = defaultOptions()
-	}
-
 	return &Node{
 		clipboard:      clipboard,
 		peers:          peers,
 		localClipboard: localClipboard,
 		lastMessage:    data.NewLastMessage(),
-		options:        opt,
-	}
-}
-
-func defaultOptions() *Options {
-	return &Options{
-		PublicPort:         netstack.RandomPort(),
-		BitSize:            2048,
-		KeepAlive:          time.Minute,
-		ClipboardScanDelay: 2 * time.Second,
-		WriteTimeout:       5 * time.Second,
-		Metadata:           data.SelfMetaData(),
-		Notifier:           new(notification.BeepDecorator),
-		Discovering: DiscoverOptions{
-			Enable:   true,
-			Delay:    5 * time.Minute,
-			MaxPeers: 5,
-		},
+		options:        NewOptions(opts...),
 	}
 }
 
@@ -121,11 +181,10 @@ func (n *Node) addPeer(hisHand *data.Greet, cipher *encrypter.Cipher, conn net.C
 	}
 
 	peer := AcquirePeer(
-		conn,
-		castAddrPort(conn),
-		metadata,
-		n.localClipboard,
-		cipher,
+		WithConn(conn),
+		WithMetaData(metadata),
+		WithLocalClipboard(n.localClipboard),
+		WithCipher(cipher),
 	)
 
 	n.peers.Add(
@@ -182,7 +241,6 @@ func (n *Node) handleConnection(conn net.Conn) error {
 	}
 
 	myHand := data.NewGreet(n.options.Metadata)
-	defer myHand.Release()
 
 	myHand.PublicKey = encrypter.PublicKey2Bytes(privateKey.Public())
 
@@ -223,8 +281,6 @@ func (n *Node) handleConnection(conn net.Conn) error {
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
 func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
 	const op = "node.Broadcast"
-
-	defer msg.Release()
 
 	n.peers.Tap(func(id data.UniqueID, peer *Peer) {
 		if id == ignore {
