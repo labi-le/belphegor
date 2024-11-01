@@ -13,9 +13,7 @@ import (
 	"net/netip"
 )
 
-var (
-	peerPool = initPeerPool()
-)
+var peerPool = initPeerPool()
 
 func initPeerPool() *pool.ObjectPool[*Peer] {
 	p := pool.NewObjectPool[*Peer](10)
@@ -25,20 +23,38 @@ func initPeerPool() *pool.ObjectPool[*Peer] {
 	return p
 }
 
-func AcquirePeer(
-	conn net.Conn,
-	addr netip.AddrPort,
-	meta *data.MetaData,
-	updates data.Channel,
-	cipher *encrypter.Cipher,
-) *Peer {
-	p := peerPool.Acquire()
-	p.conn = conn
-	p.addr = addr
-	p.metaData = meta
-	p.localClipboard = updates
-	p.cipher = cipher
+type PeerOption func(*Peer)
 
+func WithConn(conn net.Conn) PeerOption {
+	return func(p *Peer) {
+		p.conn = conn
+		p.addr = conn.RemoteAddr().(*net.TCPAddr).AddrPort()
+	}
+}
+
+func WithMetaData(meta *data.MetaData) PeerOption {
+	return func(p *Peer) {
+		p.metaData = meta
+	}
+}
+
+func WithLocalClipboard(updates data.Channel) PeerOption {
+	return func(p *Peer) {
+		p.localClipboard = updates
+	}
+}
+
+func WithCipher(cipher *encrypter.Cipher) PeerOption {
+	return func(p *Peer) {
+		p.cipher = cipher
+	}
+}
+
+func AcquirePeer(opts ...PeerOption) *Peer {
+	p := peerPool.Acquire()
+	for _, opt := range opts {
+		opt(p)
+	}
 	return p
 }
 
@@ -57,6 +73,7 @@ func (p *Peer) Release() {
 	p.addr = netip.AddrPort{}
 	p.conn = nil
 	p.localClipboard = nil
+	p.cipher = nil
 
 	peerPool.Release(p)
 }
@@ -102,7 +119,6 @@ func (p *Peer) Receive(last *data.LastMessage) {
 	log.Info().Msgf("%s disconnected", p.String())
 }
 
-// handleReceiveError handles errors when receiving data.
 func (p *Peer) handleReceiveError(err error) {
 	const op = "peer.handleReceiveError"
 
