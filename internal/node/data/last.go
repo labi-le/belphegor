@@ -4,16 +4,16 @@ import "sync"
 
 // LastMessage which is stored in Node and serves to identify duplicate messages
 type LastMessage struct {
-	*Message
+	Message
 	mu     sync.Mutex
-	Update chan *Message
+	Update chan Message
 }
 
 func NewLastMessage() *LastMessage {
-	return &LastMessage{Update: make(chan *Message)}
+	return &LastMessage{Update: make(chan Message)}
 }
 
-func (m *LastMessage) Get() *Message {
+func (m *LastMessage) Get() Message {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -64,3 +64,15 @@ gen-proto:install-proto
 
 install-proto:
 	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+collect-code:
+	echo "=== START PROJECT CODE DUMP ===" > project_code.txt
+	echo "Created at: $$(date)" >> project_code.txt
+	for file in $$(find . -type f -name "*.go" -not -path "./build/*" -not -path "*/\.*"); do \
+		echo "" >> project_code.txt; \
+		echo "=== FILE: $$file ===" >> project_code.txt; \
+		echo "=== START CODE ===" >> project_code.txt; \
+		cat "$$file" >> project_code.txt; \
+		echo "=== END CODE ===" >> project_code.txt; \
+	done
+	echo "=== END PROJECT CODE DUMP ===" >> project_code.txt

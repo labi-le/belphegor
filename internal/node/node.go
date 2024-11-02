@@ -33,7 +33,7 @@ type Options struct {
 	KeepAlive          time.Duration
 	ClipboardScanDelay time.Duration
 	WriteTimeout       time.Duration
-	Metadata           *data.MetaData
+	Metadata           data.MetaData
 	Notifier           notification.Notifier
 	Discovering        DiscoverOptions
 }
@@ -77,7 +77,7 @@ func WithWriteTimeout(timeout time.Duration) Option {
 	}
 }
 
-func WithMetadata(metadata *data.MetaData) Option {
+func WithMetadata(metadata data.MetaData) Option {
 	return func(o *Options) {
 		o.Metadata = metadata
 	}
@@ -165,19 +165,19 @@ func (n *Node) ConnectTo(addr string) error {
 	return connErr
 }
 
-func (n *Node) addPeer(hisHand *data.Greet, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
-	metadata := data.MetaDataFromKind(hisHand.Device)
+func (n *Node) addPeer(hisHand data.Greet, cipher *encrypter.Cipher, conn net.Conn) (Peer, error) {
+	metadata := hisHand.Device
 	if n.peers.Exist(metadata.UniqueID()) {
 		log.Trace().Msgf("%s already connected, ignoring", metadata.String())
-		return nil, ErrAlreadyConnected
+		return Peer{}, ErrAlreadyConnected
 	}
 
 	if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
-		return nil, aliveErr
+		return Peer{}, aliveErr
 	}
 
 	if err := conn.(*net.TCPConn).SetKeepAlivePeriod(n.options.KeepAlive); err != nil {
-		return nil, err
+		return Peer{}, err
 	}
 
 	peer := AcquirePeer(
@@ -241,7 +241,6 @@ func (n *Node) handleConnection(conn net.Conn) error {
 	}
 
 	myHand := data.NewGreet(n.options.Metadata)
-	defer myHand.Release()
 
 	myHand.PublicKey = encrypter.PublicKey2Bytes(privateKey.Public())
 
@@ -264,8 +263,8 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		return addErr
 	}
 	defer n.peers.Delete(peer.MetaData().UniqueID())
-	n.Notify("connected to %s", peer.MetaData().Name())
-	defer n.Notify("Node disconnected %s", peer.MetaData().Name())
+	n.Notify("connected to %s", peer.MetaData().Name)
+	defer n.Notify("Node disconnected %s", peer.MetaData().Name)
 
 	log.Info().Msgf("connected to %s", peer.String())
 	peer.Receive(n.lastMessage)
@@ -280,12 +279,10 @@ func (n *Node) handleConnection(conn net.Conn) error {
 // The method logs the sent messages and their hashes for debugging purposes.
 // The 'msg' parameter is the message to be broadcast.
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
-func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
+func (n *Node) Broadcast(msg data.Message, ignore data.UniqueID) {
 	const op = "node.Broadcast"
 
-	defer msg.Release()
-
-	n.peers.Tap(func(id data.UniqueID, peer *Peer) {
+	n.peers.Tap(func(id data.UniqueID, peer Peer) {
 		if id == ignore {
 			log.Trace().Str(op, "exclude sending to creator node").Msg(peer.String())
 			return
@@ -317,10 +314,10 @@ func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
 	})
 }
 
-func (n *Node) greet(my *data.Greet, conn net.Conn) (*data.Greet, error) {
+func (n *Node) greet(my data.Greet, conn net.Conn) (data.Greet, error) {
 	log.Trace().Msgf("sending greeting to %s -> %s", my.Device.String(), conn.RemoteAddr().String())
-	if _, err := data.EncodeWriter(my, conn); err != nil {
-		return nil, err
+	if _, err := data.EncodeWriter(my.ToProto(), conn); err != nil {
+		return data.Greet{}, err
 	}
 
 	incoming, decodeErr := data.NewGreetFromReader(conn)
@@ -356,20 +353,20 @@ func (n *Node) MonitorBuffer() {
 	}()
 	for msg := range n.localClipboard {
 		n.setClipboardData(msg)
-		n.Broadcast(msg, msg.From())
+		n.Broadcast(msg, msg.Header.From)
 	}
 }
 
-func (n *Node) fetchClipboardData() *data.Message {
+func (n *Node) fetchClipboardData() data.Message {
 	clip, _ := n.clipboard.Get()
-	return data.MessageFrom(clip, n.Metadata())
+	return data.NewMessage(clip, n.Metadata())
 }
 
-func (n *Node) setClipboardData(m *data.Message) {
+func (n *Node) setClipboardData(m data.Message) {
 	_ = n.clipboard.Set(m.RawData())
 }
 
-func (n *Node) Metadata() *data.MetaData {
+func (n *Node) Metadata() data.MetaData {
 	return n.options.Metadata
 }
 

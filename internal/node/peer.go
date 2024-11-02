@@ -6,22 +6,11 @@ import (
 	"fmt"
 	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/pkg/encrypter"
-	"github.com/labi-le/belphegor/pkg/pool"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net"
 	"net/netip"
 )
-
-var peerPool = initPeerPool()
-
-func initPeerPool() *pool.ObjectPool[*Peer] {
-	p := pool.NewObjectPool[*Peer](10)
-	p.New = func() *Peer {
-		return &Peer{}
-	}
-	return p
-}
 
 type PeerOption func(*Peer)
 
@@ -32,7 +21,7 @@ func WithConn(conn net.Conn) PeerOption {
 	}
 }
 
-func WithMetaData(meta *data.MetaData) PeerOption {
+func WithMetaData(meta data.MetaData) PeerOption {
 	return func(p *Peer) {
 		p.metaData = meta
 	}
@@ -50,47 +39,35 @@ func WithCipher(cipher *encrypter.Cipher) PeerOption {
 	}
 }
 
-func AcquirePeer(opts ...PeerOption) *Peer {
-	p := peerPool.Acquire()
+func AcquirePeer(opts ...PeerOption) Peer {
+	p := &Peer{}
 	for _, opt := range opts {
 		opt(p)
 	}
-	return p
+	return *p
 }
 
 type Peer struct {
 	conn           net.Conn
 	addr           netip.AddrPort
-	metaData       *data.MetaData
+	metaData       data.MetaData
 	localClipboard data.Channel
 	cipher         *encrypter.Cipher
 }
 
-func (p *Peer) Release() {
-	_ = p.Close()
+func (p Peer) Addr() netip.AddrPort { return p.addr }
 
-	p.metaData = nil
-	p.addr = netip.AddrPort{}
-	p.conn = nil
-	p.localClipboard = nil
-	p.cipher = nil
+func (p Peer) MetaData() data.MetaData { return p.metaData }
 
-	peerPool.Release(p)
-}
+func (p Peer) Conn() net.Conn { return p.conn }
 
-func (p *Peer) Addr() netip.AddrPort { return p.addr }
+func (p Peer) Updates() data.Channel { return p.localClipboard }
 
-func (p *Peer) MetaData() *data.MetaData { return p.metaData }
+func (p Peer) Signer() crypto.Signer { return p.cipher }
 
-func (p *Peer) Conn() net.Conn { return p.conn }
+func (p Peer) Close() error { return p.conn.Close() }
 
-func (p *Peer) Updates() data.Channel { return p.localClipboard }
-
-func (p *Peer) Signer() crypto.Signer { return p.cipher }
-
-func (p *Peer) Close() error { return p.conn.Close() }
-
-func (p *Peer) String() string {
+func (p Peer) String() string {
 	return fmt.Sprintf(
 		"%s -> %s",
 		p.MetaData().String(),
@@ -98,7 +75,7 @@ func (p *Peer) String() string {
 	)
 }
 
-func (p *Peer) Receive(last *data.LastMessage) {
+func (p Peer) Receive(last *data.LastMessage) {
 	for {
 		msg, err := data.ReceiveMessage(p.Conn(), p.cipher)
 		if err != nil {
@@ -119,7 +96,7 @@ func (p *Peer) Receive(last *data.LastMessage) {
 	log.Info().Msgf("%s disconnected", p.String())
 }
 
-func (p *Peer) handleReceiveError(err error) {
+func (p Peer) handleReceiveError(err error) {
 	const op = "peer.handleReceiveError"
 
 	var opErr *net.OpError

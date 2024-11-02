@@ -90,7 +90,7 @@ func main() {
 	// Создаем Node с использованием функциональных опций
 	nd := node.New(
 		clipboard.NewThreadSafe(),
-		storage.NewSyncMapStorage[data.UniqueID, *node.Peer](),
+		storage.NewSyncMapStorage[data.UniqueID, node.Peer](),
 		make(data.Channel),
 		node.WithPublicPort(port),
 		node.WithBitSize(bitSize),

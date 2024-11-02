@@ -5,4 +5,4 @@ import (
 	"github.com/labi-le/belphegor/pkg/storage"
 )
 
-type Storage = storage.SyncMap[data.UniqueID, *Peer]
+type Storage = storage.SyncMap[data.UniqueID, Peer]

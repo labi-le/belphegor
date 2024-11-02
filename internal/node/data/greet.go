@@ -3,54 +3,52 @@ package data
 import (
 	"github.com/labi-le/belphegor/internal"
 	"github.com/labi-le/belphegor/internal/types"
-	"github.com/labi-le/belphegor/pkg/pool"
 	"io"
 )
 
-var (
-	greetPool = initGreetPool()
-)
-
-func initGreetPool() *pool.ObjectPool[*Greet] {
-	p := pool.NewObjectPool[*Greet](10)
-	p.New = func() *Greet {
-		return NewGreetFromProto(&types.GreetMessage{
-			Version: internal.Version,
-		})
-	}
-
-	return p
-}
-
 type Greet struct {
-	*types.GreetMessage
+	Version   string
+	Device    MetaData
+	Port      uint32
+	PublicKey []byte
 }
 
-func NewGreet(metadata *MetaData) *Greet {
-	gp := greetPool.Acquire()
-	gp.Device = metadata.Kind()
-
-	return gp
+func NewGreet(metadata MetaData) Greet {
+	return Greet{
+		Version: internal.Version,
+		Device:  metadata,
+	}
 }
 
-func NewGreetFromReader(reader io.Reader) (*Greet, error) {
-	gp := greetPool.Acquire()
+// GreetFromProto создает Greet из protobuf сообщения
+func GreetFromProto(m *types.GreetMessage) Greet {
+	return Greet{
+		Version:   m.Version,
+		Device:    MetaDataFromProto(m.Device),
+		Port:      m.Port,
+		PublicKey: m.PublicKey,
+	}
+}
 
-	if err := DecodeReader(reader, gp); err != nil {
-		return gp, err
+// NewGreetFromReader теперь использует FromProto
+func NewGreetFromReader(reader io.Reader) (Greet, error) {
+	var proto types.GreetMessage
+	if err := DecodeReader(reader, &proto); err != nil {
+		return Greet{}, err
 	}
 
-	return gp, nil
+	return GreetFromProto(&proto), nil
 }
 
-func (g *Greet) Release() {
-	greetPool.Release(g)
+func (g Greet) MetaData() MetaData {
+	return g.Device
 }
 
-func NewGreetFromProto(m *types.GreetMessage) *Greet {
-	return &Greet{GreetMessage: m}
-}
-
-func (g *Greet) MetaData() *MetaData {
-	return MetaDataFromKind(g.Device)
+func (g Greet) ToProto() *types.GreetMessage {
+	return &types.GreetMessage{
+		Version:   g.Version,
+		Device:    g.Device.ToProto(),
+		Port:      g.Port,
+		PublicKey: g.PublicKey,
+	}
 }

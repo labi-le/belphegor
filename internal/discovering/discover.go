@@ -69,9 +69,8 @@ func (d *Discover) Discover(n *node.Node) {
 		peerdiscovery.Settings{
 			PayloadFunc: func() []byte {
 				greet := data.NewGreet(n.Metadata())
-				defer greet.Release()
 				greet.Port = uint32(d.port)
-				byt, _ := proto.Marshal(greet)
+				byt, _ := proto.Marshal(greet.ToProto())
 				return byt
 			},
 			Limit:     d.maxPeers,
@@ -86,8 +85,7 @@ func (d *Discover) Discover(n *node.Node) {
 				}
 
 				greet := data.NewGreet(n.Metadata())
-				defer greet.Release()
-				if protoErr := proto.Unmarshal(d.Payload, greet); protoErr != nil {
+				if protoErr := proto.Unmarshal(d.Payload, greet.ToProto()); protoErr != nil {
 					log.Error().Err(protoErr).Msg("failed to unmarshal payload")
 					return
 				}

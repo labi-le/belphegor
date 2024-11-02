@@ -1,4 +1,4 @@
 package data
 
 // Channel is an interface for managing clipboard data.
-type Channel chan *Message
+type Channel chan Message
