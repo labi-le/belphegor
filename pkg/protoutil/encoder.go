@@ -1,4 +1,4 @@
-package data
+package protoutil
 
 import (
 	"encoding/binary"
@@ -26,8 +26,8 @@ func encode(src proto.Message) []byte {
 }
 
 // EncodeWriter encodes the source interface writes it to the destination io.Writer.
-func EncodeWriter(src proto.Message, w io.Writer) (int, error) {
-	encoded := encode(src)
+func EncodeWriter(src Proto[proto.Message], w io.Writer) (int, error) {
+	encoded := encode(src.Proto())
 
 	lenBytes := byteslice.Get(Length)
 	defer byteslice.Put(lenBytes)
@@ -70,4 +70,8 @@ func dataLen(r io.Reader) (int, error) {
 		return 0, err
 	}
 	return int(binary.BigEndian.Uint32(lenBytes)), nil
+}
+
+type Proto[T proto.Message] interface {
+	Proto() T
 }

@@ -1,19 +1,22 @@
-package data
+package node
 
-import "sync"
+import (
+	"github.com/labi-le/belphegor/internal/types/domain"
+	"sync"
+)
 
 // LastMessage which is stored in Node and serves to identify duplicate messages
 type LastMessage struct {
-	*Message
+	*domain.Message
 	mu     sync.Mutex
-	Update chan *Message
+	Update chan *domain.Message
 }
 
 func NewLastMessage() *LastMessage {
-	return &LastMessage{Update: make(chan *Message)}
+	return &LastMessage{Update: make(chan *domain.Message)}
 }
 
-func (m *LastMessage) Get() *Message {
+func (m *LastMessage) Get() *domain.Message {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/netstack"
-	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/internal/notification"
+	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
+	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/rs/zerolog/log"
 	"net"
 	"time"
@@ -22,8 +23,8 @@ var (
 type Node struct {
 	clipboard      clipboard.Manager
 	peers          *Storage
-	localClipboard data.Channel
-	lastMessage    *data.LastMessage
+	localClipboard Channel
+	lastMessage    *LastMessage
 	options        *Options
 }
 
@@ -33,7 +34,6 @@ type Options struct {
 	KeepAlive          time.Duration
 	ClipboardScanDelay time.Duration
 	WriteTimeout       time.Duration
-	Metadata           *data.MetaData
 	Notifier           notification.Notifier
 	Discovering        DiscoverOptions
 }
@@ -77,12 +77,6 @@ func WithWriteTimeout(timeout time.Duration) Option {
 	}
 }
 
-func WithMetadata(metadata *data.MetaData) Option {
-	return func(o *Options) {
-		o.Metadata = metadata
-	}
-}
-
 func WithNotifier(notifier notification.Notifier) Option {
 	return func(o *Options) {
 		o.Notifier = notifier
@@ -101,7 +95,6 @@ var defaultOptions = &Options{
 	KeepAlive:          time.Minute,
 	ClipboardScanDelay: 2 * time.Second,
 	WriteTimeout:       5 * time.Second,
-	Metadata:           data.SelfMetaData(),
 	Notifier:           new(notification.BeepDecorator),
 	Discovering: DiscoverOptions{
 		Enable:   true,
@@ -118,7 +111,6 @@ func NewOptions(opts ...Option) *Options {
 		KeepAlive:          defaultOptions.KeepAlive,
 		ClipboardScanDelay: defaultOptions.ClipboardScanDelay,
 		WriteTimeout:       defaultOptions.WriteTimeout,
-		Metadata:           defaultOptions.Metadata,
 		Notifier:           defaultOptions.Notifier,
 		Discovering:        defaultOptions.Discovering,
 	}
@@ -134,14 +126,14 @@ func NewOptions(opts ...Option) *Options {
 func New(
 	clipboard clipboard.Manager,
 	peers *Storage,
-	localClipboard data.Channel,
+	localClipboard Channel,
 	opts ...Option,
 ) *Node {
 	return &Node{
 		clipboard:      clipboard,
 		peers:          peers,
 		localClipboard: localClipboard,
-		lastMessage:    data.NewLastMessage(),
+		lastMessage:    NewLastMessage(),
 		options:        NewOptions(opts...),
 	}
 }
@@ -165,8 +157,8 @@ func (n *Node) ConnectTo(addr string) error {
 	return connErr
 }
 
-func (n *Node) addPeer(hisHand *data.Greet, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
-	metadata := data.MetaDataFromKind(hisHand.Device)
+func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
+	metadata := hisHand.MetaData
 	if n.peers.Exist(metadata.UniqueID()) {
 		log.Trace().Msgf("%s already connected, ignoring", metadata.String())
 		return nil, ErrAlreadyConnected
@@ -210,7 +202,7 @@ func (n *Node) Start() error {
 	n.Notify("started on %s", l.Addr().String())
 
 	log.Info().Str(op, "listen").Msgf("on %s", l.Addr().String())
-	log.Info().Str(op, "metadata").Msg(n.Metadata().String())
+	log.Info().Str(op, "metadata").Msg(domain.SelfMetaData().String())
 
 	defer l.Close()
 
@@ -240,11 +232,10 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		return cipherErr
 	}
 
-	myHand := data.NewGreet(n.options.Metadata)
-
-	myHand.PublicKey = encrypter.PublicKey2Bytes(privateKey.Public())
-
-	hisHand, greetErr := n.greet(myHand, conn)
+	hisHand, greetErr := n.greet(
+		domain.NewGreet(domain.WithPublicKey(encrypter.PublicKey2Bytes(privateKey.Public()))),
+		conn,
+	)
 	if greetErr != nil {
 		log.Error().AnErr("node.greet", greetErr).Send()
 		return greetErr
@@ -263,8 +254,8 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		return addErr
 	}
 	defer n.peers.Delete(peer.MetaData().UniqueID())
-	n.Notify("connected to %s", peer.MetaData().Name())
-	defer n.Notify("Node disconnected %s", peer.MetaData().Name())
+	n.Notify("connected to %s", peer.MetaData().Name)
+	defer n.Notify("Node disconnected %s", peer.MetaData().Name)
 
 	log.Info().Msgf("connected to %s", peer.String())
 	peer.Receive(n.lastMessage)
@@ -279,10 +270,10 @@ func (n *Node) handleConnection(conn net.Conn) error {
 // The method logs the sent messages and their hashes for debugging purposes.
 // The 'msg' parameter is the message to be broadcast.
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
-func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
+func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 	const op = "node.Broadcast"
 
-	n.peers.Tap(func(id data.UniqueID, peer *Peer) {
+	n.peers.Tap(func(id domain.UniqueID, peer *Peer) {
 		if id == ignore {
 			log.Trace().Str(op, "exclude sending to creator node").Msg(peer.String())
 			return
@@ -314,18 +305,18 @@ func (n *Node) Broadcast(msg *data.Message, ignore data.UniqueID) {
 	})
 }
 
-func (n *Node) greet(my *data.Greet, conn net.Conn) (*data.Greet, error) {
-	log.Trace().Msgf("sending greeting to %s -> %s", my.Device.String(), conn.RemoteAddr().String())
-	if _, err := data.EncodeWriter(my, conn); err != nil {
-		return nil, err
+func (n *Node) greet(my domain.Greet, conn net.Conn) (domain.Greet, error) {
+	log.Trace().Msgf("sending greeting to %s -> %s", my.MetaData.String(), conn.RemoteAddr().String())
+	if _, err := protoutil.EncodeWriter(&my, conn); err != nil {
+		return domain.Greet{}, err
 	}
 
-	incoming, decodeErr := data.NewGreetFromReader(conn)
+	incoming, decodeErr := domain.NewGreetFromReader(conn)
 	if decodeErr != nil {
 		return incoming, decodeErr
 	}
 
-	log.Trace().Msgf("received greeting from %s -> %s", incoming.MetaData().String(), conn.RemoteAddr().String())
+	log.Trace().Msgf("received greeting from %s -> %s", incoming.MetaData.String(), conn.RemoteAddr().String())
 
 	if my.Version != incoming.Version {
 		log.Warn().Msgf("version mismatch: %s != %s", my.Version, incoming.Version)
@@ -357,17 +348,13 @@ func (n *Node) MonitorBuffer() {
 	}
 }
 
-func (n *Node) fetchClipboardData() *data.Message {
+func (n *Node) fetchClipboardData() *domain.Message {
 	clip, _ := n.clipboard.Get()
-	return data.MessageFrom(clip, n.Metadata())
+	return domain.MessageFrom(clip)
 }
 
-func (n *Node) setClipboardData(m *data.Message) {
+func (n *Node) setClipboardData(m *domain.Message) {
 	_ = n.clipboard.Set(m.RawData())
-}
-
-func (n *Node) Metadata() *data.MetaData {
-	return n.options.Metadata
 }
 
 func (n *Node) Notify(message string, v ...any) {

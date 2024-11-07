@@ -4,7 +4,7 @@ import (
 	"crypto"
 	"errors"
 	"fmt"
-	"github.com/labi-le/belphegor/internal/node/data"
+	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/rs/zerolog/log"
 	"io"
@@ -21,13 +21,13 @@ func WithConn(conn net.Conn) PeerOption {
 	}
 }
 
-func WithMetaData(meta *data.MetaData) PeerOption {
+func WithMetaData(meta domain.MetaData) PeerOption {
 	return func(p *Peer) {
 		p.metaData = meta
 	}
 }
 
-func WithLocalClipboard(updates data.Channel) PeerOption {
+func WithLocalClipboard(updates Channel) PeerOption {
 	return func(p *Peer) {
 		p.localClipboard = updates
 	}
@@ -50,14 +50,14 @@ func AcquirePeer(opts ...PeerOption) *Peer {
 type Peer struct {
 	conn           net.Conn
 	addr           netip.AddrPort
-	metaData       *data.MetaData
-	localClipboard data.Channel
+	metaData       domain.MetaData
+	localClipboard Channel
 	cipher         *encrypter.Cipher
 }
 
 func (p *Peer) Addr() netip.AddrPort { return p.addr }
 
-func (p *Peer) MetaData() *data.MetaData { return p.metaData }
+func (p *Peer) MetaData() domain.MetaData { return p.metaData }
 
 func (p *Peer) Conn() net.Conn { return p.conn }
 
@@ -73,9 +73,9 @@ func (p *Peer) String() string {
 	)
 }
 
-func (p *Peer) Receive(last *data.LastMessage) {
+func (p *Peer) Receive(last *LastMessage) {
 	for {
-		msg, err := data.ReceiveMessage(p.Conn(), p.cipher)
+		msg, err := domain.ReceiveMessage(p.Conn(), p.cipher)
 		if err != nil {
 			p.handleReceiveError(err)
 			break

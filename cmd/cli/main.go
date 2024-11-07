@@ -8,8 +8,8 @@ import (
 	"github.com/labi-le/belphegor/internal/discovering"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
-	"github.com/labi-le/belphegor/internal/node/data"
 	"github.com/labi-le/belphegor/internal/notification"
+	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
@@ -90,14 +90,13 @@ func main() {
 	// Создаем Node с использованием функциональных опций
 	nd := node.New(
 		clipboard.NewThreadSafe(),
-		storage.NewSyncMapStorage[data.UniqueID, *node.Peer](),
-		make(data.Channel),
+		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
+		make(node.Channel),
 		node.WithPublicPort(port),
 		node.WithBitSize(bitSize),
 		node.WithKeepAlive(keepAlive),
 		node.WithClipboardScanDelay(scanDelay),
 		node.WithWriteTimeout(writeTimeout),
-		node.WithMetadata(data.SelfMetaData()),
 		node.WithNotifier(notificationProvider(notify)),
 		node.WithDiscovering(node.DiscoverOptions{
 			Enable:   discoverEnable,

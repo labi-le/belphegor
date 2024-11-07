@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package belphegor;
 
-option go_package = "internal/types";
+option go_package = "internal/types/proto";
 
 message PublicKey {
   bytes Key = 1;

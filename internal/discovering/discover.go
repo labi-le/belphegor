@@ -3,7 +3,8 @@ package discovering
 import (
 	"fmt"
 	"github.com/labi-le/belphegor/internal/node"
-	"github.com/labi-le/belphegor/internal/node/data"
+	"github.com/labi-le/belphegor/internal/types/domain"
+	proto2 "github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/ip"
 	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
@@ -68,9 +69,9 @@ func (d *Discover) Discover(n *node.Node) {
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
 			PayloadFunc: func() []byte {
-				greet := data.NewGreet(n.Metadata())
+				greet := domain.NewGreet()
 				greet.Port = uint32(d.port)
-				byt, _ := proto.Marshal(greet)
+				byt, _ := proto.Marshal(greet.Proto())
 				return byt
 			},
 			Limit:     d.maxPeers,
@@ -84,11 +85,12 @@ func (d *Discover) Discover(n *node.Node) {
 					return
 				}
 
-				greet := data.NewGreet(n.Metadata())
-				if protoErr := proto.Unmarshal(d.Payload, greet); protoErr != nil {
+				var msg proto2.GreetMessage
+				if protoErr := proto.Unmarshal(d.Payload, &msg); protoErr != nil {
 					log.Error().Err(protoErr).Msg("failed to unmarshal payload")
 					return
 				}
+				greet := domain.GreetFromProto(&msg)
 
 				peerAddr := fmt.Sprintf(
 					"%s:%s",
