@@ -2,17 +2,14 @@ package protoutil
 
 import (
 	"encoding/binary"
-	"errors"
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"io"
 )
 
-// todo: make these values customizable
 const (
-	Length         = 4
-	MaxMessageSize = 16 << 20
+	Length = 4
 )
 
 // encode encodes the source interface and returns the encoded byte slice.
@@ -29,27 +26,19 @@ func encode(src proto.Message) []byte {
 func EncodeWriter(src Proto[proto.Message], w io.Writer) (int, error) {
 	encoded := encode(src.Proto())
 
-	lenBytes := byteslice.Get(Length)
-	defer byteslice.Put(lenBytes)
+	combined := byteslice.Get(Length + len(encoded))
+	defer byteslice.Put(combined)
 
-	binary.BigEndian.PutUint32(lenBytes, uint32(len(encoded)))
+	binary.BigEndian.PutUint32(combined[:Length], uint32(len(encoded)))
+	copy(combined[Length:], encoded)
 
-	n, err := w.Write(lenBytes)
-	if err != nil {
-		return n, err
-	}
-
-	return w.Write(encoded)
+	return w.Write(combined[:Length+len(encoded)])
 }
 
 func DecodeReader(r io.Reader, dst proto.Message) error {
 	length, err := dataLen(r)
 	if err != nil {
 		return err
-	}
-
-	if length > MaxMessageSize {
-		return errors.New("message too large")
 	}
 
 	data := byteslice.Get(length)
