@@ -5,13 +5,16 @@ Belphegor is a clipboard manager that allows you to share your clipboard with ot
 ___
 
 ### Features
+
 - cipher (rsa)
 - peer to peer
 - discovering local nodes
 - image sharing (`wayland` <—> `wayland`, `wayland` <—> `windows`)
 
 ___
+
 ### Dependencies
+
 - linux:
     * xclip or xsel (for skufs) or wl-clipboard (linux)
 - macos:
@@ -19,12 +22,42 @@ ___
 - windows:
     * nothing
 
-
 ### Installation
+
 - [Prebuilt binaries](https://github.com/labi-le/belphegor/releases)
-- [Nix package](https://github.com/labi-le/nixos/blob/main/pkgs/belphegor.nix)
+- Nix flake
+  <details> <summary>as profile</summary>
+
+  ```sh
+  nix profile install github:labi-le/belphegor
+  ```
+  </details>
+  <details>
+  <summary>import the module</summary>
+
+  ```nix
+  {
+    # inputs
+    belphegor.url = "github:labi-le/belphegor";
+    # outputs
+    overlay-belphegor = final: prev: {
+      belphegor = belphegor.packages.${system}.default;
+    };
+  
+    modules = [
+      ({ config, pkgs, ... }: { nixpkgs.overlays = [ overlay-belphegor ]; })
+    ];
+  
+    # add package
+    environment.systemPackages = with pkgs; [
+      belphegor
+    ];
+  }
+  ```
+  </details>
 
 #### Build from source
+
 - Go 1.22
 - git
 - makefile
@@ -36,6 +69,7 @@ sudo make install
 ```
 
 ### Usage
+
 ```
 Usage of belphegor:
   -bit_size int
@@ -65,13 +99,16 @@ Usage of belphegor:
   -write_timeout duration
         Write timeout (default 5s)
 ```
+
 ### Todo
+
 [x] Create github actions for build binary and running tests
 
-[ ] Add the use of unix sockets to track connected nodes
+[x] Add flake
 
 [ ] Debug image sharing for xclip, xsel, pbpaste
 
 [ ] Publish to aur package
 
-[ ] Add disable cipher option
+[ ] Add disable cipher option (maybe)
+
