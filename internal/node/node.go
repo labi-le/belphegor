@@ -226,7 +226,7 @@ func (n *Node) Start() error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) error {
-	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, int(n.options.BitSize))
+	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, n.options.BitSize)
 	if cipherErr != nil {
 		log.Error().AnErr("rsa.GenerateKey", cipherErr).Send()
 		return cipherErr
@@ -284,7 +284,7 @@ func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 		}
 
 		log.Debug().Msgf(
-			"sent %s to %s",
+			"sent %d to %s",
 			msg.ID(),
 			peer.String(),
 		)

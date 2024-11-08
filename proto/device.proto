@@ -8,5 +8,5 @@ option go_package = "internal/types/proto";
 message Device {
   string Name = 1;
   string Arch = 2;
-  string UniqueID = 3;
+  int64 ID = 3;
 }

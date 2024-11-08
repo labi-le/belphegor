@@ -2,19 +2,16 @@ package domain
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"os"
 	"os/user"
 	"runtime"
 )
 
-type UniqueID = uuid.UUID
-
 type MetaData struct {
-	Name     string
-	Arch     string
-	uniqueID UniqueID
+	Name string
+	Arch string
+	ID   UniqueID
 }
 
 var defaultMetadata = initDefaultMetadata()
@@ -28,9 +25,9 @@ func initDefaultMetadata() MetaData {
 	}
 
 	return MetaData{
-		Name:     name,
-		Arch:     runtime.GOARCH,
-		uniqueID: uuid.New(),
+		Name: name,
+		Arch: runtime.GOARCH,
+		ID:   NewID(),
 	}
 }
 
@@ -39,25 +36,25 @@ func SelfMetaData() MetaData {
 }
 
 func (meta MetaData) UniqueID() UniqueID {
-	return meta.uniqueID
+	return meta.ID
 }
 
 func (meta MetaData) String() string {
-	return fmt.Sprintf("%s (%s)", meta.Name, meta.uniqueID)
+	return fmt.Sprintf("%s (%d)", meta.Name, meta.ID)
 }
 
 func MetaDataFromProto(device *proto.Device) MetaData {
 	return MetaData{
-		Name:     device.Name,
-		Arch:     device.Arch,
-		uniqueID: uuid.MustParse(device.UniqueID),
+		Name: device.Name,
+		Arch: device.Arch,
+		ID:   device.ID,
 	}
 }
 
 func (meta MetaData) Proto() *proto.Device {
 	return &proto.Device{
-		Name:     meta.Name,
-		Arch:     meta.Arch,
-		UniqueID: meta.uniqueID.String(),
+		Name: meta.Name,
+		Arch: meta.Arch,
+		ID:   meta.ID,
 	}
 }

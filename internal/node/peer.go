@@ -85,7 +85,7 @@ func (p *Peer) Receive(last *LastMessage) {
 		p.localClipboard <- msg
 
 		log.Debug().Msgf(
-			"received %s from %s",
+			"received %d from %s",
 			msg.ID(),
 			p.String(),
 		)

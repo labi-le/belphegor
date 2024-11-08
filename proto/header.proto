@@ -7,9 +7,9 @@ option go_package = "internal/types/proto";
 
 // Header represents the header of a message
 message Header {
-  string From = 1;
+  int64 From = 1;
   Mime MimeType = 2;
-  string ID = 3;
+  int64 ID = 3;
   google.protobuf.Timestamp Created = 4;
   Clipboard ClipboardProvider = 5;
 }

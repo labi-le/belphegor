@@ -1,12 +1,11 @@
 package domain
 
 import (
-	"github.com/google/uuid"
 	"time"
 )
 
 type Header struct {
-	ID                uuid.UUID
+	ID                UniqueID
 	Created           time.Time
 	From              UniqueID
 	MimeType          MimeType
@@ -15,7 +14,7 @@ type Header struct {
 
 func NewHeader(opts ...Option) Header {
 	header := &Header{
-		ID:                uuid.New(),
+		ID:                NewID(),
 		Created:           time.Now(),
 		From:              SelfMetaData().UniqueID(),
 		ClipboardProvider: CurrentClipboardProvider,

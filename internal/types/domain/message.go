@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/rand"
-	"github.com/google/uuid"
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/image"
 	"github.com/labi-le/belphegor/pkg/protoutil"
@@ -39,9 +38,9 @@ func MessageFromProto(m *proto.Message) *Message {
 			Hash: m.Data.Hash,
 		},
 		Header: Header{
-			ID:                uuid.MustParse(m.Header.ID),
+			ID:                m.Header.ID,
 			Created:           m.Header.Created.AsTime(),
-			From:              uuid.MustParse(m.Header.From),
+			From:              m.Header.From,
 			MimeType:          MimeType(m.Header.MimeType),
 			ClipboardProvider: ClipboardProvider(m.Header.ClipboardProvider.Number()),
 		},
@@ -92,9 +91,9 @@ func (m *Message) Proto() pb.Message {
 			Hash: m.Data.Hash,
 		},
 		Header: &proto.Header{
-			From:              m.From().String(),
+			From:              m.From(),
 			MimeType:          proto.Mime(m.Header.MimeType),
-			ID:                m.ID().String(),
+			ID:                m.ID(),
 			Created:           timestamppb.New(m.Header.Created),
 			ClipboardProvider: proto.Clipboard(m.Header.ClipboardProvider),
 		},

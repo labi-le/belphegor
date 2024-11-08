@@ -3,6 +3,7 @@ module github.com/labi-le/belphegor
 go 1.22
 
 require (
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/gen2brain/beeep v0.0.0-20240516210008-9c006672e7f4
 	github.com/google/uuid v1.6.0
 	github.com/nightlyone/lockfile v1.0.0
