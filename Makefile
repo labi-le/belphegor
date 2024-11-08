@@ -110,3 +110,7 @@ version:
 	@echo "Version: $(VERSION)"
 	@echo "Commit: $(COMMIT_HASH)"
 	@echo "Build time: $(BUILD_TIMESTAMP)"
+
+sri-hash:
+	@read -p "Enter sha256 hash: " hash; \
+	nix hash convert --to sri "sha256:$$hash"
