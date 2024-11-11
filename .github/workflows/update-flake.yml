@@ -5,7 +5,7 @@ permissions:
   pull-requests: write
 
 on:
-  pull_request:
+  push:
 
 jobs:
   update-flake:
@@ -20,30 +20,44 @@ jobs:
 
       - name: Update flake.nix
         run: |
+          # Get version from release tag (remove 'v' prefix if exists)
           VERSION="${{ github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
           
+          # Download checksums.txt from latest release
           CHECKSUMS_URL=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | \
             jq -r '.assets[] | select(.name=="checksums.txt") | .browser_download_url')
           
           curl -sL "$CHECKSUMS_URL" -o checksums.txt
           
+          # Function to convert SHA256 to SRI hash format
           convert_to_sri() {
             echo "sha256-$(echo -n "$1" | xxd -r -p | base64)"
           }
           
+          # Extract hashes from checksums.txt and convert to SRI
           AMD64_HASH=$(grep "belphegor_${VERSION}_linux_amd64$" checksums.txt | cut -d ' ' -f 1)
           ARMV6_HASH=$(grep "belphegor_${VERSION}_linux_armv6$" checksums.txt | cut -d ' ' -f 1)
           
           AMD64_SRI=$(convert_to_sri "$AMD64_HASH")
           ARMV6_SRI=$(convert_to_sri "$ARMV6_HASH")
           
-          sed -i "s/version = \".*\"/version = \"${VERSION}\"/" flake.nix
+          # Debug output
+          echo "Version: $VERSION"
+          echo "AMD64 SRI: $AMD64_SRI"
+          echo "ARMV6 SRI: $ARMV6_SRI"
           
-          sed -i "/x86_64-linux = {/,/};/ s/hash = \"sha256-[^\"]*\"/hash = \"${AMD64_SRI}\"/" flake.nix
-          sed -i "/aarch64-linux = {/,/};/ s/hash = \"sha256-[^\"]*\"/hash = \"${ARMV6_SRI}\"/" flake.nix
+          # Update version in flake.nix (precise pattern match)
+          sed -i 's/version = "[^"]*";/version = "'"${VERSION}"'";/' flake.nix
           
-          # Обновляем flake.lock
+          # Update hashes in flake.nix (precise pattern match)
+          sed -i '/x86_64-linux = {/,/hash =/ s/hash = "sha256-[^"]*"/hash = "'"${AMD64_SRI}"'"/' flake.nix
+          sed -i '/aarch64-linux = {/,/hash =/ s/hash = "sha256-[^"]*"/hash = "'"${ARMV6_SRI}"'"/' flake.nix
+          
+          # Show changes for verification
+          git diff flake.nix
+          
+          # Update flake.lock
           nix flake update
 
       - name: Create Pull Request
@@ -52,10 +66,12 @@ jobs:
           commit-message: "chore: update flake.nix and flake.lock to ${{ github.event.release.tag_name }}"
           title: "Update flake.nix to ${{ github.event.release.tag_name }}"
           body: |
-            Automatically update flake.nix for a new release ${{ github.event.release.tag_name }}
+            Automatic update of flake.nix for release ${{ github.event.release.tag_name }}
             
-            - Updated package version
-            - Updated SRI hashes for binary files
+            Updates:
+            - Version: ${VERSION}
+            - x86_64-linux hash: ${AMD64_SRI}
+            - aarch64-linux hash: ${ARMV6_SRI}
             - Updated flake.lock
           branch: update-flake
           delete-branch: true
