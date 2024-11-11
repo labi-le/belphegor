@@ -66,6 +66,7 @@ func New(opts ...Option) *Discover {
 }
 
 func (d *Discover) Discover(n *node.Node) {
+	ctxLog := log.With().Str("op", "discover.Discover").Logger()
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
 			PayloadFunc: func() []byte {
@@ -87,17 +88,23 @@ func (d *Discover) Discover(n *node.Node) {
 
 				var msg proto2.GreetMessage
 				if protoErr := proto.Unmarshal(d.Payload, &msg); protoErr != nil {
-					log.Error().Err(protoErr).Msg("failed to unmarshal payload")
+					ctxLog.Err(protoErr).Msg("failed to unmarshal payload")
 					return
 				}
 				greet := domain.GreetFromProto(&msg)
 
-				peerAddr := fmt.Sprintf(
+				ctxLog.Info().
+					Str("op", "discovering").
+					Str("peer", greet.MetaData.String()).
+					Str("address", peerIP.String()).
+					Uint32("port", greet.Port).
+					Msg("discovered new peer")
+
+				go n.ConnectTo(fmt.Sprintf(
 					"%s:%s",
 					peerIP.String(),
 					strconv.Itoa(int(greet.Port)),
-				)
-				go n.ConnectTo(peerAddr)
+				))
 			},
 		},
 	)

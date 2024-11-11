@@ -143,24 +143,28 @@ func New(
 // The 'addr' parameter should be in the format "host:port" to specify the remote clipboard's address.
 // If the connection is successfully established, it returns nil; otherwise, it returns an error.
 func (n *Node) ConnectTo(addr string) error {
+	ctxLog := log.With().Str("op", "node.ConnectTo").Logger()
+
 	conn, err := net.Dial("tcp4", addr)
 	if err != nil {
-		log.Error().AnErr("net.Dial", err).Msg("failed to handle connection")
+		ctxLog.Error().AnErr("net.Dial", err).Msg("failed to handle connection")
 		return err
 	}
 
-	connErr := n.handleConnection(conn)
-	if connErr != nil {
-		log.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
+	if connErr := n.handleConnection(conn); connErr != nil {
+		ctxLog.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
+		return connErr
 	}
 
-	return connErr
+	return nil
 }
 
 func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
+	ctxLog := log.With().Str("op", "node.addPeer").Logger()
+
 	metadata := hisHand.MetaData
 	if n.peers.Exist(metadata.UniqueID()) {
-		log.Trace().Msgf("%s already connected, ignoring", metadata.String())
+		ctxLog.Trace().Msgf("%s already connected, ignoring", metadata.String())
 		return nil, ErrAlreadyConnected
 	}
 
@@ -192,19 +196,22 @@ func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.
 // The 'scanDelay' parameter determines the interval at which the clipboard is scanned and updated.
 // The method returns an error if it fails to start listening.
 func (n *Node) Start() error {
-	const op = "node.Start"
+	ctxLog := log.With().Str("op", "node.Start").Logger()
 
 	l, err := net.Listen("tcp4", fmt.Sprintf(":%d", n.options.PublicPort))
 	if err != nil {
 		return err
 	}
-
-	n.Notify("started on %s", l.Addr().String())
-
-	log.Info().Str(op, "listen").Msgf("on %s", l.Addr().String())
-	log.Info().Str(op, "metadata").Msg(domain.SelfMetaData().String())
-
 	defer l.Close()
+
+	addr := l.Addr().String()
+	metadata := domain.SelfMetaData()
+
+	n.Notify("started on %s", addr)
+	ctxLog.Info().
+		Str("address", addr).
+		Str("metadata", metadata.String()).
+		Msg("node started")
 
 	go n.MonitorBuffer()
 	go n.lastMessage.ListenUpdates()
@@ -215,20 +222,22 @@ func (n *Node) Start() error {
 			return err
 		}
 
-		log.Trace().Str(op, "accept connection").Msgf("from %s", conn.RemoteAddr().String())
+		ctxLog.Trace().Msgf("accepted connection from %s", conn.RemoteAddr())
+
 		go func() {
-			connErr := n.handleConnection(conn)
-			if connErr != nil {
-				log.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
+			if connErr := n.handleConnection(conn); connErr != nil {
+				ctxLog.Err(connErr).Msg("failed to handle connection")
 			}
 		}()
 	}
 }
 
 func (n *Node) handleConnection(conn net.Conn) error {
+	ctxLog := log.With().Str("op", "node.handleConnection").Logger()
+
 	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, n.options.BitSize)
 	if cipherErr != nil {
-		log.Error().AnErr("rsa.GenerateKey", cipherErr).Send()
+		ctxLog.Err(cipherErr).Msg("failed to generate key")
 		return cipherErr
 	}
 
@@ -237,7 +246,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		conn,
 	)
 	if greetErr != nil {
-		log.Error().AnErr("node.greet", greetErr).Send()
+		ctxLog.Err(greetErr).Msg("failed to greet")
 		return greetErr
 	}
 
@@ -250,16 +259,17 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		if errors.Is(addErr, ErrAlreadyConnected) {
 			return nil
 		}
-		log.Error().AnErr("node.addPeer", addErr).Send()
+		ctxLog.Err(addErr).Msg("failed to add peer")
 		return addErr
 	}
 	defer n.peers.Delete(peer.MetaData().UniqueID())
+
 	n.Notify("connected to %s", peer.MetaData().Name)
 	defer n.Notify("Node disconnected %s", peer.MetaData().Name)
 
-	log.Info().Msgf("connected to %s", peer.String())
-	peer.Receive(n.lastMessage)
+	ctxLog.Info().Str("peer", peer.String()).Msg("connected")
 
+	peer.Receive(n.lastMessage)
 	return nil
 }
 
@@ -271,11 +281,11 @@ func (n *Node) handleConnection(conn net.Conn) error {
 // The 'msg' parameter is the message to be broadcast.
 // The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
 func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
-	const op = "node.Broadcast"
+	ctxLog := log.With().Str("op", "node.Broadcast").Logger()
 
 	n.peers.Tap(func(id domain.UniqueID, peer *Peer) {
 		if id == ignore {
-			log.Trace().Str(op, "exclude sending to creator node").Msg(peer.String())
+			ctxLog.Trace().Msgf("exclude sending to creator node: %s", peer.String())
 			return
 		}
 
@@ -283,7 +293,7 @@ func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 			return
 		}
 
-		log.Debug().Msgf(
+		ctxLog.Debug().Msgf(
 			"sent %d to %s",
 			msg.ID(),
 			peer.String(),
@@ -292,21 +302,20 @@ func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 		// Set write timeout if the writer implements net.Conn
 		err := peer.Conn().SetWriteDeadline(time.Now().Add(n.options.WriteTimeout))
 		if err != nil {
-			log.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
+			ctxLog.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
 			return
 		}
 		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
 
 		_, encErr := msg.WriteEncrypted(peer.Signer(), peer.Conn())
 		if encErr != nil {
-			log.Error().AnErr("message.WriteEncrypted", encErr).Send()
+			ctxLog.Error().AnErr("message.WriteEncrypted", encErr).Send()
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
 	})
 }
 
 func (n *Node) greet(my domain.Greet, conn net.Conn) (domain.Greet, error) {
-	log.Trace().Msgf("sending greeting to %s -> %s", my.MetaData.String(), conn.RemoteAddr().String())
 	if _, err := protoutil.EncodeWriter(&my, conn); err != nil {
 		return domain.Greet{}, err
 	}
@@ -316,17 +325,19 @@ func (n *Node) greet(my domain.Greet, conn net.Conn) (domain.Greet, error) {
 		return incoming, decodeErr
 	}
 
-	log.Trace().Msgf("received greeting from %s -> %s", incoming.MetaData.String(), conn.RemoteAddr().String())
+	ctxLog := log.With().Str("op", "node.greet").Logger()
+	ctxLog.Trace().Msgf("received greeting from %s -> %s", incoming.MetaData.String(), conn.RemoteAddr().String())
 
 	if my.Version != incoming.Version {
-		log.Warn().Msgf("version mismatch: %s != %s", my.Version, incoming.Version)
+		ctxLog.Warn().Msgf("version mismatch: %s != %s", my.Version, incoming.Version)
 	}
 	return incoming, nil
 }
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
 func (n *Node) MonitorBuffer() {
-	const op = "node.MonitorBuffer"
+	ctxLog := log.With().Str("op", "node.MonitorBuffer").Logger()
+
 	var (
 		currentClipboard = n.fetchClipboardData()
 	)
@@ -335,7 +346,7 @@ func (n *Node) MonitorBuffer() {
 		for range time.Tick(n.options.ClipboardScanDelay) {
 			newClipboard := n.fetchClipboardData()
 			if !newClipboard.Duplicate(currentClipboard) {
-				log.Trace().Str(op, "local clipboard data changed").Send()
+				ctxLog.Trace().Msg("local clipboard data changed")
 
 				currentClipboard = newClipboard
 				n.localClipboard <- currentClipboard
