@@ -27,8 +27,7 @@ MINOR := $(shell echo $(CURRENT_VERSION) | cut -d. -f2)
 PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
 
-
-.PHONY: build build-windows run install install-windows uninstall clean clean-windows \
+.PHONY: build run install uninstall clean \
     tests lint profiling gen-proto install-proto version tag-patch tag-minor \
     tag-major tag-delete
 
@@ -38,14 +37,6 @@ run:
 build: clean
 	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
 
-build-windows: clean-windows
-	set GOOS=windows
-	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE).exe $(MAIN_PATH)
-
-install-windows: build-windows
-	powershell.exe -command "Copy-Item -Path '$(BUILD_PATH)$(PACKAGE).exe' \
-	 -Destination '$(APPDATA)\Microsoft\Windows\Start Menu\Programs\Startup\$(PACKAGE).exe' -Force"
-
 install: build
 	sudo cp $(BUILD_PATH)$(PACKAGE) $(INSTALL_PATH)$(PACKAGE)
 
@@ -54,9 +45,6 @@ uninstall:
 
 clean:
 	rm -rf $(FULL_PATH)
-
-clean-windows:
-	powershell.exe -command "if (Test-Path $(FULL_PATH).exe) { Remove-Item -Recurse -Force -Path $(FULL_PATH).exe }"
 
 tests:
 	go test ./...
