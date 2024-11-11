@@ -70,6 +70,7 @@ func init() {
 
 func main() {
 	if debug {
+		port = 7777
 		log.Info().Msg("debug mode enabled")
 	}
 
