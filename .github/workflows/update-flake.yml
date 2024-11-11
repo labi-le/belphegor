@@ -1,0 +1,55 @@
+name: Update flake.nix on Release
+
+on:
+  push:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-flake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Update flake.nix
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          
+          CHECKSUMS_URL=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | \
+            jq -r '.assets[] | select(.name=="checksums.txt") | .browser_download_url')
+          
+          curl -sL "$CHECKSUMS_URL" -o checksums.txt
+          
+          AMD64_HASH=$(grep "belphegor_${VERSION}_linux_amd64$" checksums.txt | cut -d ' ' -f 1)
+          ARMV6_HASH=$(grep "belphegor_${VERSION}_linux_armv6$" checksums.txt | cut -d ' ' -f 1)
+          
+          AMD64_HASH_NIX="sha256-$(echo -n $AMD64_HASH | base64)"
+          ARMV6_HASH_NIX="sha256-$(echo -n $ARMV6_HASH | base64)"
+          
+          sed -i "s/version = \".*\"/version = \"${VERSION}\"/" flake.nix
+          
+          sed -i "s/hash = \"sha256-.*\";  # x86_64-linux/hash = \"${AMD64_HASH_NIX}\";  # x86_64-linux/" flake.nix
+          sed -i "s/hash = \"sha256-.*\";  # aarch64-linux/hash = \"${ARMV6_HASH_NIX}\";  # aarch64-linux/" flake.nix
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update flake.nix to ${{ github.event.release.tag_name }}"
+          title: "Update flake.nix to ${{ github.event.release.tag_name }}"
+          body: |
+            Automatically update flake.nix for new releaseа ${{ github.event.release.tag_name }}
+            
+            - Updated version ${VERSION}
+            - Updated SHA256 hashes:
+              - x86_64-linux (linux_amd64)
+              - aarch64-linux (linux_armv6)
+          branch: update-flake
+          delete-branch: true
