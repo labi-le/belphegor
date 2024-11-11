@@ -102,3 +102,15 @@ version:
 sri-hash:
 	@read -p "Enter sha256 hash: " hash; \
 	nix hash convert --to sri "sha256:$$hash"
+
+dump:
+	@echo "=== START PROJECT CODE DUMP ===" > project_code.txt
+	@echo "Created at: $$(date)" >> project_code.txt
+	@echo "" >> project_code.txt
+	@find . -type f -name "*.go" | while read file; do \
+		echo "=== FILE: $$file ===" >> project_code.txt; \
+		echo "=== START CODE ===" >> project_code.txt; \
+		cat "$$file" >> project_code.txt; \
+		echo "=== END CODE ===" >> project_code.txt; \
+		echo "" >> project_code.txt; \
+	done
