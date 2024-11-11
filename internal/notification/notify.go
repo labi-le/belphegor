@@ -15,7 +15,9 @@ type BeepDecorator struct {
 }
 
 func (b BeepDecorator) Notify(message string, v ...any) {
-	log.Err(beeep.Notify(b.Title, fmt.Sprintf(message, v...), "")).Send()
+	if err := beeep.Notify(b.Title, fmt.Sprintf(message, v...), ""); err != nil {
+		log.Err(err).Msg("failed to send system notification")
+	}
 }
 
 type NullNotifier struct{}
