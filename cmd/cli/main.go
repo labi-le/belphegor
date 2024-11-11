@@ -11,6 +11,7 @@ import (
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/console"
 	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
@@ -28,8 +29,8 @@ var (
 	showVersion bool
 	showHelp    bool
 	notify      bool
+	hidden      bool
 
-	// Флаги для конфигурации
 	port           int
 	discoverEnable bool
 	discoverDelay  time.Duration
@@ -60,6 +61,7 @@ func init() {
 	flag.BoolVar(&notify, "notify", true, "Enable notifications")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
+	flag.BoolVar(&hidden, "hidden", false, "Hide console window (for windows user)")
 
 	flag.Parse()
 
@@ -85,6 +87,11 @@ func main() {
 	if showHelp {
 		flag.Usage()
 		return
+	}
+
+	if hidden {
+		console.HideConsoleWindow()
+
 	}
 
 	// Создаем Node с использованием функциональных опций

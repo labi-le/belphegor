@@ -9,6 +9,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/schollz/peerdiscovery v1.7.5
 	golang.org/x/image v0.22.0
+	golang.org/x/sys v0.27.0
 	google.golang.org/protobuf v1.35.1
 )
 
@@ -20,6 +21,5 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
-	golang.org/x/net v0.29.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/net v0.31.0 // indirect
 )

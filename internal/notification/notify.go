@@ -3,6 +3,7 @@ package notification
 import (
 	"fmt"
 	"github.com/gen2brain/beeep"
+	"github.com/rs/zerolog/log"
 )
 
 type Notifier interface {
@@ -14,7 +15,7 @@ type BeepDecorator struct {
 }
 
 func (b BeepDecorator) Notify(message string, v ...any) {
-	beeep.Notify(b.Title, fmt.Sprintf(message, v...), "")
+	log.Err(beeep.Notify(b.Title, fmt.Sprintf(message, v...), "")).Send()
 }
 
 type NullNotifier struct{}
