@@ -10,20 +10,24 @@ permissions:
   contents: write
   id-token: write
   packages: write
+  pull-requests: write
 
 jobs:
-  release:
+  goreleaser:
     runs-on: ubuntu-latest
     steps:
       - if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: echo "flags=--snapshot" >> $GITHUB_ENV
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-go@v5
         with:
           go-version: 1.23
           cache: true
+
       - uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
@@ -31,3 +35,80 @@ jobs:
           args: release --clean ${{ env.flags }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-flake:
+    needs: goreleaser
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: flake-update
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Update flake.nix
+        working-directory: flake-update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$version" >> $GITHUB_ENV
+          
+          # Get checksums from just created release
+          sleep 2
+          curl -sL "https://github.com/labi-le/belphegor/releases/download/v$version/checksums.txt" -o checksums.txt
+          
+          # Get hashes and convert them
+          amd64_hash=$(grep "belphegor_${version}_linux_amd64$" checksums.txt | cut -d ' ' -f1)
+          arm_hash=$(grep "belphegor_${version}_linux_armv6$" checksums.txt | cut -d ' ' -f1)
+          
+          amd64_sri=$(nix hash convert --to sri "sha256:$amd64_hash")
+          arm_sri=$(nix hash convert --to sri "sha256:$arm_hash")
+          
+          echo "AMD64_SRI=$amd64_sri" >> $GITHUB_ENV
+          echo "ARMV6_SRI=$arm_sri" >> $GITHUB_ENV
+          
+          # Update version
+          sed -i "s/version = \"[^\"]*\"/version = \"$version\"/" flake.nix
+          
+          # Update AMD64 hash
+          sed -i "s|hash = \"sha256-[^\"]*\"; # x86_64-linux|hash = \"$amd64_sri\"; # x86_64-linux|" flake.nix
+          
+          # Update ARM hash
+          sed -i "s|hash = \"sha256-[^\"]*\"; # aarch64-linux|hash = \"$arm_sri\"; # aarch64-linux|" flake.nix
+          
+          # Update flake.lock
+          nix flake update
+          
+          # Remove checksums file
+          rm checksums.txt
+
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          path: flake-update
+          base: main
+          commit-message: "chore: update flake.nix and flake.lock to v${{ env.VERSION }}"
+          title: "Update flake.nix to v${{ env.VERSION }}"
+          body: |
+            Automatic update of flake.nix for release v${{ env.VERSION }}
+            
+            Updates:
+            - Version: ${{ env.VERSION }}
+            - x86_64-linux hash: ${{ env.AMD64_SRI }}
+            - aarch64-linux hash: ${{ env.ARMV6_SRI }}
+            - Updated flake.lock
+          branch: update-flake
+          delete-branch: true
+
+      - name: Enable Pull Request Automerge
+        if: steps.cpr.outputs.pull-request-operation == 'created'
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+          merge-method: merge
