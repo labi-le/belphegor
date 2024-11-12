@@ -74,34 +74,30 @@ func (p *Peer) String() string {
 }
 
 func (p *Peer) Receive(last *LastMessage) {
+	ctxLog := log.With().Str("op", "peer.Receive").Logger()
+
 	for {
 		msg, err := domain.ReceiveMessage(p.Conn(), p.cipher)
 		if err != nil {
-			p.handleReceiveError(err)
+			var opErr *net.OpError
+			if errors.As(err, &opErr) || errors.Is(err, io.EOF) {
+				ctxLog.Trace().Err(opErr).Msg("connection closed")
+				return
+			}
+
+			ctxLog.Err(err).Msg("failed to receive message")
 			break
 		}
 
 		last.Update <- msg
 		p.localClipboard <- msg
 
-		log.Debug().Msgf(
+		ctxLog.Debug().Msgf(
 			"received %d from %s",
 			msg.ID(),
 			p.String(),
 		)
 	}
 
-	log.Info().Msgf("%s disconnected", p.String())
-}
-
-func (p *Peer) handleReceiveError(err error) {
-	const op = "peer.handleReceiveError"
-
-	var opErr *net.OpError
-	if errors.As(err, &opErr) || errors.Is(err, io.EOF) {
-		log.Trace().AnErr(op, opErr).Msg("connection closed")
-		return
-	}
-
-	log.Error().AnErr(op, err).Msg("failed to receive message")
+	ctxLog.Info().Msgf("%s disconnected", p.String())
 }

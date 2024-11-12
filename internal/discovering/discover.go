@@ -94,7 +94,6 @@ func (d *Discover) Discover(n *node.Node) {
 				greet := domain.GreetFromProto(&msg)
 
 				ctxLog.Info().
-					Str("op", "discovering").
 					Str("peer", greet.MetaData.String()).
 					Str("address", peerIP.String()).
 					Uint32("port", greet.Port).
@@ -110,6 +109,6 @@ func (d *Discover) Discover(n *node.Node) {
 	)
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to discover nodes")
+		ctxLog.Fatal().Err(err).Msg("failed to discover nodes")
 	}
 }

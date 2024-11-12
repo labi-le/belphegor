@@ -124,7 +124,6 @@ func main() {
 		}()
 	}
 
-	// Используем функциональные опции для discovering
 	if discoverEnable {
 		go discovering.New(
 			discovering.WithMaxPeers(maxPeers),
