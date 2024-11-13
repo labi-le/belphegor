@@ -82,6 +82,8 @@ Usage of belphegor:
         Delay between node discovery (default 5m0s)
   -help
         Show help
+  -hidden
+        Hide console window (for windows user)
   -keep_alive duration
         Interval for checking connections between nodes (default 1m0s)
   -max_peers int
