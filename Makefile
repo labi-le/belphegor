@@ -20,7 +20,6 @@ LDFLAGS=-ldflags="-X '${METADATA_PACKAGE}.Version=${VERSION}' \
                   -s -w \
                   -extldflags '-static'"
 
-# Парсинг текущей версии
 CURRENT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 MAJOR := $(shell echo $(CURRENT_VERSION) | cut -d. -f1 | tr -d 'v')
 MINOR := $(shell echo $(CURRENT_VERSION) | cut -d. -f2)
@@ -51,11 +50,6 @@ tests:
 
 lint:
 	golangci-lint run
-
-profiling:
-	powershell.exe -command Invoke-WebRequest -Uri "http://localhost:8080/debug/pprof/heap" -OutFile "heap.out"
-	go tool pprof heap.out
-
 gen-proto: install-proto
 	@protoc --proto_path=proto --go_out=. proto/*
 
