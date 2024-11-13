@@ -43,28 +43,18 @@ release:
 
 nfpms:
   - vendor: labi-le
-
-
-    # Your app's homepage.
     homepage: https://github.com/labi-le/belphegor
-
-    # Your app's maintainer (probably you).
     maintainer: labi-le <i@labile.cc>
-
-    # Your app's description.
     description: |-
       share clipboard on network
 
-    # Your app's license.
     license: MIT
 
-    # Formats to be generated.
     formats:
       - deb
       - rpm
       - archlinux
 
-    # Packages your package recommends installing. (overridable)
     recommends:
       - wl-clipboard
       - xclip
