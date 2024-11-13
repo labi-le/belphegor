@@ -1,7 +1,6 @@
 project_name: belphegor
 before:
   hooks:
-    - go mod tidy
     - go generate ./...
 archives:
   - format: binary
