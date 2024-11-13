@@ -7,6 +7,7 @@ INSTALL_PATH = /usr/bin/
 CGO_ENABLED=0
 
 FULL_PATH = $(BUILD_PATH)$(PACKAGE)
+PWD = $(shell pwd)
 
 VERSION=$(shell git describe --tags --always --abbrev=0 --match='v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | sed 's/^.//')
 COMMIT_HASH=$(shell git rev-parse --short HEAD)
@@ -25,34 +26,31 @@ MAJOR := $(shell echo $(CURRENT_VERSION) | cut -d. -f1 | tr -d 'v')
 MINOR := $(shell echo $(CURRENT_VERSION) | cut -d. -f2)
 PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
-
-.PHONY: build run install uninstall clean \
-    tests lint profiling gen-proto install-proto version tag-patch tag-minor \
-    tag-major tag-delete
-
+.PHONY: run
 run:
 	go run $(MAIN_PATH) -node_discover=true -debug -scan_delay 1s
 
+.PHONY: build
 build: clean
 	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
 
-install: build
-	sudo cp $(BUILD_PATH)$(PACKAGE) $(INSTALL_PATH)$(PACKAGE)
-
-uninstall:
-	sudo rm $(INSTALL_PATH)$(PACKAGE)
-
+.PHONY: clean
 clean:
 	rm -rf $(FULL_PATH)
 
+.PHONY: tests
 tests:
 	go test ./...
 
+.PHONY: lint
 lint:
 	golangci-lint run
+
+.PHONY: gen-proto
 gen-proto: install-proto
 	@protoc --proto_path=proto --go_out=. proto/*
 
+.PHONY: install-proto
 install-proto:
 	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
@@ -69,15 +67,19 @@ define create_tag
 	fi
 endef
 
+.PHONY: tag-patch
 tag-patch:
 	$(call create_tag,v$(MAJOR).$(MINOR).$$(( $(PATCH) + 1 )))
 
+.PHONY: tag-minor
 tag-minor:
 	$(call create_tag,v$(MAJOR).$$(( $(MINOR) + 1 )).0)
 
+.PHONY: tag-major
 tag-major:
 	$(call create_tag,v$$(( $(MAJOR) + 1 )).0.0)
 
+.PHONY: tag-delete
 tag-delete:
 	@echo "Current version: $(CURRENT_VERSION)"
 	@read -p "Delete tag $(CURRENT_VERSION)? [y/N] " confirm; \
@@ -88,15 +90,18 @@ tag-delete:
 		echo "Aborted"; \
 	fi
 
+.PHONY: version
 version:
 	@echo "Version: $(VERSION)"
 	@echo "Commit: $(COMMIT_HASH)"
 	@echo "Build time: $(BUILD_TIMESTAMP)"
 
+.PHONY: sri-hash
 sri-hash:
 	@read -p "Enter sha256 hash: " hash; \
 	nix hash convert --to sri "sha256:$$hash"
 
+.PHONY: dump
 dump:
 	@echo "=== START PROJECT CODE DUMP ===" > project_code.txt
 	@echo "Created at: $$(date)" >> project_code.txt
@@ -108,3 +113,10 @@ dump:
 		echo "=== END CODE ===" >> project_code.txt; \
 		echo "" >> project_code.txt; \
 	done
+
+.PHONY: dist
+dist:
+	docker run --rm \
+        -v $(PWD):/go/src/github.com/labi-le/belphegor \
+        -w /go/src/github.com/labi-le/belphegor \
+        goreleaser/goreleaser release --clean --snapshot
