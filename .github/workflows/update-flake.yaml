@@ -10,6 +10,9 @@ jobs:
   update-flake:
     runs-on: ubuntu-latest
     steps:
+      - if: ${{ github.event.workflow_run.conclusion != 'success' }}
+        run: echo 'No way' && exit 1
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
