@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
 	"github.com/labi-le/belphegor/internal/discovering"
@@ -16,6 +15,7 @@ import (
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	flag "github.com/spf13/pflag"
 	"os"
 	"path/filepath"
 	"time"
@@ -48,8 +48,8 @@ var (
 )
 
 func init() {
-	flag.StringVar(&addressIP, "connect", "", "Address in ip:port format to connect to the node")
-	flag.IntVar(&port, "port", netstack.RandomPort(), "Port to use. Default: random")
+	flag.StringVarP(&addressIP, "connect", "c", "", "Address in ip:port format to connect to the node")
+	flag.IntVarP(&port, "port", "p", netstack.RandomPort(), "Port to use. Default: random")
 	flag.BoolVar(&discoverEnable, "node_discover", true, "Find local nodes on the network and connect to them")
 	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
 	flag.DurationVar(&scanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
@@ -57,10 +57,10 @@ func init() {
 	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
 	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
 	flag.IntVar(&bitSize, "bit_size", 2048, "RSA key bit size")
-	flag.BoolVar(&debug, "debug", false, "Show debug logs")
+	flag.BoolVarP(&debug, "debug", "d", false, "Show debug logs")
 	flag.BoolVar(&notify, "notify", true, "Enable notifications")
-	flag.BoolVar(&showVersion, "version", false, "Show version")
-	flag.BoolVar(&showHelp, "help", false, "Show help")
+	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
+	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
 	flag.BoolVar(&hidden, "hidden", false, "Hide console window (for windows user)")
 
 	flag.Parse()
@@ -95,7 +95,6 @@ func main() {
 
 	}
 
-	// Создаем Node с использованием функциональных опций
 	nd := node.New(
 		clipboard.NewThreadSafe(),
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),

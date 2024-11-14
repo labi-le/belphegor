@@ -28,7 +28,7 @@ PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
 .PHONY: run
 run:
-	go run $(MAIN_PATH) -node_discover=true -debug -scan_delay 1s
+	go run $(MAIN_PATH) --node_discover=true --debug --scan_delay 1s
 
 .PHONY: build
 build: clean
