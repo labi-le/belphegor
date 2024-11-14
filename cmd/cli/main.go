@@ -148,7 +148,7 @@ func notificationProvider(enable bool) notification.Notifier {
 
 func initLogger(debug bool) {
 	if debug {
-		log.Logger = log.With().Caller().Logger()
+		log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 		zerolog.CallerMarshalFunc = func(_ uintptr, file string, line int) string {
 			short := file
