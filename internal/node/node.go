@@ -1,8 +1,6 @@
 package node
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/netstack"
@@ -235,16 +233,13 @@ func (n *Node) Start() error {
 func (n *Node) handleConnection(conn net.Conn) error {
 	ctxLog := log.With().Str("op", "node.handleConnection").Logger()
 
-	privateKey, cipherErr := rsa.GenerateKey(rand.Reader, n.options.BitSize)
+	hs, cipherErr := newHandshake(n.options.BitSize)
 	if cipherErr != nil {
 		ctxLog.Err(cipherErr).Msg("failed to generate key")
 		return cipherErr
 	}
 
-	hisHand, greetErr := n.greet(
-		domain.NewGreet(domain.WithPublicKey(encrypter.PublicKey2Bytes(privateKey.Public()))),
-		conn,
-	)
+	hisHand, cipher, greetErr := hs.exchange(conn)
 	if greetErr != nil {
 		ctxLog.Err(greetErr).Msg("failed to greet")
 		return greetErr
@@ -252,7 +247,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 
 	peer, addErr := n.addPeer(
 		hisHand,
-		encrypter.NewCipher(privateKey, encrypter.Bytes2PublicKey(hisHand.PublicKey)),
+		cipher,
 		conn,
 	)
 	if addErr != nil {
