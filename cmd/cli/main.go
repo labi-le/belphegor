@@ -96,7 +96,7 @@ func main() {
 	}
 
 	nd := node.New(
-		clipboard.NewThreadSafe(),
+		clipboard.New(),
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
 		make(node.Channel),
 		node.WithPublicPort(port),

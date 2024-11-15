@@ -37,23 +37,5 @@ func findClipboardManager() Manager {
 }
 
 func New() Manager {
-	return &wrapped{
-		findClipboardManager(),
-	}
-}
-
-type wrapped struct {
-	manager Manager
-}
-
-func (w *wrapped) Set(data []byte) error {
-	return w.manager.Set(data)
-}
-
-func (w *wrapped) Get() ([]byte, error) {
-	return w.manager.Get()
-}
-
-func (w *wrapped) Name() string {
-	return w.manager.Name()
+	return findClipboardManager()
 }
