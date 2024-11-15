@@ -349,7 +349,9 @@ func (n *Node) MonitorBuffer() {
 		}
 	}()
 	for msg := range n.localClipboard {
-		n.setClipboardData(msg)
+		if !msg.My() {
+			n.setClipboardData(msg)
+		}
 		n.Broadcast(msg, msg.From())
 	}
 }
@@ -360,6 +362,7 @@ func (n *Node) fetchClipboardData() *domain.Message {
 }
 
 func (n *Node) setClipboardData(m *domain.Message) {
+	log.Trace().Msg("set")
 	_ = n.clipboard.Set(m.RawData())
 }
 

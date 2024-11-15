@@ -76,6 +76,10 @@ func (m *Message) From() UniqueID {
 	return m.Header.From
 }
 
+func (m *Message) My() bool {
+	return m.From() == SelfMetaData().UniqueID()
+}
+
 func (m *Message) ID() UniqueID {
 	return m.Header.ID
 }
