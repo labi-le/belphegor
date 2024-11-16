@@ -17,14 +17,16 @@ type handshake struct {
 	private crypto.Decrypter
 }
 
-func newHandshake(bitSize int) (*handshake, error) {
+func newHandshake(bitSize int, meta domain.MetaData) (*handshake, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, bitSize)
 	if err != nil {
 		return nil, fmt.Errorf("generate key: %w", err)
 	}
 
 	return &handshake{
-		my:      domain.NewGreet(domain.WithPublicKey(encrypter.PublicKey2Bytes(privateKey.Public()))),
+		my: domain.NewGreet(
+			domain.WithPublicKey(encrypter.PublicKey2Bytes(privateKey.Public())),
+			domain.WithMetadata(meta)),
 		private: privateKey,
 	}, nil
 }

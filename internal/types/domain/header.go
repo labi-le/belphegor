@@ -16,7 +16,6 @@ func NewHeader(opts ...Option) Header {
 	header := &Header{
 		ID:                NewID(),
 		Created:           time.Now(),
-		From:              SelfMetaData().UniqueID(),
 		ClipboardProvider: CurrentClipboardProvider,
 	}
 	for _, opt := range opts {
@@ -37,5 +36,11 @@ func WithClipboardProvider(cp ClipboardProvider) Option {
 func WithMime(mime MimeType) Option {
 	return func(header *Header) {
 		header.MimeType = mime
+	}
+}
+
+func WithFrom(from UniqueID) Option {
+	return func(header *Header) {
+		header.From = from
 	}
 }

@@ -20,11 +20,12 @@ type Message struct {
 }
 
 // MessageFrom creates a new Message with the provided data.
-func MessageFrom(data []byte) *Message {
+func MessageFrom(data []byte, from UniqueID) *Message {
 	msg := &Message{
 		Data: NewData(data),
 		Header: NewHeader(
 			WithMime(MimeFromData(data)),
+			WithFrom(from),
 		),
 	}
 
@@ -74,10 +75,6 @@ func (m *Message) Duplicate(new *Message) bool {
 
 func (m *Message) From() UniqueID {
 	return m.Header.From
-}
-
-func (m *Message) My() bool {
-	return m.From() == SelfMetaData().UniqueID()
 }
 
 func (m *Message) ID() UniqueID {

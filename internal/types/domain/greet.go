@@ -17,8 +17,7 @@ type Greet struct {
 
 func NewGreet(opts ...GreetOption) Greet {
 	greet := &Greet{
-		Version:  internal.Version,
-		MetaData: SelfMetaData(),
+		Version: internal.Version,
 	}
 
 	for _, opt := range opts {
@@ -61,5 +60,11 @@ type GreetOption func(g *Greet)
 func WithPublicKey(key []byte) GreetOption {
 	return func(g *Greet) {
 		g.PublicKey = key
+	}
+}
+
+func WithMetadata(opt MetaData) GreetOption {
+	return func(g *Greet) {
+		g.MetaData = opt
 	}
 }

@@ -34,6 +34,7 @@ type Options struct {
 	WriteTimeout       time.Duration
 	Notifier           notification.Notifier
 	Discovering        DiscoverOptions
+	Metadata           domain.MetaData
 }
 
 type DiscoverOptions struct {
@@ -86,6 +87,11 @@ func WithDiscovering(opt DiscoverOptions) Option {
 		o.Discovering = opt
 	}
 }
+func WithMetadata(opt domain.MetaData) Option {
+	return func(o *Options) {
+		o.Metadata = opt
+	}
+}
 
 var defaultOptions = &Options{
 	PublicPort:         netstack.RandomPort(),
@@ -99,6 +105,7 @@ var defaultOptions = &Options{
 		Delay:    5 * time.Minute,
 		MaxPeers: 5,
 	},
+	Metadata: domain.SelfMetaData(),
 }
 
 // NewOptions creates Options with provided options
@@ -111,6 +118,7 @@ func NewOptions(opts ...Option) *Options {
 		WriteTimeout:       defaultOptions.WriteTimeout,
 		Notifier:           defaultOptions.Notifier,
 		Discovering:        defaultOptions.Discovering,
+		Metadata:           defaultOptions.Metadata,
 	}
 
 	for _, opt := range opts {
@@ -127,12 +135,13 @@ func New(
 	localClipboard Channel,
 	opts ...Option,
 ) *Node {
+	options := NewOptions(opts...)
 	return &Node{
 		clipboard:      clipboard,
 		peers:          peers,
 		localClipboard: localClipboard,
 		lastMessage:    NewLastMessage(),
-		options:        NewOptions(opts...),
+		options:        options,
 	}
 }
 
@@ -196,12 +205,11 @@ func (n *Node) Start() error {
 	defer l.Close()
 
 	addr := l.Addr().String()
-	metadata := domain.SelfMetaData()
 
 	n.Notify("started on %s", addr)
 	ctxLog.Info().
 		Str("address", addr).
-		Str("metadata", metadata.String()).
+		Str("metadata", n.options.Metadata.String()).
 		Msg("node started")
 
 	go n.MonitorBuffer()
@@ -226,7 +234,7 @@ func (n *Node) Start() error {
 func (n *Node) handleConnection(conn net.Conn) error {
 	ctxLog := log.With().Str("op", "node.handleConnection").Logger()
 
-	hs, cipherErr := newHandshake(n.options.BitSize)
+	hs, cipherErr := newHandshake(n.options.BitSize, n.Metadata())
 	if cipherErr != nil {
 		ctxLog.Err(cipherErr).Msg("failed to generate key")
 		return cipherErr
@@ -336,7 +344,7 @@ func (n *Node) MonitorBuffer() {
 		}
 	}()
 	for msg := range n.localClipboard {
-		if !msg.My() {
+		if msg.From() != n.options.Metadata.UniqueID() {
 			n.setClipboardData(msg)
 		}
 		n.Broadcast(msg, msg.From())
@@ -345,7 +353,7 @@ func (n *Node) MonitorBuffer() {
 
 func (n *Node) fetchClipboardData() *domain.Message {
 	clip, _ := n.clipboard.Get()
-	return domain.MessageFrom(clip)
+	return domain.MessageFrom(clip, n.Metadata().UniqueID())
 }
 
 func (n *Node) setClipboardData(m *domain.Message) {
@@ -355,4 +363,8 @@ func (n *Node) setClipboardData(m *domain.Message) {
 
 func (n *Node) Notify(message string, v ...any) {
 	n.options.Notifier.Notify(message, v...)
+}
+
+func (n *Node) Metadata() domain.MetaData {
+	return n.options.Metadata
 }

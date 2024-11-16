@@ -70,7 +70,7 @@ func (d *Discover) Discover(n *node.Node) {
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
 			PayloadFunc: func() []byte {
-				greet := domain.NewGreet()
+				greet := domain.NewGreet(domain.WithMetadata(n.Metadata()))
 				greet.Port = uint32(d.port)
 				byt, _ := proto.Marshal(greet.Proto())
 				return byt
