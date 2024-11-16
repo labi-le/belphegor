@@ -1,23 +1,23 @@
 package encrypter
 
 import (
-	"bytes"
 	"crypto"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/binary"
+	"errors"
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"github.com/rs/zerolog/log"
 	"io"
 	"math"
-	"sync"
 )
 
 type Cipher struct {
 	private crypto.PrivateKey
 	public  crypto.PublicKey
-
-	size int
 }
 
 func (c *Cipher) Public() crypto.PublicKey {
@@ -28,141 +28,138 @@ func NewCipher(privKey crypto.PrivateKey, pubKey crypto.PublicKey) *Cipher {
 	return &Cipher{
 		private: privKey,
 		public:  pubKey,
-		size:    encryptSize(pubKey),
 	}
 }
 
-func (c *Cipher) PublicKeyBytes() []byte {
-	return PublicKey2Bytes(c.Public())
+type EncryptedMessage struct {
+	KeyLength  uint32 // Length of the encrypted AES key
+	Key        []byte // AES encrypted key
+	Nonce      []byte // GCM nonce
+	CipherText []byte // Encrypted data
 }
 
-func (c *Cipher) Sign(rand io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
-	if len(digest) <= c.size {
-		//return signer.(crypto.Signer).Sign(rand, digest, opts)
-		return rsa.EncryptOAEP(
-			sha256.New(),
-			rand,
-			c.public.(*rsa.PublicKey),
-			digest,
-			nil,
-		)
+func (m *EncryptedMessage) ToBytes() []byte {
+	keyLenBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(keyLenBytes, m.KeyLength)
 
+	totalLen := 4 + len(m.Key) + len(m.Nonce) + len(m.CipherText)
+	result := make([]byte, totalLen)
+
+	offset := 0
+	copy(result[offset:], keyLenBytes)
+	offset += 4
+
+	copy(result[offset:], m.Key)
+	offset += len(m.Key)
+
+	copy(result[offset:], m.Nonce)
+	offset += len(m.Nonce)
+
+	copy(result[offset:], m.CipherText)
+
+	return result
+}
+
+func ParseEncryptedMessage(data []byte) (*EncryptedMessage, error) {
+	if len(data) < 4 {
+		return nil, errors.New("data too short")
 	}
 
-	return parallelEnc(c, rand, explodeBySize(digest, c.size))
+	msg := &EncryptedMessage{}
+	msg.KeyLength = binary.BigEndian.Uint32(data[:4])
+	offset := 4
+
+	if len(data) < offset+int(msg.KeyLength) {
+		return nil, errors.New("invalid key length")
+	}
+
+	msg.Key = data[offset : offset+int(msg.KeyLength)]
+	offset += int(msg.KeyLength)
+
+	if len(data) < offset+12 { // 12 - стандартный размер nonce для GCM
+		return nil, errors.New("data too short for nonce")
+	}
+
+	msg.Nonce = data[offset : offset+12]
+	offset += 12
+
+	msg.CipherText = data[offset:]
+
+	return msg, nil
+}
+
+func (c *Cipher) Sign(rand io.Reader, data []byte, _ crypto.SignerOpts) ([]byte, error) {
+	aesKey := make([]byte, 32) // AES-256
+	if _, err := io.ReadFull(rand, aesKey); err != nil {
+		return nil, err
+	}
+
+	encryptedKey, err := rsa.EncryptOAEP(
+		sha256.New(),
+		rand,
+		c.public.(*rsa.PublicKey),
+		aesKey,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := aes.NewCipher(aesKey)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand, nonce); err != nil {
+		return nil, err
+	}
+
+	ciphertext := gcm.Seal(nil, nonce, data, nil)
+
+	msg := &EncryptedMessage{
+		KeyLength:  uint32(len(encryptedKey)),
+		Key:        encryptedKey,
+		Nonce:      nonce,
+		CipherText: ciphertext,
+	}
+
+	return msg.ToBytes(), nil
 }
 
 func (c *Cipher) Decrypt(rand io.Reader, msg []byte, _ crypto.DecrypterOpts) (plaintext []byte, err error) {
-	return c.decrypt(rand, msg)
-}
-
-func (c *Cipher) decrypt(rand io.Reader, msg []byte) ([]byte, error) {
-	ks := c.public.(*rsa.PublicKey).Size()
-	parts := explodeBySize(msg, ks)
-
-	var wg sync.WaitGroup
-	decChan := make(chan part, len(parts))
-
-	for i, portion := range parts {
-		wg.Add(1)
-		i := i
-		portion := portion
-		go func() {
-			defer wg.Done()
-			dec, err := rsa.DecryptOAEP(
-				sha256.New(),
-				rand,
-				c.private.(*rsa.PrivateKey),
-				portion,
-				nil,
-			)
-			decChan <- part{index: i, byt: dec, error: err}
-		}()
+	encMsg, err := ParseEncryptedMessage(msg)
+	if err != nil {
+		return nil, err
 	}
 
-	wg.Wait()
-	close(decChan)
-
-	// Собираем дешифрованные части в порядке их индекса
-	decryptedParts := make([][]byte, len(parts))
-	for decPart := range decChan {
-		if decPart.error != nil {
-			return nil, decPart.error
-		}
-		decryptedParts[decPart.index] = decPart.byt
-	}
-
-	var result bytes.Buffer
-	for _, decrypted := range decryptedParts {
-		result.Write(decrypted)
-	}
-
-	return result.Bytes(), nil
-}
-
-func parallelEnc(enc *Cipher, rand io.Reader, digest [][]byte) (byt []byte, err error) {
-	var (
-		encChan = make(chan part)
-		data    bytes.Buffer
+	aesKey, err := rsa.DecryptOAEP(
+		sha256.New(),
+		rand,
+		c.private.(*rsa.PrivateKey),
+		encMsg.Key,
+		nil,
 	)
-
-	var readWg sync.WaitGroup
-	readWg.Add(1)
-	go func() {
-		parts := make([][]byte, len(digest))
-
-		defer readWg.Done()
-		for part := range encChan {
-			if part.error != nil {
-				err = part.error
-				return
-			}
-			parts[part.index] = part.byt
-		}
-
-		for _, part := range parts {
-			data.Write(part)
-		}
-	}()
-
-	var wg sync.WaitGroup
-	for i, portion := range digest {
-		wg.Add(1)
-
-		portion := portion
-		i := i
-		go func() {
-			defer wg.Done()
-
-			encByt, encErr := rsa.EncryptOAEP(
-				sha256.New(),
-				rand,
-				enc.public.(*rsa.PublicKey),
-				portion,
-				nil,
-			)
-			//encByt, encErr := enc.private.(crypto.Signer).Sign(rand, portion, opts)
-
-			encChan <- part{
-				index: i,
-				byt:   encByt,
-				error: encErr,
-			}
-		}()
+	if err != nil {
+		return nil, err
 	}
 
-	wg.Wait()
+	block, err := aes.NewCipher(aesKey)
+	if err != nil {
+		return nil, err
+	}
 
-	close(encChan)
-	readWg.Wait()
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
 
-	return data.Bytes(), nil
-}
-
-type part struct {
-	error
-	index int
-	byt   []byte
+	return gcm.Open(nil, encMsg.Nonce, encMsg.CipherText, nil)
 }
 
 func encryptSize(pub crypto.PublicKey) int {

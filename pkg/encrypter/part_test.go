@@ -146,3 +146,55 @@ func TestCipher_Encrypt(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkCipher(b *testing.B) {
+	benchmarks := []struct {
+		name string
+		data []byte
+	}{
+		{
+			name: "short_text",
+			data: []byte("hello"),
+		},
+		{
+			name: "large_text",
+			data: bytes.Repeat([]byte("hello"), 1000),
+		},
+		{
+			name: "very_large_text",
+			data: bytes.Repeat([]byte("hello"), 100_000),
+		},
+		{
+			name: "mega_large_text",
+			data: bytes.Repeat([]byte("hello"), 1_000_000),
+		},
+	}
+
+	b.ReportAllocs()
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+			if err != nil {
+				b.Fatal(err)
+			}
+			cipher := NewCipher(privateKey, privateKey.Public())
+
+			b.Run("EncryptDecrypt", func(b *testing.B) {
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					encrypted, err := cipher.Sign(rand.Reader, bm.data, crypto.SHA256)
+					if err != nil {
+						b.Fatal(err)
+					}
+
+					_, err = cipher.Decrypt(rand.Reader, encrypted, crypto.SHA256)
+					if err != nil {
+						b.Fatal(err)
+					}
+				}
+				b.SetBytes(int64(len(bm.data)))
+			})
+		})
+	}
+}
