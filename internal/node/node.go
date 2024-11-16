@@ -120,7 +120,7 @@ func NewOptions(opts ...Option) *Options {
 	return options
 }
 
-// New creates a new instance of Node with the specified settings.
+// New creates a new instance of Node with the specified settings
 func New(
 	clipboard clipboard.Manager,
 	peers *Storage,
@@ -136,10 +136,7 @@ func New(
 	}
 }
 
-// ConnectTo establishes a TCP connection to a remote clipboard at the specified address.
-// It adds the connection to the node's storage and starts handling the connection using 'handleConnection'.
-// The 'addr' parameter should be in the format "host:port" to specify the remote clipboard's address.
-// If the connection is successfully established, it returns nil; otherwise, it returns an error.
+// ConnectTo establishes a TCP connection to a remote clipboard at the specified address
 func (n *Node) ConnectTo(addr string) error {
 	ctxLog := log.With().Str("op", "node.ConnectTo").Logger()
 
@@ -188,11 +185,7 @@ func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.
 	return peer, nil
 }
 
-// Start starts the node by listening for incoming connections on the specified public port.
-// It also starts a clipboard monitor to periodically scan and update the local clipboard.
-// When a new connection is accepted, it invokes the 'handleConnection' method to handle the connection.
-// The 'scanDelay' parameter determines the interval at which the clipboard is scanned and updated.
-// The method returns an error if it fails to start listening.
+// Start starts the node by listening for incoming connections on the specified public port
 func (n *Node) Start() error {
 	ctxLog := log.With().Str("op", "node.Start").Logger()
 
@@ -269,12 +262,6 @@ func (n *Node) handleConnection(conn net.Conn) error {
 }
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
-// It first checks if the message is a duplicate of the last sent message by comparing their IDs and hashes.
-// If the message is a duplicate, it is not sent.
-// For each connection in the storage, it writes the message to the connection's writer.
-// The method logs the sent messages and their hashes for debugging purposes.
-// The 'msg' parameter is the message to be broadcast.
-// The 'ignore' parameter is a variadic list of AddrPort to exclude from the broadcast.
 func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 	ctxLog := log.With().Str("op", "node.Broadcast").Logger()
 
