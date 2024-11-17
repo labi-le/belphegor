@@ -10,7 +10,6 @@ import (
 	"github.com/schollz/peerdiscovery"
 	"google.golang.org/protobuf/proto"
 	"net"
-	"strconv"
 	"time"
 )
 
@@ -100,9 +99,9 @@ func (d *Discover) Discover(n *node.Node) {
 					Msg("discovered new peer")
 
 				go n.ConnectTo(fmt.Sprintf(
-					"%s:%s",
+					"%s:%d",
 					peerIP.String(),
-					strconv.Itoa(int(greet.Port)),
+					greet.Port,
 				))
 			},
 		},
