@@ -8,7 +8,6 @@ import (
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/encrypter"
-	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/rs/zerolog/log"
 	"net"
 	"time"
@@ -303,25 +302,6 @@ func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
 	})
-}
-
-func (n *Node) greet(my domain.Greet, conn net.Conn) (domain.Greet, error) {
-	if _, err := protoutil.EncodeWriter(&my, conn); err != nil {
-		return domain.Greet{}, err
-	}
-
-	incoming, decodeErr := domain.NewGreetFromReader(conn)
-	if decodeErr != nil {
-		return incoming, decodeErr
-	}
-
-	ctxLog := log.With().Str("op", "node.greet").Logger()
-	ctxLog.Trace().Msgf("received greeting from %s -> %s", incoming.MetaData.String(), conn.RemoteAddr().String())
-
-	if my.Version != incoming.Version {
-		ctxLog.Warn().Msgf("version mismatch: %s != %s", my.Version, incoming.Version)
-	}
-	return incoming, nil
 }
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
