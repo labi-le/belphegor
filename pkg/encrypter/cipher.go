@@ -9,10 +9,8 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"errors"
-	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"github.com/rs/zerolog/log"
 	"io"
-	"math"
 )
 
 type Cipher struct {
@@ -160,27 +158,6 @@ func (c *Cipher) Decrypt(rand io.Reader, msg []byte, _ crypto.DecrypterOpts) (pl
 	}
 
 	return gcm.Open(nil, encMsg.Nonce, encMsg.CipherText, nil)
-}
-
-func encryptSize(pub crypto.PublicKey) int {
-	return pub.(*rsa.PublicKey).Size() - 2*sha256.New().Size() - 2
-}
-
-func explodeBySize(src []byte, size int) [][]byte {
-	numParts := int(math.Ceil(float64(len(src)) / float64(size)))
-	parts := make([][]byte, numParts)
-
-	for i := 0; i < numParts; i++ {
-		start := i * size
-		end := (i + 1) * size
-		if end > len(src) {
-			end = len(src)
-		}
-		parts[i] = byteslice.Get(end - start)
-		copy(parts[i], src[start:end])
-	}
-
-	return parts
 }
 
 func PublicKey2Bytes(publicKey crypto.PublicKey) []byte {
