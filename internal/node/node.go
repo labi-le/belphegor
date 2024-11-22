@@ -272,13 +272,13 @@ func (n *Node) handleConnection(conn net.Conn) error {
 func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 	ctxLog := log.With().Str("op", "node.Broadcast").Logger()
 
+	if n.lastMessage.Duplicate(msg) {
+		return
+	}
+
 	n.peers.Tap(func(id domain.UniqueID, peer *Peer) {
 		if id == ignore {
 			ctxLog.Trace().Msgf("exclude sending to creator node: %s", peer.String())
-			return
-		}
-
-		if n.lastMessage.Duplicate(msg) {
 			return
 		}
 
