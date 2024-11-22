@@ -6,10 +6,10 @@ ___
 
 ### Features
 
-- cipher (rsa)
-- peer to peer
-- discovering local nodes
-- image sharing (`wayland` <—> `wayland`, `wayland` <—> `windows`)
+- Hybrid encryption (RSA-2048*, AES-256-GCM) (bit size configurable)
+- Peer to peer
+- Discovering local nodes
+- Image sharing (`wayland` <—> `wayland`, `wayland` <—> `windows`)
 
 ___
 
