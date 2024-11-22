@@ -106,7 +106,16 @@ dump:
 	@echo "=== START PROJECT CODE DUMP ===" > project_code.txt
 	@echo "Created at: $$(date)" >> project_code.txt
 	@echo "" >> project_code.txt
-	@find . -type f -name "*.go" | while read file; do \
+	@find . -type f \( \
+		-name "*.go" -o \
+		-name "*.yml" -o \
+		-name "*.yaml" -o \
+		-name "*.proto" -o \
+		-name "*.mod" -o \
+		-name "*.sum" -o \
+		-name "*.nix" -o \
+		-name "Makefile" \
+	\) | while read file; do \
 		echo "=== FILE: $$file ===" >> project_code.txt; \
 		echo "=== START CODE ===" >> project_code.txt; \
 		cat "$$file" >> project_code.txt; \
