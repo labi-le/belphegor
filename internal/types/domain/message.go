@@ -53,6 +53,10 @@ func (m *Message) Duplicate(new *Message) bool {
 		return false
 	}
 
+	if m == new {
+		return true
+	}
+
 	if m.Header.MimeType == MimeTypeImage && new.Header.MimeType == m.Header.MimeType {
 		if m.Header.ClipboardProvider == new.Header.ClipboardProvider {
 			return bytes.Equal(m.Data.Hash, new.Data.Hash)

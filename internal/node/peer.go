@@ -89,7 +89,7 @@ func (p *Peer) Receive(last *LastMessage) {
 			break
 		}
 
-		last.Update <- msg
+		last.Update(msg)
 		p.localClipboard <- msg
 
 		ctxLog.Debug().Msgf(

@@ -2,21 +2,30 @@ package node
 
 import (
 	"github.com/labi-le/belphegor/internal/types/domain"
+	"sync"
 )
 
 // LastMessage which is stored in Node and serves to identify duplicate messages
 type LastMessage struct {
-	*domain.Message
-	Update chan *domain.Message
+	msg *domain.Message
+	mu  sync.Mutex
+}
+
+func (m *LastMessage) Msg() *domain.Message {
+	return m.msg
 }
 
 func NewLastMessage() *LastMessage {
-	return &LastMessage{Update: make(chan *domain.Message)}
+	return &LastMessage{
+		msg: &domain.Message{
+			Data:   domain.Data{},
+			Header: domain.Header{},
+		},
+	}
 }
 
-// ListenUpdates updates the lastMessage with the latest message received
-func (m *LastMessage) ListenUpdates() {
-	for msg := range m.Update {
-		m.Message = msg
-	}
+func (m *LastMessage) Update(msg *domain.Message) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.msg = msg
 }

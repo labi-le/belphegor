@@ -212,7 +212,6 @@ func (n *Node) Start() error {
 		Msg("node started")
 
 	go n.MonitorBuffer()
-	go n.lastMessage.ListenUpdates()
 
 	for {
 		conn, netErr := l.Accept()
@@ -272,7 +271,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 	ctxLog := log.With().Str("op", "node.Broadcast").Logger()
 
-	if n.lastMessage.Duplicate(msg) {
+	if n.lastMessage.Msg().Duplicate(msg) {
 		return
 	}
 
@@ -282,7 +281,7 @@ func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
 			return
 		}
 
-		ctxLog.Debug().Msgf(
+		ctxLog.Trace().Msgf(
 			"sent %d to %s",
 			msg.ID(),
 			peer.String(),
@@ -324,6 +323,9 @@ func (n *Node) MonitorBuffer() {
 		}
 	}()
 	for msg := range n.localClipboard {
+		if n.lastMessage.Msg().Duplicate(msg) {
+			continue
+		}
 		if msg.From() != n.options.Metadata.UniqueID() {
 			n.setClipboardData(msg)
 		}
@@ -337,7 +339,7 @@ func (n *Node) fetchClipboardData() *domain.Message {
 }
 
 func (n *Node) setClipboardData(m *domain.Message) {
-	log.Trace().Msg("set")
+	log.Trace().Msg("set clipboard data")
 	_ = n.clipboard.Set(m.RawData())
 }
 
