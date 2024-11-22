@@ -171,12 +171,13 @@ func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.
 		return nil, ErrAlreadyConnected
 	}
 
-	if aliveErr := conn.(*net.TCPConn).SetKeepAlive(true); aliveErr != nil {
-		return nil, aliveErr
-	}
-
-	if err := conn.(*net.TCPConn).SetKeepAlivePeriod(n.options.KeepAlive); err != nil {
-		return nil, err
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		if aliveErr := tcp.SetKeepAlive(true); aliveErr != nil {
+			return nil, aliveErr
+		}
+		if err := tcp.SetKeepAlivePeriod(n.options.KeepAlive); err != nil {
+			return nil, err
+		}
 	}
 
 	peer := AcquirePeer(
