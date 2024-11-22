@@ -1,4 +1,5 @@
 .idea/
+project_code.txt
 
 # CMake
 cmake-build-*/
@@ -29,6 +30,8 @@ fabric.properties
 *.dll
 *.so
 *.dylib
+build
+dist
 
 # Test binary, built with `go test -c`
 *.test
