@@ -269,7 +269,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 }
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
-func (n *Node) Broadcast(msg *domain.Message, ignore domain.UniqueID) {
+func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 	ctxLog := log.With().Str("op", "node.Broadcast").Logger()
 
 	if n.lastMessage.Msg().Duplicate(msg) {
@@ -334,12 +334,12 @@ func (n *Node) MonitorBuffer() {
 	}
 }
 
-func (n *Node) fetchClipboardData() *domain.Message {
+func (n *Node) fetchClipboardData() domain.Message {
 	clip, _ := n.clipboard.Get()
 	return domain.MessageFrom(clip, n.Metadata().UniqueID())
 }
 
-func (n *Node) setClipboardData(m *domain.Message) {
+func (n *Node) setClipboardData(m domain.Message) {
 	log.Trace().Msg("set clipboard data")
 	_ = n.clipboard.Set(m.RawData())
 }
