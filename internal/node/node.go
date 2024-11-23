@@ -272,10 +272,6 @@ func (n *Node) handleConnection(conn net.Conn) error {
 func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 	ctxLog := log.With().Str("op", "node.Broadcast").Logger()
 
-	if n.lastMessage.Msg().Duplicate(msg) {
-		return
-	}
-
 	n.peers.Tap(func(id domain.UniqueID, peer *Peer) {
 		if id == ignore {
 			ctxLog.Trace().Msgf("exclude sending to creator node: %s", peer.String())
@@ -324,13 +320,15 @@ func (n *Node) MonitorBuffer() {
 		}
 	}()
 	for msg := range n.localClipboard {
-		if n.lastMessage.Msg().Duplicate(msg) {
-			continue
-		}
 		if msg.From() != n.options.Metadata.UniqueID() {
 			n.setClipboardData(msg)
 		}
-		n.Broadcast(msg, msg.From())
+
+		if n.lastMessage.Msg().Duplicate(msg) {
+			continue
+		}
+
+		go n.Broadcast(msg, msg.From())
 	}
 }
 

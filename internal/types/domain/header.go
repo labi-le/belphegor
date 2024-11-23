@@ -12,35 +12,12 @@ type Header struct {
 	ClipboardProvider ClipboardProvider
 }
 
-func NewHeader(opts ...Option) Header {
-	header := &Header{
+func NewHeader(from UniqueID, mime MimeType) Header {
+	return Header{
 		ID:                NewID(),
 		Created:           time.Now(),
+		From:              from,
+		MimeType:          mime,
 		ClipboardProvider: CurrentClipboardProvider,
-	}
-	for _, opt := range opts {
-		opt(header)
-	}
-
-	return *header
-}
-
-type Option func(header *Header)
-
-func WithClipboardProvider(cp ClipboardProvider) Option {
-	return func(header *Header) {
-		header.ClipboardProvider = cp
-	}
-}
-
-func WithMime(mime MimeType) Option {
-	return func(header *Header) {
-		header.MimeType = mime
-	}
-}
-
-func WithFrom(from UniqueID) Option {
-	return func(header *Header) {
-		header.From = from
 	}
 }

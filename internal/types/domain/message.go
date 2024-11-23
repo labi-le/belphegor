@@ -24,8 +24,8 @@ func MessageFrom(data []byte, from UniqueID) Message {
 	return Message{
 		Data: NewData(data),
 		Header: NewHeader(
-			WithMime(MimeFromData(data)),
-			WithFrom(from),
+			from,
+			MimeFromData(data),
 		),
 	}
 }
@@ -33,8 +33,7 @@ func MessageFrom(data []byte, from UniqueID) Message {
 func MessageFromProto(m *proto.Message) Message {
 	return Message{
 		Data: Data{
-			Raw:  m.Data.Raw,
-			Hash: m.Data.Hash,
+			Raw: m.Data.Raw,
 		},
 		Header: Header{
 			ID:                m.Header.ID,
@@ -47,12 +46,19 @@ func MessageFromProto(m *proto.Message) Message {
 }
 
 func (m Message) Duplicate(new Message) bool {
-	if m.Header.MimeType == MimeTypeImage && new.Header.MimeType == m.Header.MimeType {
+	if m.Header.ID == new.Header.ID {
+		return true
+	}
+
+	if m.Header.MimeType != new.Header.MimeType {
+		return false
+	}
+
+	if m.Header.MimeType == MimeTypeImage {
 		if m.Header.ClipboardProvider == new.Header.ClipboardProvider {
-			return bytes.Equal(m.Data.Hash, new.Data.Hash)
+			return bytes.Equal(m.Data.Raw, new.Data.Raw)
 		}
 
-		// mse: compare images
 		identical, err := image.EqualMSE(
 			bytes.NewReader(m.Data.Raw),
 			bytes.NewReader(new.Data.Raw),
@@ -64,7 +70,7 @@ func (m Message) Duplicate(new Message) bool {
 		return identical
 	}
 
-	return m.Header.ID == new.Header.ID || bytes.Equal(m.Data.Hash, new.Data.Hash)
+	return bytes.Equal(m.Data.Raw, new.Data.Raw)
 }
 
 func (m Message) From() UniqueID {
@@ -82,8 +88,7 @@ func (m Message) RawData() []byte {
 func (m Message) Proto() pb.Message {
 	return &proto.Message{
 		Data: &proto.Data{
-			Raw:  m.Data.Raw,
-			Hash: m.Data.Hash,
+			Raw: m.Data.Raw,
 		},
 		Header: &proto.Header{
 			From:              m.From(),

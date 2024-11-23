@@ -10,11 +10,10 @@ import (
 var ErrUnimplementedClipboardManager = errors.New("unimplemented clipboard wrapper")
 
 var managers = map[string]Manager{
-	XClip:         new(xClip),
-	XSel:          new(xSel),
-	WlClipboard:   new(wlClipboard),
-	Termux:        new(termux),
-	NullClipboard: new(Null),
+	XClip:       new(xClip),
+	XSel:        new(xSel),
+	WlClipboard: new(wlClipboard),
+	Termux:      new(termux),
 }
 
 func findClipboardManager() Manager {

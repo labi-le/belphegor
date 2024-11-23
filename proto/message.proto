@@ -11,8 +11,7 @@ message Message {
   Header Header = 2;
 }
 
-// Data represents the clipboard data and hash
+// Data represents the clipboard data
 message Data {
   bytes Raw = 1;
-  bytes Hash = 2;
 }
