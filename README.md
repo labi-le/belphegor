@@ -110,7 +110,7 @@ Usage of belphegor:
 
 [ ] Debug image sharing for xclip, xsel, pbpaste
 
-[ ] Publish to aur package
+[ ] Use wayland/x11 ipc clients instead of using utilities to monitor the clipboard
 
 [ ] Add disable cipher option (maybe)
 
