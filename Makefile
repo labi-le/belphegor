@@ -129,3 +129,12 @@ dist:
         -v $(PWD):/go/src/github.com/labi-le/belphegor \
         -w /go/src/github.com/labi-le/belphegor \
         goreleaser/goreleaser release --clean --snapshot
+#
+#benchmark-pipe:
+#	strace -f -e trace=write,read go test -benchmem -bench=BenchmarkFromPipe2  /home/labile/GolandProjects/belphegor/pkg/pipe 2>&1
+
+#benchmark-pipe:
+#	go test -gcflags '-m=2 -l' -benchmem -memprofile=mem.prof -bench=BenchmarkFromPipe2 ./pkg/pipe 2>&1 | grep -A1 "pipe.go"
+
+benchmark-pipe:
+	go test -gcflags '-m=2 -l' -benchmem -memprofile=mem.prof -bench=BenchmarkFromPipe2 ./pkg/pipe 2>&1
