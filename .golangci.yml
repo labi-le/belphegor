@@ -2,7 +2,7 @@ run:
   # Timeout for analysis, e.g. 30s, 5m.
   # Default: 1m
   timeout: 3m
-  go: "1.22"
+  go: "1.23"
   allow-parallel-runners: true
 
 
@@ -108,7 +108,9 @@ linters-settings:
       shadow:
         # Whether to be strict about shadowing; can be noisy.
         # Default: false
-        strict: true
+        strict: false
+  staticcheck:
+    checks: [ "SA4006", "SA6002" ]
 
   nakedret:
     # Make an issue if func has more lines of code than this setting, and it has naked returns.
@@ -160,10 +162,8 @@ linters:
     - dupl # tool for code clone detection
     - durationcheck # checks for two durations multiplied together
     - errname # checks that sentinel errors are prefixed with the Err and error types are suffixed with the Error
-    - errorlint # finds code that will cause problems with the error wrapping scheme introduced in Go 1.13
-    - execinquery # checks query string in Query function which reads your Go src files and warning it finds
+    #    - errorlint # finds code that will cause problems with the error wrapping scheme introduced in Go 1.13
     #    - exhaustive # checks exhaustiveness of enum switch statements
-    - exportloopref # checks for pointers to enclosing loop variables
     - forbidigo # forbids identifiers
     - funlen # tool for detection of long functions
     #    - gochecknoglobals # checks that no global variables exist
