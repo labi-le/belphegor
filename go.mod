@@ -7,7 +7,7 @@ require (
 	github.com/gen2brain/beeep v0.0.0-20240516210008-9c006672e7f4
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/rs/zerolog v1.33.0
-	github.com/schollz/peerdiscovery v1.7.5
+	github.com/schollz/peerdiscovery v1.7.6
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/image v0.23.0
 	golang.org/x/sys v0.29.0
@@ -22,5 +22,5 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
-	golang.org/x/net v0.31.0 // indirect
+	golang.org/x/net v0.34.0 // indirect
 )
