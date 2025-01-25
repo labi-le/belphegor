@@ -80,23 +80,22 @@ func (w Reusable) ReadFd() uintptr {
 }
 
 func waitForReadable(fd uintptr, lastRead time.Time, hasData bool) (int, bool, error) {
+	if hasData && time.Since(lastRead) >= 5*time.Millisecond {
+		return 0, true, nil
+	}
+
 	pfd := unix.PollFd{
 		Fd:     int32(fd),
 		Events: unix.POLLIN | unix.POLLPRI | unix.POLLERR | unix.POLLHUP | unix.POLLNVAL,
 	}
 
-	const (
-		pollTimeout = 5 // ms
-		maxIdleTime = 5 * time.Millisecond
-	)
-
-	// checking whether the timeout between messages has expired
-	if hasData && time.Since(lastRead) >= maxIdleTime {
-		return 0, true, nil // timeout
+	pollTimeout := uintptr(100) // 100ms timeout after read first portion cake
+	if !hasData {
+		pollTimeout = ^uintptr(0) // inf wait
 	}
 
 	for {
-		n, _, errno := syscall.Syscall(syscall.SYS_POLL,
+		_, _, errno := syscall.Syscall(syscall.SYS_POLL,
 			uintptr(unsafe.Pointer(&pfd)),
 			1,
 			pollTimeout,
@@ -109,21 +108,18 @@ func waitForReadable(fd uintptr, lastRead time.Time, hasData bool) (int, bool, e
 			return 0, false, fmt.Errorf("poll error: %w", errno)
 		}
 
-		if n == 0 {
-			return 0, false, nil // no data, but this is not the final timeout
-		}
-
 		if pfd.Revents&(unix.POLLERR|unix.POLLNVAL|unix.POLLHUP) != 0 {
 			return 0, false, fmt.Errorf("poll error event: %v", pfd.Revents)
 		}
 
 		if pfd.Revents&unix.POLLIN != 0 {
-			return size(fd), false, nil
+			return readableSize(fd), false, nil
 		}
 
 		return 0, false, nil
 	}
 }
+
 func FromPipe(pipe uintptr) ([]byte, error) {
 	if pipe == 0 {
 		return nil, ErrNilPipe
