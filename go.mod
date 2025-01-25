@@ -4,10 +4,8 @@ go 1.23.1
 
 toolchain go1.23.4
 
-replace deedles.dev/wl => github.com/labi-le/wl v0.0.0-20250102174645-19109860bb8f
-
 require (
-	deedles.dev/wl v0.0.0-20240822204653-4d140c94388c
+	deedles.dev/wl v0.0.0-20250103021037-596c362c83fe
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/gen2brain/beeep v0.0.0-20240516210008-9c006672e7f4
 	github.com/nightlyone/lockfile v1.0.0
