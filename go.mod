@@ -11,7 +11,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	golang.org/x/image v0.23.0
 	golang.org/x/sys v0.29.0
-	google.golang.org/protobuf v1.36.4
+	google.golang.org/protobuf v1.36.5
 )
 
 require (
