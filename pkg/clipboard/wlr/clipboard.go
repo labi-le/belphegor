@@ -5,7 +5,14 @@ import (
 	wl "deedles.dev/wl/client"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/pipe"
+	"os"
 )
+
+var Supported = (func() bool {
+	_, exist1 := os.LookupEnv("WAYLAND_DISPLAY")
+	_, exist2 := os.LookupEnv("WAYLAND_SOCKET")
+	return exist1 || exist2
+})()
 
 type Wlr struct {
 	reader *ClipboardReader

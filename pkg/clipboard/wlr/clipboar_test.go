@@ -5,8 +5,6 @@ import (
 	"context"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/clipboard/wlr"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"math/rand"
 	"testing"
 	"time"
@@ -28,9 +26,6 @@ type testcase struct {
 }
 
 func TestWlr_WatchWrite(t *testing.T) {
-	t.Logf("The current implementation panics when the initial buffer is empty." +
-		" Copy something with CTRL + C")
-
 	tests := []testcase{
 		{"Basic clipboard update", []byte("test data\n"), false},
 		{"Empty clipboard", []byte(""), true},
@@ -40,7 +35,7 @@ func TestWlr_WatchWrite(t *testing.T) {
 		{"Random length string", generateRandomData(rand.Intn(1000)), false},
 	}
 
-	log.Logger = zerolog.Nop()
+	//log.Logger = zerolog.Nop()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
