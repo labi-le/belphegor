@@ -1,4 +1,4 @@
-package clipboard
+package api
 
 import (
 	"context"

@@ -6,7 +6,7 @@
 
 //go:build windows
 
-package clipboard
+package windows
 
 // Interacting with Clipboard on Windows:
 // https://docs.microsoft.com/zh-cn/windows/win32/dataxchg/using-the-clipboard
@@ -32,13 +32,13 @@ import (
 	"golang.org/x/image/bmp"
 )
 
-func New() Manager {
-	return &windows{}
+func New() Windows {
+	return Windows{}
 }
 
-type windows struct{}
+type Windows struct{}
 
-func (p *windows) Get() ([]byte, error) {
+func (p Windows) Get() ([]byte, error) {
 	//select {
 	//case text := <-watch(context.Background(), FmtText):
 	//	buf = text
@@ -67,7 +67,7 @@ func (p *windows) Get() ([]byte, error) {
 	//return clipboardGet(exec.Command("powershell.exe", "-command", "Get-Clipboard"))
 }
 
-func (p *windows) Set(data []byte) error {
+func (p Windows) Set(data []byte) error {
 	mime := http.DetectContentType(data)
 	if mime == "image/png" {
 		_, err := write(FmtImage, data)
@@ -76,10 +76,6 @@ func (p *windows) Set(data []byte) error {
 
 	_, err := write(FmtText, data)
 	return err
-}
-
-func (p *windows) Name() string {
-	return WindowsNT10
 }
 
 var (

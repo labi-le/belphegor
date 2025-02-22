@@ -6,7 +6,7 @@ import (
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/api"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/rs/zerolog/log"
 	"net"
@@ -18,7 +18,7 @@ var (
 )
 
 type Node struct {
-	clipboard      clipboard.Manager
+	clipboard      api.Manager
 	peers          *Storage
 	localClipboard Channel
 	lastMessage    *LastMessage
@@ -129,7 +129,7 @@ func NewOptions(opts ...Option) *Options {
 
 // New creates a new instance of Node with the specified settings
 func New(
-	clipboard clipboard.Manager,
+	clipboard api.Manager,
 	peers *Storage,
 	localClipboard Channel,
 	opts ...Option,

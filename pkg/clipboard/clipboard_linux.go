@@ -4,19 +4,21 @@ package clipboard
 
 import (
 	"errors"
+	"github.com/labi-le/belphegor/pkg/clipboard/api"
+	"github.com/labi-le/belphegor/pkg/clipboard/generic"
 	"os/exec"
 )
 
 var ErrUnimplementedClipboardManager = errors.New("unimplemented clipboard wrapper")
 
-var managers = map[string]Manager{
-	XClip:       new(xClip),
-	XSel:        new(xSel),
-	WlClipboard: new(wlClipboard),
-	Termux:      new(termux),
+var managers = []api.Manager{
+	generic.XClip{},
+	generic.XSel{},
+	generic.WlClipboard{},
+	generic.Termux{},
 }
 
-func findClipboardManager() Manager {
+func findClipboardManager() api.Manager {
 	for _, manager := range managers {
 		_, err := manager.Get()
 
@@ -35,6 +37,6 @@ func findClipboardManager() Manager {
 	panic(ErrUnimplementedClipboardManager)
 }
 
-func New() Manager {
+func New() api.Manager {
 	return findClipboardManager()
 }

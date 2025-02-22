@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/generic"
 	"github.com/labi-le/belphegor/pkg/storage"
 	"testing"
 	"time"
@@ -55,8 +55,8 @@ func TestNode_MessageExchange(t *testing.T) {
 	}
 }
 
-func testNodes() (*clipboard.Null, *node.Node, *clipboard.Null, *node.Node) {
-	clip1 := &clipboard.Null{}
+func testNodes() (*generic.Null, *node.Node, *generic.Null, *node.Node) {
+	clip1 := &generic.Null{}
 	_ = clip1.Set([]byte("null"))
 
 	node1 := node.New(
@@ -71,7 +71,7 @@ func testNodes() (*clipboard.Null, *node.Node, *clipboard.Null, *node.Node) {
 		}),
 	)
 
-	clip2 := &clipboard.Null{}
+	clip2 := &generic.Null{}
 	node2 := node.New(
 		clip2,
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),

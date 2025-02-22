@@ -1,7 +1,12 @@
+//go:build darwin
+
 package domain
 
 import (
 	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/generic"
+	"github.com/labi-le/belphegor/pkg/clipboard/mac"
+	"github.com/labi-le/belphegor/pkg/clipboard/windows"
 	"github.com/rs/zerolog/log"
 )
 
@@ -9,7 +14,7 @@ var (
 	CurrentClipboardProvider = ClipboardProviderFromManager(clipboard.New())
 )
 
-type ClipboardProvider int32
+type ClipboardProvider uint32
 
 const (
 	ClipboardNull ClipboardProvider = iota
@@ -18,24 +23,27 @@ const (
 	ClipboardWlClipboard
 	ClipboardMasOsStd
 	ClipboardWindowsNT10
+	ClipboardTermux
 )
 
-func ClipboardProviderFromManager(m clipboard.Manager) ClipboardProvider {
-	switch m.Name() {
-	case clipboard.XSel:
+func ClipboardProviderFromManager(m any) ClipboardProvider {
+	switch m.(type) {
+	case generic.XSel:
 		return ClipboardXSel
-	case clipboard.XClip:
+	case generic.XClip:
 		return ClipboardXClip
-	case clipboard.WlClipboard:
+	case generic.WlClipboard:
 		return ClipboardWlClipboard
-	case clipboard.MasOsStd:
+	case mac.Darwin:
 		return ClipboardMasOsStd
-	case clipboard.WindowsNT10:
+	case windows.Windows:
 		return ClipboardWindowsNT10
-	case clipboard.NullClipboard:
+	case generic.Termux:
+		return ClipboardTermux
+	case generic.Null:
 		return ClipboardNull
 	default:
-		log.Fatal().Msgf("unimplemented device: %s", m.Name())
+		log.Fatal().Msgf("unimplemented device: %+v", m)
 	}
 
 	// unreachable

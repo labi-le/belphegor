@@ -3,7 +3,7 @@ package wlr
 import (
 	"context"
 	wl "deedles.dev/wl/client"
-	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/api"
 	"github.com/labi-le/belphegor/pkg/pipe"
 	"os"
 )
@@ -38,7 +38,7 @@ func New(read *wl.Client, write *wl.Client, p pipe.RWPipe) Wlr {
 	}
 }
 
-func (w Wlr) Watch(ctx context.Context, update chan<- clipboard.Update) {
+func (w Wlr) Watch(ctx context.Context, update chan<- api.Update) {
 	go func() {
 		<-ctx.Done()
 		close(update)
@@ -51,7 +51,7 @@ func (w Wlr) Watch(ctx context.Context, update chan<- clipboard.Update) {
 			continue
 		}
 
-		update <- clipboard.Update{Data: buf, Err: err}
+		update <- api.Update{Data: buf, Err: err}
 	}
 
 }

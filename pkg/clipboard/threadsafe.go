@@ -1,9 +1,12 @@
 package clipboard
 
-import "sync"
+import (
+	"github.com/labi-le/belphegor/pkg/clipboard/api"
+	"sync"
+)
 
 type ThreadSafe struct {
-	defaultManager Manager
+	defaultManager api.Manager
 	sync.RWMutex
 }
 
@@ -19,10 +22,6 @@ func (t *ThreadSafe) Set(data []byte) error {
 	defer t.RWMutex.Unlock()
 
 	return t.defaultManager.Set(data)
-}
-
-func (t *ThreadSafe) Name() string {
-	return t.defaultManager.Name()
 }
 
 func NewThreadSafe() *ThreadSafe {

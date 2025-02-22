@@ -11,7 +11,9 @@ message Header {
   Mime MimeType = 2;
   int64 ID = 3;
   google.protobuf.Timestamp Created = 4;
-  Clipboard ClipboardProvider = 5;
+  // ClipboardProvider represents the clipboard provider
+  // Used to identify the clipboard provider
+  uint32 ClipboardProvider = 5;
 }
 
 enum Mime {
@@ -19,13 +21,4 @@ enum Mime {
   IMAGE = 1;
 }
 
-// ClipboardProvider represents the clipboard provider
-// Used to identify the clipboard provider
-enum Clipboard {
-  XClip = 0;
-  XSel = 1;
-  WlClipboard = 2;
-  MasOsStd = 4;
-  WindowsNT10 = 5;
-  Null = 6;
-}
+

@@ -3,7 +3,7 @@ package wlr_test
 import (
 	"bytes"
 	"context"
-	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/api"
 	"github.com/labi-le/belphegor/pkg/clipboard/wlr"
 	"math/rand"
 	"testing"
@@ -73,7 +73,7 @@ func TestWlr_WatchWrite(t *testing.T) {
 }
 
 func checkUpdate(ctx context.Context, cancel context.CancelFunc, t *testing.T, test testcase) {
-	updates := make(chan clipboard.Update)
+	updates := make(chan api.Update)
 	go wlr.Must().Watch(ctx, updates)
 
 	select {

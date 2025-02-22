@@ -1,10 +1,11 @@
 //go:build windows
 // +build windows
 
-package clipboard
+package windows
 
 import (
 	"bytes"
+	"github.com/labi-le/belphegor/pkg/clipboard"
 	"os"
 	"testing"
 )
@@ -34,7 +35,7 @@ func Test_windows_Set(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := New()
+			p := clipboard.New()
 			if err := p.Set(tt.args.data); (err != nil) != tt.wantErr {
 				t.Errorf("Set() error = %v, wantErr %v", err, tt.wantErr)
 			}

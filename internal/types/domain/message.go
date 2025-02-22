@@ -40,7 +40,7 @@ func MessageFromProto(m *proto.Message) Message {
 			Created:           m.Header.Created.AsTime(),
 			From:              m.Header.From,
 			MimeType:          MimeType(m.Header.MimeType),
-			ClipboardProvider: ClipboardProvider(m.Header.ClipboardProvider.Number()),
+			ClipboardProvider: ClipboardProvider(m.Header.ClipboardProvider),
 		},
 	}
 }
@@ -95,7 +95,7 @@ func (m Message) Proto() pb.Message {
 			MimeType:          proto.Mime(m.Header.MimeType),
 			ID:                m.ID(),
 			Created:           timestamppb.New(m.Header.Created),
-			ClipboardProvider: proto.Clipboard(m.Header.ClipboardProvider),
+			ClipboardProvider: uint32(m.Header.ClipboardProvider),
 		},
 	}
 }
