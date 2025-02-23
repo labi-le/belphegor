@@ -1,12 +1,14 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard/api"
+	"github.com/labi-le/belphegor/pkg/clipboard/wlr"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/rs/zerolog/log"
 	"net"
@@ -18,7 +20,7 @@ var (
 )
 
 type Node struct {
-	clipboard      api.Manager
+	clipboard      api.Eventful
 	peers          *Storage
 	localClipboard Channel
 	lastMessage    *LastMessage
@@ -129,7 +131,7 @@ func NewOptions(opts ...Option) *Options {
 
 // New creates a new instance of Node with the specified settings
 func New(
-	clipboard api.Manager,
+	clipboard api.Eventful,
 	peers *Storage,
 	localClipboard Channel,
 	opts ...Option,
@@ -145,7 +147,7 @@ func New(
 }
 
 // ConnectTo establishes a TCP connection to a remote clipboard at the specified address
-func (n *Node) ConnectTo(addr string) error {
+func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	ctxLog := log.With().Str("op", "node.ConnectTo").Logger()
 
 	conn, err := net.Dial("tcp4", addr)
@@ -154,7 +156,7 @@ func (n *Node) ConnectTo(addr string) error {
 		return err
 	}
 
-	if connErr := n.handleConnection(conn); connErr != nil {
+	if connErr := n.handleConnection(ctx, conn); connErr != nil {
 		ctxLog.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
 		return connErr
 	}
@@ -195,7 +197,7 @@ func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.
 }
 
 // Start starts the node by listening for incoming connections on the specified public port
-func (n *Node) Start() error {
+func (n *Node) Start(ctx context.Context) error {
 	ctxLog := log.With().Str("op", "node.Start").Logger()
 
 	l, err := net.Listen("tcp4", fmt.Sprintf(":%d", n.options.PublicPort))
@@ -212,25 +214,40 @@ func (n *Node) Start() error {
 		Str("metadata", n.options.Metadata.String()).
 		Msg("node started")
 
-	go n.MonitorBuffer()
+	go n.MonitorBuffer(ctx)
+
+	connChan := make(chan net.Conn)
+	go func() {
+		for {
+			conn, netErr := l.Accept()
+			if netErr != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				ctxLog.Err(netErr).Msg("accept failed")
+				continue
+			}
+			connChan <- conn
+		}
+	}()
 
 	for {
-		conn, netErr := l.Accept()
-		if netErr != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			ctxLog.Warn().Msg("shutting down node")
+			return nil
+		case conn := <-connChan:
+			ctxLog.Trace().Msgf("accepted connection from %s", conn.RemoteAddr())
+			go func(c net.Conn) {
+				if connErr := n.handleConnection(ctx, c); connErr != nil {
+					ctxLog.Err(connErr).Msg("failed to handle connection")
+				}
+			}(conn)
 		}
-
-		ctxLog.Trace().Msgf("accepted connection from %s", conn.RemoteAddr())
-
-		go func() {
-			if connErr := n.handleConnection(conn); connErr != nil {
-				ctxLog.Err(connErr).Msg("failed to handle connection")
-			}
-		}()
 	}
 }
 
-func (n *Node) handleConnection(conn net.Conn) error {
+func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 	ctxLog := log.With().Str("op", "node.handleConnection").Logger()
 
 	hs, cipherErr := newHandshake(n.options.BitSize, n.Metadata())
@@ -264,7 +281,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 
 	ctxLog.Info().Str("peer", peer.String()).Msg("connected")
 
-	peer.Receive(n.lastMessage)
+	peer.Receive(ctx, n.lastMessage)
 	return nil
 }
 
@@ -279,8 +296,8 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 		}
 
 		ctxLog.Trace().Msgf(
-			"sent %d to %s",
-			msg.ID(),
+			"msg %s -> %s",
+			msg.String(),
 			peer.String(),
 		)
 
@@ -301,27 +318,43 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 }
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
-func (n *Node) MonitorBuffer() {
+func (n *Node) MonitorBuffer(ctx context.Context) {
 	ctxLog := log.With().Str("op", "node.MonitorBuffer").Logger()
 
 	var (
-		currentClipboard = n.fetchClipboardData()
+		currentClipboard = domain.MessageFrom([]byte{}, n.Metadata().UniqueID())
 	)
 
 	go func() {
-		for range time.Tick(n.options.ClipboardScanDelay) {
-			newClipboard := n.fetchClipboardData()
-			if !newClipboard.Duplicate(currentClipboard) {
-				ctxLog.Trace().Msg("local clipboard data changed")
+		<-ctx.Done()
+		close(n.localClipboard)
+	}()
 
-				currentClipboard = newClipboard
+	go func() {
+		layer, ok := n.clipboard.(*wlr.Wlr)
+		if ok {
+			ctxLog.Trace().Msg("start wlr client")
+			go layer.Run(ctx)
+		}
+		var update = make(chan api.Update)
+		go n.clipboard.Watch(ctx, update)
+		for ev := range update {
+			newData := domain.MessageFrom(ev.Data, n.Metadata().UniqueID())
+			if !newData.Duplicate(currentClipboard) {
+				ctxLog.Trace().Msg("local clipboard data changed")
+				currentClipboard = newData
 				n.localClipboard <- currentClipboard
 			}
 		}
 	}()
+
 	for msg := range n.localClipboard {
 		if msg.From() != n.options.Metadata.UniqueID() {
-			n.setClipboardData(msg)
+			n, err := n.clipboard.Write(msg.RawData())
+			if err != nil {
+				log.Trace().Err(err).Send()
+			}
+			log.Trace().Msgf("set clipboard data: %d", n)
 		}
 
 		if n.lastMessage.Msg().Duplicate(msg) {
@@ -330,16 +363,6 @@ func (n *Node) MonitorBuffer() {
 
 		go n.Broadcast(msg, msg.From())
 	}
-}
-
-func (n *Node) fetchClipboardData() domain.Message {
-	clip, _ := n.clipboard.Get()
-	return domain.MessageFrom(clip, n.Metadata().UniqueID())
-}
-
-func (n *Node) setClipboardData(m domain.Message) {
-	log.Trace().Msg("set clipboard data")
-	_ = n.clipboard.Set(m.RawData())
 }
 
 func (n *Node) Notify(message string, v ...any) {

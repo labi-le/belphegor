@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"crypto"
 	"errors"
 	"fmt"
@@ -67,37 +68,42 @@ func (p *Peer) Close() error { return p.conn.Close() }
 
 func (p *Peer) String() string {
 	return fmt.Sprintf(
-		"%s -> %s",
-		p.MetaData().String(),
+		"%s (%s)",
 		p.addr.String(),
+		p.MetaData().String(),
 	)
 }
 
-func (p *Peer) Receive(last *LastMessage) {
+func (p *Peer) Receive(ctx context.Context, last *LastMessage) {
 	ctxLog := log.With().Str("op", "peer.Receive").Logger()
+	defer ctxLog.Info().Msgf("%s disconnected", p.String())
 
 	for {
-		msg, err := domain.ReceiveMessage(p.Conn(), p.cipher)
-		if err != nil {
-			var opErr *net.OpError
-			if errors.As(err, &opErr) || errors.Is(err, io.EOF) {
-				ctxLog.Trace().Err(opErr).Msg("connection closed")
-				return
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			msg, err := domain.ReceiveMessage(p.Conn(), p.cipher)
+			if err != nil {
+				var opErr *net.OpError
+				if errors.As(err, &opErr) || errors.Is(err, io.EOF) {
+					ctxLog.Trace().Err(opErr).Msg("connection closed")
+					return
+				}
+
+				ctxLog.Err(err).Msg("failed to receive message")
+				break
 			}
 
-			ctxLog.Err(err).Msg("failed to receive message")
-			break
+			last.Update(msg)
+			p.localClipboard <- msg
+
+			ctxLog.Debug().Msgf(
+				"received %s from %s",
+				msg.String(),
+				p.String(),
+			)
 		}
-
-		last.Update(msg)
-		p.localClipboard <- msg
-
-		ctxLog.Debug().Msgf(
-			"received %d from %s",
-			msg.ID(),
-			p.String(),
-		)
 	}
 
-	ctxLog.Info().Msgf("%s disconnected", p.String())
 }

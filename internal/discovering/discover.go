@@ -1,6 +1,7 @@
 package discovering
 
 import (
+	"context"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/types/domain"
@@ -64,7 +65,7 @@ func New(opts ...Option) *Discover {
 	return d
 }
 
-func (d *Discover) Discover(n *node.Node) {
+func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 	ctxLog := log.With().Str("op", "discover.Discover").Logger()
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
@@ -98,7 +99,7 @@ func (d *Discover) Discover(n *node.Node) {
 					Uint32("port", greet.Port).
 					Msg("discovered new peer")
 
-				go n.ConnectTo(fmt.Sprintf(
+				go n.ConnectTo(ctx, fmt.Sprintf(
 					"%s:%d",
 					peerIP.String(),
 					greet.Port,

@@ -1,77 +1,50 @@
 package wlr
 
 import (
-	"context"
-	wl "deedles.dev/wl/client"
+	"errors"
 	"github.com/labi-le/belphegor/pkg/pipe"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
-type ClipboardReader struct {
+type reader struct {
 	*preset
-	device *ZwlrDataControlDeviceV1
-	Pipe   pipe.RWPipe
+	pipe   pipe.RWPipe
+	logger zerolog.Logger
 }
 
-func NewClipboardReader(client *wl.Client, p pipe.RWPipe) *ClipboardReader {
-	return &ClipboardReader{
-		preset: &preset{client: client},
-		Pipe:   p,
+func newReader(preset *preset, pipe pipe.RWPipe, log zerolog.Logger) *reader {
+	return &reader{
+		preset: preset,
+		pipe:   pipe,
+		logger: log.With().Str("component", "reader").Logger(),
 	}
 }
 
-func (s *ClipboardReader) Run(ctx context.Context) error {
-	err := s.Setup()
-	if err != nil {
-		return err
-	}
-	s.device = s.deviceManager.GetDataDevice(s.seat)
-	s.device.Listener = (*deviceListener)(s)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case ev, ok := <-s.client.Events():
-			if !ok {
-				return nil
-			}
-			err := ev()
-			if err != nil {
-				log.Error().Msgf("event: %v", err)
-				return err
-			}
-		}
-	}
-}
-
-type deviceListener ClipboardReader
-
-func (d *deviceListener) DataOffer(id *ZwlrDataControlOfferV1) {
+func (r *reader) DataOffer(id *ZwlrDataControlOfferV1) {
 	if id == nil {
 		return
 	}
-	id.Listener = (*dataOfferListener)(d)
+	id.Listener = r
 }
 
-func (d *deviceListener) Selection(offer *ZwlrDataControlOfferV1) {
+func (r *reader) Selection(offer *ZwlrDataControlOfferV1) {
 	if offer == nil {
 		return
 	}
-	log.Trace().Msg("received new selection offer")
-	offer.Receive("text/plain", int(d.Pipe.Fd()))
+
+	r.logger.Trace().Str("Selection", "received new selection offer").Send()
+
+	offer.Receive("text/plain", int(r.pipe.Fd()))
 }
 
-func (d *deviceListener) Finished() {}
+func (r *reader) Finished() {}
 
-func (d *deviceListener) PrimarySelection(*ZwlrDataControlOfferV1) {}
+func (r *reader) PrimarySelection(*ZwlrDataControlOfferV1) {}
 
-type dataOfferListener ClipboardReader
-
-func (d *dataOfferListener) Offer(string) {
+func (r *reader) Offer(string) {
 	//log.Debug().Msgf("offer called with: %s", s)
 }
 
-func (s *ClipboardReader) Close() error {
-	return s.client.Close()
+func (r *reader) Close() error {
+	return errors.Join(r.client.Close(), r.pipe.Close())
 }

@@ -3,11 +3,13 @@ package domain
 import (
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/clipboard/generic"
+	"github.com/labi-le/belphegor/pkg/clipboard/wlr"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 var (
-	CurrentClipboardProvider = ClipboardProviderFromManager(clipboard.New())
+	CurrentClipboardProvider = ClipboardProviderFromManager(clipboard.New(zerolog.Nop()))
 )
 
 type ClipboardProvider uint32
@@ -16,7 +18,7 @@ const (
 	ClipboardNull ClipboardProvider = iota
 	ClipboardXSel
 	ClipboardXClip
-	ClipboardWlClipboard
+	ClipboardWlr
 	ClipboardMasOsStd
 	ClipboardWindowsNT10
 	ClipboardTermux
@@ -28,8 +30,8 @@ func ClipboardProviderFromManager(m any) ClipboardProvider {
 		return ClipboardXSel
 	case generic.XClip:
 		return ClipboardXClip
-	case generic.WlClipboard:
-		return ClipboardWlClipboard
+	case *wlr.Wlr:
+		return ClipboardWlr
 	case generic.Termux:
 		return ClipboardTermux
 	case *generic.Null:

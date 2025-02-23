@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/rand"
+	"fmt"
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/image"
 	"github.com/labi-le/belphegor/pkg/protoutil"
@@ -109,6 +110,10 @@ func (m Message) WriteEncrypted(signer crypto.Signer, writer io.Writer) (int, er
 
 	msg := EncryptedMessage{encrypted}
 	return protoutil.EncodeWriter(msg, writer)
+}
+
+func (m Message) String() string {
+	return fmt.Sprintf("%d#%d", Short(m.ID()), Short(m.Header.From))
 }
 
 func ReceiveMessage(conn net.Conn, decrypter crypto.Decrypter) (Message, error) {

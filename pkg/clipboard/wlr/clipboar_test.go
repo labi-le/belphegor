@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/labi-le/belphegor/pkg/clipboard/api"
 	"github.com/labi-le/belphegor/pkg/clipboard/wlr"
+	"github.com/rs/zerolog/log"
 	"math/rand"
 	"testing"
 	"time"
@@ -42,7 +43,7 @@ func TestWlr_WatchWrite(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			w := wlr.Must()
+			w := wlr.Must(log.Logger)
 			go w.Run(ctx)
 
 			// warmup
@@ -74,7 +75,7 @@ func TestWlr_WatchWrite(t *testing.T) {
 
 func checkUpdate(ctx context.Context, cancel context.CancelFunc, t *testing.T, test testcase) {
 	updates := make(chan api.Update)
-	go wlr.Must().Watch(ctx, updates)
+	go wlr.Must(log.Logger).Watch(ctx, updates)
 
 	select {
 	case update := <-updates:

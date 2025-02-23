@@ -29,3 +29,7 @@ func (g *idGenerator) nextID() int64 {
 func NewID() UniqueID {
 	return generator.nextID()
 }
+
+func Short(id UniqueID) UniqueID {
+	return id % 10000
+}

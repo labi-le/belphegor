@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
@@ -17,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 	flag "github.com/spf13/pflag"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"time"
 )
@@ -69,6 +71,9 @@ func init() {
 }
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
 	if debug {
 		port = 7777
 		log.Info().Msg("debug mode enabled")
@@ -96,7 +101,7 @@ func main() {
 	}
 
 	nd := node.New(
-		clipboard.New(),
+		clipboard.New(log.Logger),
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
 		make(node.Channel),
 		node.WithPublicPort(port),
@@ -117,7 +122,7 @@ func main() {
 
 	if addressIP != "" {
 		go func() {
-			if err := nd.ConnectTo(addressIP); err != nil {
+			if err := nd.ConnectTo(ctx, addressIP); err != nil {
 				log.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
 			}
 		}()
@@ -128,11 +133,11 @@ func main() {
 			discovering.WithMaxPeers(maxPeers),
 			discovering.WithDelay(discoverDelay),
 			discovering.WithPort(port),
-		).Discover(nd)
+		).Discover(ctx, nd)
 	}
 
-	if err := nd.Start(); err != nil {
-		log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
+	if err := nd.Start(ctx); err != nil && errors.Is(ctx.Err(), context.Canceled) {
+		log.Panic().AnErr("node.Start", err).Msg("failed to start the node")
 	}
 }
 
@@ -148,19 +153,9 @@ func notificationProvider(enable bool) notification.Notifier {
 
 func initLogger(debug bool) {
 	if debug {
-		log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		log.Logger = log.With().Caller().Logger()
+		//log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stdout})
 
-		zerolog.CallerMarshalFunc = func(_ uintptr, file string, line int) string {
-			short := file
-			for i := len(file) - 1; i > 0; i-- {
-				if file[i] == '/' {
-					short = file[i+1:]
-					break
-				}
-			}
-			file = short
-			return fmt.Sprintf("%s:%d", file, line)
-		}
 		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 		return
 	}

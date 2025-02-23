@@ -4,13 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
+	"github.com/rs/zerolog"
 	"golang.org/x/sys/unix"
 	"syscall"
 	"time"
 	"unsafe"
 )
 
-var _ RWPipe = Reusable{}
+var _ RWPipe = &Reusable{}
 
 var (
 	ErrNilPipe      = fmt.Errorf("pipe: nil pipe provided")
@@ -34,10 +35,11 @@ type RWPipe interface {
 // Non thread-safe
 type Reusable struct {
 	rfd, wfd int
+	logger   zerolog.Logger
 }
 
-func MustNonBlock() Reusable {
-	p, err := NewNonBlock()
+func MustNonBlock(log zerolog.Logger) *Reusable {
+	p, err := NewNonBlock(log)
 	if err != nil {
 		panic(err)
 	}
@@ -45,23 +47,26 @@ func MustNonBlock() Reusable {
 	return p
 }
 
-func NewNonBlock() (Reusable, error) {
+func NewNonBlock(log zerolog.Logger) (*Reusable, error) {
 	var pipefd [2]int
 	if err := syscall.Pipe(pipefd[:]); err != nil {
-		return Reusable{}, errors.Join(ErrFailedCreate, err)
+		return &Reusable{}, errors.Join(ErrFailedCreate, err)
 	}
 
 	if err := syscall.SetNonblock(pipefd[0], true); err != nil {
-		return Reusable{}, errors.Join(ErrFailedCreate, err)
+		return &Reusable{}, errors.Join(ErrFailedCreate, err)
 	}
 
-	return Reusable{
-		rfd: pipefd[0],
-		wfd: pipefd[1],
+	return &Reusable{
+		rfd:    pipefd[0],
+		wfd:    pipefd[1],
+		logger: log.With().Str("component", "pipe").Logger(),
 	}, nil
 }
 
-func (w Reusable) Close() error {
+func (w *Reusable) Close() error {
+	w.logger.Trace().Ints("close(:rfd, :wfd)", []int{w.rfd, w.wfd}).Send()
+
 	if err := syscall.Close(w.rfd); err != nil {
 		return errors.Join(ErrClose, err)
 	}
@@ -71,11 +76,13 @@ func (w Reusable) Close() error {
 	return nil
 }
 
-func (w Reusable) Fd() uintptr {
+func (w *Reusable) Fd() uintptr {
+	w.logger.Trace().Int("write_fd", w.wfd).Send()
 	return uintptr(w.wfd)
 }
 
-func (w Reusable) ReadFd() uintptr {
+func (w *Reusable) ReadFd() uintptr {
+	w.logger.Trace().Int("read_fd", w.rfd).Send()
 	return uintptr(w.rfd)
 }
 

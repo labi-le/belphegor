@@ -40,7 +40,7 @@ func (meta MetaData) UniqueID() UniqueID {
 }
 
 func (meta MetaData) String() string {
-	return fmt.Sprintf("%s (%d)", meta.Name, meta.ID)
+	return fmt.Sprintf("%s#%d", meta.Name, Short(meta.ID))
 }
 
 func MetaDataFromProto(device *proto.Device) MetaData {
