@@ -1,6 +1,7 @@
 module github.com/labi-le/belphegor
 
 go 1.22
+toolchain go1.23.7
 
 require (
 	github.com/bwmarrin/snowflake v0.3.0
@@ -9,7 +10,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/schollz/peerdiscovery v1.7.6
 	github.com/spf13/pflag v1.0.6
-	golang.org/x/image v0.24.0
+	golang.org/x/image v0.25.0
 	golang.org/x/sys v0.30.0
 	google.golang.org/protobuf v1.36.5
 )
