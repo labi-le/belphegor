@@ -11,7 +11,7 @@ require (
 	github.com/schollz/peerdiscovery v1.7.6
 	github.com/spf13/pflag v1.0.6
 	golang.org/x/image v0.26.0
-	golang.org/x/sys v0.31.0
+	golang.org/x/sys v0.32.0
 	google.golang.org/protobuf v1.36.6
 )
 
