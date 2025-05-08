@@ -272,10 +272,10 @@ func (n *Node) handleConnection(conn net.Conn) error {
 func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 	ctxLog := log.With().Str("op", "node.Broadcast").Logger()
 
-	n.peers.Tap(func(id domain.UniqueID, peer *Peer) {
+	n.peers.Tap(func(id domain.UniqueID, peer *Peer) bool {
 		if id == ignore {
 			ctxLog.Trace().Msgf("exclude sending to creator node: %s", peer.String())
-			return
+			return true
 		}
 
 		ctxLog.Trace().Msgf(
@@ -288,7 +288,7 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 		err := peer.Conn().SetWriteDeadline(time.Now().Add(n.options.WriteTimeout))
 		if err != nil {
 			ctxLog.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
-			return
+			return true
 		}
 		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
 
@@ -297,6 +297,8 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 			ctxLog.Error().AnErr("message.WriteEncrypted", encErr).Send()
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
+
+		return true
 	})
 }
 

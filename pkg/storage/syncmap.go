@@ -24,7 +24,8 @@ func (s *SyncMap[key, val]) Delete(k key) {
 func (s *SyncMap[key, val]) Get(k key) (val, bool) {
 	v, ok := s.m.Load(k)
 	if !ok {
-		return v.(val), false
+		var zeroVal val
+		return zeroVal, false
 	}
 	return v.(val), true
 }
@@ -34,15 +35,19 @@ func (s *SyncMap[key, val]) Exist(k key) bool {
 	return ok
 }
 
-func (s *SyncMap[key, val]) Tap(fn func(key, val)) {
+func (s *SyncMap[key, val]) Tap(fn func(key, val) bool) {
 	var wg sync.WaitGroup
 	s.m.Range(func(k, v any) bool {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			fn(k.(key), v.(val))
-		}()
-		return true
+		typedKey, okKey := k.(key)
+		if !okKey {
+			panic("unexpected key type in SyncMap during Tap")
+		}
+		typedVal, okVal := v.(val)
+		if !okVal {
+			panic("unexpected value type in SyncMap during Tap")
+		}
+
+		return fn(typedKey, typedVal)
 	})
 
 	wg.Wait()
