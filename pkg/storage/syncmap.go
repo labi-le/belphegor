@@ -24,7 +24,8 @@ func (s *SyncMap[key, val]) Delete(k key) {
 func (s *SyncMap[key, val]) Get(k key) (val, bool) {
 	v, ok := s.m.Load(k)
 	if !ok {
-		return v, false
+		var zeroVal val
+		return zeroVal, false
 	}
 	return v.(val), true
 }
