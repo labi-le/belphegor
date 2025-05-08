@@ -12,5 +12,5 @@ type Storage[key any, val any] interface {
 	// Exist returns true if the specified node exists in the storage.
 	Exist(k key) bool
 	// Tap calls the specified function for parallel each node in the storage.
-	Tap(fn func(key, val))
+	Tap(fn func(key, val) bool)
 }
