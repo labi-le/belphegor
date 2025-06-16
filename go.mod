@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/bwmarrin/snowflake v0.3.0
-	github.com/gen2brain/beeep v0.0.0-20240516210008-9c006672e7f4
+	github.com/gen2brain/beeep v0.11.0
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/rs/zerolog v1.34.0
 	github.com/schollz/peerdiscovery v1.7.6
@@ -17,12 +17,16 @@ require (
 )
 
 require (
-	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4 // indirect
+	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
+	github.com/esiqveland/notify v0.13.3 // indirect
+	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/jackmordaunt/icns/v3 v3.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
+	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
+	github.com/sergeymakinen/go-ico v1.0.0-beta.0 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
 	golang.org/x/net v0.40.0 // indirect
 )
