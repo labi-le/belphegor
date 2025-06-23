@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/bwmarrin/snowflake v0.3.0
-	github.com/gen2brain/beeep v0.11.0
+	github.com/gen2brain/beeep v0.11.1
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/rs/zerolog v1.34.0
 	github.com/schollz/peerdiscovery v1.7.6
