@@ -11,7 +11,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/schollz/peerdiscovery v1.7.6
 	github.com/spf13/pflag v1.0.6
-	golang.org/x/image v0.28.0
+	golang.org/x/image v0.29.0
 	golang.org/x/sys v0.33.0
 	google.golang.org/protobuf v1.36.6
 )
