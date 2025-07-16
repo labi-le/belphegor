@@ -72,34 +72,20 @@ sudo make install
 
 ```
 Usage of belphegor:
-  -bit_size int
-        RSA key bit size (default 2048)
-  -connect string
-        Address in ip:port format to connect to the node
-  -debug
-        Show debug logs
-  -discover_delay duration
-        Delay between node discovery (default 5m0s)
-  -help
-        Show help
-  -hidden
-        Hide console window (for windows user)
-  -keep_alive duration
-        Interval for checking connections between nodes (default 1m0s)
-  -max_peers int
-        Maximum number of peers to connect to (default 5)
-  -node_discover
-        Find local nodes on the network and connect to them (default true)
-  -notify
-        Enable notifications (default true)
-  -port int
-        Port to use. Default: random (default 7663)
-  -scan_delay duration
-        Delay between scan local clipboard (default 2s)
-  -version
-        Show version
-  -write_timeout duration
-        Write timeout (default 5s)
+      --bit_size int              RSA key bit size (default 2048)
+  -c, --connect string            Address in ip:port format to connect to the node
+  -d, --debug                     Show debug logs
+      --discover_delay duration   Delay between node discovery (default 5m0s)
+  -h, --help                      Show help
+      --hidden                    Hide console window (for windows user)
+      --keep_alive duration       Interval for checking connections between nodes (default 1m0s)
+      --max_peers int             Maximum number of peers to connect to (default 5)
+      --node_discover             Find local nodes on the network and connect to them (default true)
+      --notify                    Enable notifications (default true)
+  -p, --port int                  Port to use. Default: random (default 7937)
+      --scan_delay duration       Delay between scan local clipboard (default 2s)
+  -v, --version                   Show version
+      --write_timeout duration    Write timeout (default 5s)
 ```
 
 ### Todo
