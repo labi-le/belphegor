@@ -88,6 +88,15 @@ Usage of belphegor:
       --write_timeout duration    Write timeout (default 5s)
 ```
 
+
+### Autostart
+  <details> <summary>sway</summary>
+
+  ```conf
+  exec belphegor
+  ```
+  </details>
+
 ### Todo
 
 [x] Create github actions for build binary and running tests
