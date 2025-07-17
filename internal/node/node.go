@@ -18,11 +18,10 @@ var (
 )
 
 type Node struct {
-	clipboard      clipboard.Manager
-	peers          *Storage
-	localClipboard Channel
-	lastMessage    *LastMessage
-	options        *Options
+	clipboard clipboard.Manager
+	peers     *Storage
+	channel   *Channel
+	options   *Options
 }
 
 type Options struct {
@@ -131,16 +130,15 @@ func NewOptions(opts ...Option) *Options {
 func New(
 	clipboard clipboard.Manager,
 	peers *Storage,
-	localClipboard Channel,
+	channel *Channel,
 	opts ...Option,
 ) *Node {
 	options := NewOptions(opts...)
 	return &Node{
-		clipboard:      clipboard,
-		peers:          peers,
-		localClipboard: localClipboard,
-		lastMessage:    NewLastMessage(),
-		options:        options,
+		clipboard: clipboard,
+		peers:     peers,
+		channel:   channel,
+		options:   options,
 	}
 }
 
@@ -183,7 +181,7 @@ func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.
 	peer := AcquirePeer(
 		WithConn(conn),
 		WithMetaData(metadata),
-		WithLocalClipboard(n.localClipboard),
+		WithChannel(n.channel),
 		WithCipher(cipher),
 	)
 
@@ -264,7 +262,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 
 	ctxLog.Info().Str("peer", peer.String()).Msg("connected")
 
-	peer.Receive(n.lastMessage)
+	peer.Receive()
 	return nil
 }
 
@@ -317,16 +315,16 @@ func (n *Node) MonitorBuffer() {
 				ctxLog.Trace().Msg("local clipboard data changed")
 
 				currentClipboard = newClipboard
-				n.localClipboard <- currentClipboard
+				n.channel.new <- currentClipboard
 			}
 		}
 	}()
-	for msg := range n.localClipboard {
+	for msg := range n.channel.new {
 		if msg.From() != n.options.Metadata.UniqueID() {
 			n.setClipboardData(msg)
 		}
 
-		if n.lastMessage.Msg().Duplicate(msg) {
+		if n.channel.old.Duplicate(msg) {
 			continue
 		}
 

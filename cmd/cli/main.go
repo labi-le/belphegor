@@ -98,7 +98,7 @@ func main() {
 	nd := node.New(
 		clipboard.New(),
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
-		make(node.Channel),
+		node.NewChannel(),
 		node.WithPublicPort(port),
 		node.WithBitSize(bitSize),
 		node.WithKeepAlive(keepAlive),
@@ -112,6 +112,7 @@ func main() {
 		}),
 	)
 
+	// todo panic catch
 	lock := MustLock()
 	defer Unlock(lock)
 

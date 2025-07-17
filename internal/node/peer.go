@@ -27,9 +27,9 @@ func WithMetaData(meta domain.MetaData) PeerOption {
 	}
 }
 
-func WithLocalClipboard(updates Channel) PeerOption {
+func WithChannel(updates *Channel) PeerOption {
 	return func(p *Peer) {
-		p.localClipboard = updates
+		p.channel = updates
 	}
 }
 
@@ -48,11 +48,11 @@ func AcquirePeer(opts ...PeerOption) *Peer {
 }
 
 type Peer struct {
-	conn           net.Conn
-	addr           netip.AddrPort
-	metaData       domain.MetaData
-	localClipboard Channel
-	cipher         *encrypter.Cipher
+	conn     net.Conn
+	addr     netip.AddrPort
+	metaData domain.MetaData
+	channel  *Channel
+	cipher   *encrypter.Cipher
 }
 
 func (p *Peer) Addr() netip.AddrPort { return p.addr }
@@ -73,7 +73,7 @@ func (p *Peer) String() string {
 	)
 }
 
-func (p *Peer) Receive(last *LastMessage) {
+func (p *Peer) Receive() {
 	ctxLog := log.With().Str("op", "peer.Receive").Logger()
 
 	for {
@@ -89,8 +89,8 @@ func (p *Peer) Receive(last *LastMessage) {
 			break
 		}
 
-		last.Update(msg)
-		p.localClipboard <- msg
+		p.channel.Update(msg)
+		p.channel.new <- msg
 
 		ctxLog.Debug().Msgf(
 			"received %d from %s",
