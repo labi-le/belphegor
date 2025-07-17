@@ -1,15 +1,30 @@
 package node
 
-import "github.com/labi-le/belphegor/internal/types/domain"
+import (
+	"github.com/labi-le/belphegor/internal/types/domain"
+	"sync"
+)
 
 // Channel is an interface for managing clipboard data
 type Channel struct {
 	new chan domain.Message
 	old domain.Message
+	mu  sync.Mutex
 }
 
-func (c *Channel) Update(msg domain.Message) {
+func (c *Channel) Send(msg domain.Message) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.old.Duplicate(msg) {
+		return
+	}
 	c.old = msg
+	c.new <- msg
+}
+
+func (c *Channel) Listen() <-chan domain.Message {
+	return c.new
 }
 
 func NewChannel() *Channel {

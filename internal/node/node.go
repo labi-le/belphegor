@@ -315,17 +315,13 @@ func (n *Node) MonitorBuffer() {
 				ctxLog.Trace().Msg("local clipboard data changed")
 
 				currentClipboard = newClipboard
-				n.channel.new <- currentClipboard
+				n.channel.Send(currentClipboard)
 			}
 		}
 	}()
-	for msg := range n.channel.new {
+	for msg := range n.channel.Listen() {
 		if msg.From() != n.options.Metadata.UniqueID() {
 			n.setClipboardData(msg)
-		}
-
-		if n.channel.old.Duplicate(msg) {
-			continue
 		}
 
 		go n.Broadcast(msg, msg.From())

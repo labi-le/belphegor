@@ -89,8 +89,7 @@ func (p *Peer) Receive() {
 			break
 		}
 
-		p.channel.Update(msg)
-		p.channel.new <- msg
+		p.channel.Send(msg)
 
 		ctxLog.Debug().Msgf(
 			"received %d from %s",
