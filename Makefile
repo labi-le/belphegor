@@ -34,6 +34,10 @@ run:
 build: clean
 	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
 
+.PHONY: build-debug
+build-debug:
+	go build -gcflags="-m=2" $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
+
 .PHONY: clean
 clean:
 	rm -rf $(FULL_PATH)

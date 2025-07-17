@@ -43,7 +43,7 @@ func (h *handshake) exchange(conn net.Conn) (domain.Greet, *encrypter.Cipher, er
 
 	ctxLog := ctxlog.Op("handshake.exchangeGreetings")
 	ctxLog.Trace().
-		Str("peer", from.MetaData.String()).
+		Str("node", from.MetaData.String()).
 		Str("addr", conn.RemoteAddr().String()).
 		Msg("received greeting")
 

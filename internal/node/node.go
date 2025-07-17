@@ -214,14 +214,13 @@ func (n *Node) Start(ctx context.Context) {
 	}()
 
 	addr := l.Addr().String()
-
 	n.Notify("started on %s", addr)
 	ctxLog.Info().
 		Str("address", addr).
 		Str("metadata", n.options.Metadata.String()).
-		Msg("node started")
+		Msg("started")
 
-	go n.MonitorBuffer(ctx)
+	go n.MonitorBuffer()
 
 	for {
 		select {
@@ -232,8 +231,8 @@ func (n *Node) Start(ctx context.Context) {
 			if netErr != nil {
 				if errors.Is(netErr, net.ErrClosed) {
 					ctxLog.
-						Info().
-						Msg("shutdown: listener closed")
+						Trace().
+						Msg("listener closed")
 					return
 				}
 				ctxLog.
@@ -259,17 +258,25 @@ func (n *Node) Start(ctx context.Context) {
 }
 
 func (n *Node) handleConnection(conn net.Conn) error {
-	ctxLog := ctxlog.Op("node.handleConnection")
+	ctxLog := ctxlog.Op("node.handleConnection").
+		With().
+		Str("node", n.Metadata().String()).
+		Logger()
 
 	hs, cipherErr := newHandshake(n.options.BitSize, n.Metadata())
 	if cipherErr != nil {
-		ctxLog.Err(cipherErr).Msg("failed to generate key")
+		ctxLog.
+			Err(cipherErr).
+			Msg("generate key error")
 		return cipherErr
 	}
 
 	hisHand, cipher, greetErr := hs.exchange(conn)
 	if greetErr != nil {
-		ctxLog.Err(greetErr).Msg("failed to greet")
+		ctxLog.Error().
+			Err(greetErr).
+			Str("step", "greeting").
+			Msg("greeting failed")
 		return greetErr
 	}
 
@@ -282,7 +289,9 @@ func (n *Node) handleConnection(conn net.Conn) error {
 		if errors.Is(addErr, ErrAlreadyConnected) {
 			return nil
 		}
-		ctxLog.Err(addErr).Msg("failed to add peer")
+		ctxLog.
+			Err(addErr).
+			Msg("failed to add")
 		return addErr
 	}
 	defer n.peers.Delete(peer.MetaData().UniqueID())
@@ -290,7 +299,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 	n.Notify("connected to %s", peer.MetaData().Name)
 	defer n.Notify("Node disconnected %s", peer.MetaData().Name)
 
-	ctxLog.Info().Str("peer", peer.String()).Msg("connected")
+	ctxLog.Info().Msg("connected")
 
 	peer.Receive()
 	return nil
@@ -298,31 +307,39 @@ func (n *Node) handleConnection(conn net.Conn) error {
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
 func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
-	ctxLog := ctxlog.Op("node.Broadcast")
+	ctxLog := ctxlog.Op("node.Broadcast").
+		With().
+		Int64("msg_id", msg.ID()).
+		Logger()
 
 	n.peers.Tap(func(id domain.UniqueID, peer *Peer) bool {
+		ctx := ctxLog.
+			With().
+			Str("node", peer.String()).
+			Logger()
+
 		if id == ignore {
-			ctxLog.Trace().Msgf("exclude sending to creator node: %s", peer.String())
+			ctx.Trace().Msg("exclude")
 			return true
 		}
 
-		ctxLog.Trace().Msgf(
-			"sent %d to %s",
-			msg.ID(),
-			peer.String(),
-		)
+		ctx.Trace().Msg("sent")
 
 		// Set write timeout if the writer implements net.Conn
 		err := peer.Conn().SetWriteDeadline(time.Now().Add(n.options.WriteTimeout))
 		if err != nil {
-			ctxLog.Error().AnErr("net.Conn.SetWriteDeadline", err).Send()
+			ctx.Trace().
+				AnErr("SetWriteDeadline", err).
+				Msg("cannot set write deadline")
 			return true
 		}
 		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
 
 		_, encErr := msg.WriteEncrypted(peer.Signer(), peer.Conn())
 		if encErr != nil {
-			ctxLog.Error().AnErr("message.WriteEncrypted", encErr).Send()
+			ctx.Trace().
+				AnErr("WriteEncrypted", encErr).
+				Msg("failed to write encrypted message")
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
 
@@ -331,7 +348,7 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 }
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
-func (n *Node) MonitorBuffer(context.Context) {
+func (n *Node) MonitorBuffer() {
 	ctxLog := ctxlog.Op("node.MonitorBuffer")
 
 	var (
@@ -342,7 +359,10 @@ func (n *Node) MonitorBuffer(context.Context) {
 		for range time.Tick(n.options.ClipboardScanDelay) {
 			newClipboard := n.fetchClipboardData()
 			if !newClipboard.Duplicate(currentClipboard) {
-				ctxLog.Trace().Msg("local clipboard data changed")
+				ctxLog.
+					Trace().
+					Int64("msg_id", newClipboard.ID()).
+					Msg("local clipboard changed")
 
 				currentClipboard = newClipboard
 				n.channel.Send(currentClipboard)
@@ -364,7 +384,7 @@ func (n *Node) fetchClipboardData() domain.Message {
 }
 
 func (n *Node) setClipboardData(m domain.Message) {
-	log.Trace().Msg("set clipboard data")
+	log.Trace().Int64("msg_id", m.ID()).Msg("set clipboard data")
 	_ = n.clipboard.Set(m.RawData())
 }
 

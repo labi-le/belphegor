@@ -96,7 +96,7 @@ func (d *Discover) Discover(n *node.Node) {
 					Str("peer", greet.MetaData.String()).
 					Str("address", peerIP.String()).
 					Uint32("port", greet.Port).
-					Msg("discovered new peer")
+					Msg("discovered")
 
 				go n.ConnectTo(fmt.Sprintf(
 					"%s:%d",
@@ -108,6 +108,6 @@ func (d *Discover) Discover(n *node.Node) {
 	)
 
 	if err != nil {
-		ctxLog.Fatal().Err(err).Msg("failed to discover nodes")
+		ctxLog.Fatal().Err(err).Msg("failed to start discover")
 	}
 }

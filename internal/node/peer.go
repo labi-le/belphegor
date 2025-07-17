@@ -48,11 +48,12 @@ func AcquirePeer(opts ...PeerOption) *Peer {
 }
 
 type Peer struct {
-	conn     net.Conn
-	addr     netip.AddrPort
-	metaData domain.MetaData
-	channel  *Channel
-	cipher   *encrypter.Cipher
+	conn       net.Conn
+	addr       netip.AddrPort
+	metaData   domain.MetaData
+	channel    *Channel
+	cipher     *encrypter.Cipher
+	stringRepr string
 }
 
 func (p *Peer) Addr() netip.AddrPort { return p.addr }
@@ -66,11 +67,15 @@ func (p *Peer) Signer() crypto.Signer { return p.cipher }
 func (p *Peer) Close() error { return p.conn.Close() }
 
 func (p *Peer) String() string {
-	return fmt.Sprintf(
-		"%s -> %s",
-		p.MetaData().String(),
-		p.addr.String(),
-	)
+	if p.stringRepr == "" {
+		p.stringRepr = fmt.Sprintf(
+			"%s -> %s",
+			p.MetaData().Name,
+			p.addr.String(),
+		)
+	}
+
+	return p.stringRepr
 }
 
 func (p *Peer) Receive() {
@@ -91,7 +96,7 @@ func (p *Peer) Receive() {
 
 		p.channel.Send(msg)
 
-		ctxLog.Debug().Msgf(
+		ctxLog.Trace().Msgf(
 			"received %d from %s",
 			msg.ID(),
 			p.String(),
