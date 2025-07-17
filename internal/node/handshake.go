@@ -6,9 +6,9 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/protoutil"
-	"github.com/rs/zerolog/log"
 	"net"
 )
 
@@ -41,7 +41,7 @@ func (h *handshake) exchange(conn net.Conn) (domain.Greet, *encrypter.Cipher, er
 		return domain.Greet{}, nil, fmt.Errorf("receive greeting: %w", err)
 	}
 
-	ctxLog := log.With().Str("op", "handshake.exchangeGreetings").Logger()
+	ctxLog := ctxlog.Op("handshake.exchangeGreetings")
 	ctxLog.Trace().
 		Str("peer", from.MetaData.String()).
 		Str("addr", conn.RemoteAddr().String()).

@@ -5,8 +5,8 @@ import (
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	proto2 "github.com/labi-le/belphegor/internal/types/proto"
+	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/ip"
-	"github.com/rs/zerolog/log"
 	"github.com/schollz/peerdiscovery"
 	"google.golang.org/protobuf/proto"
 	"net"
@@ -65,7 +65,7 @@ func New(opts ...Option) *Discover {
 }
 
 func (d *Discover) Discover(n *node.Node) {
-	ctxLog := log.With().Str("op", "discover.Discover").Logger()
+	ctxLog := ctxlog.Op("discover.Discover")
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
 			PayloadFunc: func() []byte {

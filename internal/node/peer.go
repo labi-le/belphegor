@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
-	"github.com/rs/zerolog/log"
 	"io"
 	"net"
 	"net/netip"
@@ -74,7 +74,7 @@ func (p *Peer) String() string {
 }
 
 func (p *Peer) Receive() {
-	ctxLog := log.With().Str("op", "peer.Receive").Logger()
+	ctxLog := ctxlog.Op("peer.Receive")
 
 	for {
 		msg, err := domain.ReceiveMessage(p.Conn(), p.cipher)

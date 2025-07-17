@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal"
@@ -17,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 	flag "github.com/spf13/pflag"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"time"
 )
@@ -69,6 +71,9 @@ func init() {
 }
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
 	if debug {
 		port = 7777
 		log.Info().Msg("debug mode enabled")
@@ -132,9 +137,8 @@ func main() {
 		).Discover(nd)
 	}
 
-	if err := nd.Start(); err != nil {
-		log.Fatal().AnErr("node.Start", err).Msg("failed to start the node")
-	}
+	nd.Start(ctx)
+
 }
 
 func notificationProvider(enable bool) notification.Notifier {

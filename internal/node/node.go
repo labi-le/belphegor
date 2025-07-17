@@ -1,12 +1,14 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/rs/zerolog/log"
 	"net"
@@ -144,7 +146,7 @@ func New(
 
 // ConnectTo establishes a TCP connection to a remote clipboard at the specified address
 func (n *Node) ConnectTo(addr string) error {
-	ctxLog := log.With().Str("op", "node.ConnectTo").Logger()
+	ctxLog := ctxlog.Op("node.ConnectTo")
 
 	conn, err := net.Dial("tcp4", addr)
 	if err != nil {
@@ -161,7 +163,7 @@ func (n *Node) ConnectTo(addr string) error {
 }
 
 func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
-	ctxLog := log.With().Str("op", "node.addPeer").Logger()
+	ctxLog := ctxlog.Op("node.addPeer")
 
 	metadata := hisHand.MetaData
 	if n.peers.Exist(metadata.UniqueID()) {
@@ -193,14 +195,23 @@ func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.
 }
 
 // Start starts the node by listening for incoming connections on the specified public port
-func (n *Node) Start() error {
-	ctxLog := log.With().Str("op", "node.Start").Logger()
+func (n *Node) Start(ctx context.Context) {
+	defer n.channel.Close()
 
-	l, err := net.Listen("tcp4", fmt.Sprintf(":%d", n.options.PublicPort))
+	ctxLog := ctxlog.Op("node.Start")
+
+	var lc net.ListenConfig
+	l, err := lc.Listen(ctx, "tcp4", fmt.Sprintf(":%d", n.options.PublicPort))
 	if err != nil {
-		return err
+		ctxLog.Err(err).Msg("failed to listen")
 	}
 	defer l.Close()
+
+	go func() {
+		<-ctx.Done()
+		l.Close()
+		ctxLog.Info().Msg("goodbye!")
+	}()
 
 	addr := l.Addr().String()
 
@@ -210,26 +221,45 @@ func (n *Node) Start() error {
 		Str("metadata", n.options.Metadata.String()).
 		Msg("node started")
 
-	go n.MonitorBuffer()
+	go n.MonitorBuffer(ctx)
 
 	for {
-		conn, netErr := l.Accept()
-		if netErr != nil {
-			return err
-		}
-
-		ctxLog.Trace().Msgf("accepted connection from %s", conn.RemoteAddr())
-
-		go func() {
-			if connErr := n.handleConnection(conn); connErr != nil {
-				ctxLog.Err(connErr).Msg("failed to handle connection")
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			conn, netErr := l.Accept()
+			if netErr != nil {
+				if errors.Is(netErr, net.ErrClosed) {
+					ctxLog.
+						Info().
+						Msg("shutdown: listener closed")
+					return
+				}
+				ctxLog.
+					Fatal().
+					Err(netErr).
+					Msg("failed to accept connection")
+				return
 			}
-		}()
+
+			ctxLog.
+				Trace().
+				Msgf("accepted connection from %s", conn.RemoteAddr())
+
+			go func() {
+				if connErr := n.handleConnection(conn); connErr != nil {
+					ctxLog.
+						Err(connErr).
+						Msg("failed to handle connection")
+				}
+			}()
+		}
 	}
 }
 
 func (n *Node) handleConnection(conn net.Conn) error {
-	ctxLog := log.With().Str("op", "node.handleConnection").Logger()
+	ctxLog := ctxlog.Op("node.handleConnection")
 
 	hs, cipherErr := newHandshake(n.options.BitSize, n.Metadata())
 	if cipherErr != nil {
@@ -268,7 +298,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
 func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
-	ctxLog := log.With().Str("op", "node.Broadcast").Logger()
+	ctxLog := ctxlog.Op("node.Broadcast")
 
 	n.peers.Tap(func(id domain.UniqueID, peer *Peer) bool {
 		if id == ignore {
@@ -301,8 +331,8 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 }
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
-func (n *Node) MonitorBuffer() {
-	ctxLog := log.With().Str("op", "node.MonitorBuffer").Logger()
+func (n *Node) MonitorBuffer(context.Context) {
+	ctxLog := ctxlog.Op("node.MonitorBuffer")
 
 	var (
 		currentClipboard = n.fetchClipboardData()

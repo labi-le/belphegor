@@ -27,6 +27,11 @@ func (c *Channel) Listen() <-chan domain.Message {
 	return c.new
 }
 
+func (c *Channel) Close() error {
+	close(c.new)
+	return nil
+}
+
 func NewChannel() *Channel {
 	return &Channel{
 		new: make(chan domain.Message),
