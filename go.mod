@@ -1,8 +1,6 @@
 module github.com/labi-le/belphegor
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.24.1
 
 require (
 	github.com/bwmarrin/snowflake v0.3.0
@@ -10,7 +8,7 @@ require (
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/rs/zerolog v1.34.0
 	github.com/schollz/peerdiscovery v1.7.6
-	github.com/spf13/pflag v1.0.6
+	github.com/spf13/pflag v1.0.7
 	golang.org/x/image v0.29.0
 	golang.org/x/sys v0.34.0
 	google.golang.org/protobuf v1.36.6
@@ -28,5 +26,5 @@ require (
 	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
 	github.com/sergeymakinen/go-ico v1.0.0-beta.0 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
-	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/net v0.42.0 // indirect
 )
