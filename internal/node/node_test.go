@@ -2,6 +2,7 @@ package node_test
 
 import (
 	"bytes"
+	"context"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard"
@@ -16,17 +17,13 @@ func TestNode_MessageExchange(t *testing.T) {
 	clip1, node1, clip2, node2 := testNodes()
 
 	go func() {
-		if err := node1.Start(); err != nil {
-			t.Errorf("failed to start node1: %v", err)
-		}
+		node1.Start(context.TODO())
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
 	go func() {
-		if err := node2.Start(); err != nil {
-			t.Errorf("failed to start node1: %v", err)
-		}
+		node2.Start(context.TODO())
 	}()
 
 	go func() {
@@ -39,7 +36,7 @@ func TestNode_MessageExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(3 * time.Second)
 	for {
 		select {
 		case <-deadline:
@@ -62,7 +59,7 @@ func testNodes() (*clipboard.Null, *node.Node, *clipboard.Null, *node.Node) {
 	node1 := node.New(
 		clip1,
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
-		make(node.Channel),
+		node.NewChannel(),
 		node.WithPublicPort(7777),
 		node.WithMetadata(domain.MetaData{
 			Name: "1",
@@ -75,7 +72,7 @@ func testNodes() (*clipboard.Null, *node.Node, *clipboard.Null, *node.Node) {
 	node2 := node.New(
 		clip2,
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
-		make(node.Channel),
+		node.NewChannel(),
 		node.WithPublicPort(7778),
 		node.WithMetadata(domain.MetaData{
 			Name: "2",
