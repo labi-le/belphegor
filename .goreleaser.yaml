@@ -4,7 +4,7 @@ before:
   hooks:
     - go generate ./...
 archives:
-  - format: binary
+  - formats: [ binary ]
 builds:
   - main: "./cmd/cli/"
     mod_timestamp: '{{ .CommitTimestamp }}'
