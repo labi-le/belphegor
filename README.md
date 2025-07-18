@@ -1,7 +1,7 @@
 # belphegor
 
 Belphegor is a clipboard manager that allows you to share your clipboard with other devices on the network.\
-<img src="logo.webp" width="800">
+<img src="logo.png" width="500">
 ___
 
 ### Features
