@@ -20,6 +20,7 @@ LDFLAGS=-ldflags="-X '${METADATA_PACKAGE}.Version=${VERSION}' \
                   -X '${METADATA_PACKAGE}.BuildTime=${BUILD_TIMESTAMP}' \
                   -s -w \
                   -extldflags '-static'"
+TAGS=-tags nodbus
 
 CURRENT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 MAJOR := $(shell echo $(CURRENT_VERSION) | cut -d. -f1 | tr -d 'v')
@@ -32,7 +33,7 @@ run:
 
 .PHONY: build
 build: clean
-	go build $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
+	go build $(TAGS) $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
 
 .PHONY: build-debug
 build-debug:

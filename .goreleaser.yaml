@@ -18,6 +18,7 @@ builds:
     tags:
       - netgo
       - osusergo
+      - nodbus
     env:
       - CGO_ENABLED=0
     flags:
