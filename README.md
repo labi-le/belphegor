@@ -82,7 +82,7 @@ Usage of belphegor:
       --max_peers int             Maximum number of peers to connect to (default 5)
       --node_discover             Find local nodes on the network and connect to them (default true)
       --notify                    Enable notifications (default true)
-  -p, --port int                  Port to use. Default: random (default 7937)
+  -p, --port int                  Port to use. Default: random
       --scan_delay duration       Delay between scan local clipboard (default 2s)
   -v, --version                   Show version
       --write_timeout duration    Write timeout (default 5s)
