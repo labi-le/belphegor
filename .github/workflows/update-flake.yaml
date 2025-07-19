@@ -57,7 +57,7 @@ jobs:
 
       - name: Create Pull Request
         id: cpr
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           base: main
           commit-message: "chore: update flake.nix and flake.lock to v${{ env.VERSION }}"
