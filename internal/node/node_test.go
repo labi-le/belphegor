@@ -13,6 +13,7 @@ import (
 
 func TestNode_MessageExchange(t *testing.T) {
 	testData := []byte("test message")
+	ctx := context.TODO()
 
 	clip1, node1, clip2, node2 := testNodes()
 
@@ -27,7 +28,7 @@ func TestNode_MessageExchange(t *testing.T) {
 	}()
 
 	go func() {
-		if err := node2.ConnectTo("127.0.0.1:7777"); err != nil {
+		if err := node2.ConnectTo(ctx, "127.0.0.1:7777"); err != nil {
 			t.Fatalf("failed to connect node2 to node1: %v", err)
 		}
 	}()

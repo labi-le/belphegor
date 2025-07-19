@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"crypto"
 	"errors"
 	"fmt"
@@ -78,30 +79,48 @@ func (p *Peer) String() string {
 	return p.stringRepr
 }
 
-func (p *Peer) Receive() {
+func (p *Peer) Receive(ctx context.Context) error {
 	ctxLog := ctxlog.Op("peer.Receive")
+	defer ctxLog.
+		Info().
+		Str("node", p.String()).
+		Msg("disconnected")
+
+	type readResult struct {
+		msg domain.Message
+		err error
+	}
+	resultChan := make(chan readResult, 1)
+
+	go func() {
+		for {
+			msg, err := domain.ReceiveMessage(p.Conn(), p.cipher)
+			resultChan <- readResult{msg: msg, err: err}
+		}
+	}()
 
 	for {
-		msg, err := domain.ReceiveMessage(p.Conn(), p.cipher)
-		if err != nil {
-			var opErr *net.OpError
-			if errors.As(err, &opErr) || errors.Is(err, io.EOF) {
-				ctxLog.Trace().Err(opErr).Msg("connection closed")
-				return
+		select {
+		case <-ctx.Done():
+			return p.Close()
+		case res := <-resultChan:
+			if res.err != nil {
+				var opErr *net.OpError
+				if errors.As(res.err, &opErr) || errors.Is(res.err, io.EOF) {
+					ctxLog.Trace().Err(opErr).Msg("connection closed")
+					return nil
+				}
+
+				return res.err
 			}
 
-			ctxLog.Err(err).Msg("failed to receive message")
-			break
+			p.channel.Send(res.msg)
+
+			ctxLog.Trace().Msgf(
+				"received %d from %s",
+				res.msg.ID(),
+				p.String(),
+			)
 		}
-
-		p.channel.Send(msg)
-
-		ctxLog.Trace().Msgf(
-			"received %d from %s",
-			msg.ID(),
-			p.String(),
-		)
 	}
-
-	ctxLog.Info().Msgf("%s disconnected", p.String())
 }

@@ -1,6 +1,7 @@
 package discovering
 
 import (
+	"context"
 	"fmt"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/types/domain"
@@ -64,16 +65,11 @@ func New(opts ...Option) *Discover {
 	return d
 }
 
-func (d *Discover) Discover(n *node.Node) {
+func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 	ctxLog := ctxlog.Op("discover.Discover")
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
-			PayloadFunc: func() []byte {
-				greet := domain.NewGreet(domain.WithMetadata(n.Metadata()))
-				greet.Port = uint32(d.port)
-				byt, _ := proto.Marshal(greet.Proto())
-				return byt
-			},
+			Payload:   createPayload(n.Metadata(), d.port),
 			Limit:     d.maxPeers,
 			TimeLimit: -1,
 			Delay:     d.delay,
@@ -92,17 +88,19 @@ func (d *Discover) Discover(n *node.Node) {
 				}
 				greet := domain.GreetFromProto(&msg)
 
-				ctxLog.Info().
+				ctxLog.Trace().
 					Str("peer", greet.MetaData.String()).
 					Str("address", peerIP.String()).
 					Uint32("port", greet.Port).
 					Msg("discovered")
 
-				go n.ConnectTo(fmt.Sprintf(
-					"%s:%d",
-					peerIP.String(),
-					greet.Port,
-				))
+				go n.ConnectTo(
+					ctx,
+					fmt.Sprintf(
+						"%s:%d",
+						peerIP.String(),
+						greet.Port,
+					))
 			},
 		},
 	)
@@ -110,4 +108,11 @@ func (d *Discover) Discover(n *node.Node) {
 	if err != nil {
 		ctxLog.Fatal().Err(err).Msg("failed to start discover")
 	}
+}
+
+func createPayload(metadata domain.MetaData, port int) []byte {
+	greet := domain.NewGreet(domain.WithMetadata(metadata))
+	greet.Port = uint32(port)
+	byt, _ := proto.Marshal(greet.Proto())
+	return byt
 }

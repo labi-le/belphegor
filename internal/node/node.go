@@ -145,16 +145,17 @@ func New(
 }
 
 // ConnectTo establishes a TCP connection to a remote clipboard at the specified address
-func (n *Node) ConnectTo(addr string) error {
+func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	ctxLog := ctxlog.Op("node.ConnectTo")
 
-	conn, err := net.Dial("tcp4", addr)
+	var lc net.Dialer
+	conn, err := lc.DialContext(ctx, "tcp4", addr)
 	if err != nil {
 		ctxLog.Error().AnErr("net.Dial", err).Msg("failed to handle connection")
 		return err
 	}
 
-	if connErr := n.handleConnection(conn); connErr != nil {
+	if connErr := n.handleConnection(ctx, conn); connErr != nil {
 		ctxLog.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
 		return connErr
 	}
@@ -172,10 +173,12 @@ func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.
 	}
 
 	if tcp, ok := conn.(*net.TCPConn); ok {
-		if aliveErr := tcp.SetKeepAlive(true); aliveErr != nil {
-			return nil, aliveErr
-		}
-		if err := tcp.SetKeepAlivePeriod(n.options.KeepAlive); err != nil {
+		if err := tcp.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     n.options.KeepAlive,
+			Interval: n.options.KeepAlive,
+			Count:    1,
+		}); err != nil {
 			return nil, err
 		}
 	}
@@ -210,7 +213,6 @@ func (n *Node) Start(ctx context.Context) {
 	go func() {
 		<-ctx.Done()
 		l.Close()
-		ctxLog.Info().Msg("goodbye!")
 	}()
 
 	addr := l.Addr().String()
@@ -230,9 +232,6 @@ func (n *Node) Start(ctx context.Context) {
 			conn, netErr := l.Accept()
 			if netErr != nil {
 				if errors.Is(netErr, net.ErrClosed) {
-					ctxLog.
-						Trace().
-						Msg("listener closed")
 					return
 				}
 				ctxLog.
@@ -247,7 +246,7 @@ func (n *Node) Start(ctx context.Context) {
 				Msgf("accepted connection from %s", conn.RemoteAddr())
 
 			go func() {
-				if connErr := n.handleConnection(conn); connErr != nil {
+				if connErr := n.handleConnection(ctx, conn); connErr != nil {
 					ctxLog.
 						Err(connErr).
 						Msg("failed to handle connection")
@@ -257,7 +256,7 @@ func (n *Node) Start(ctx context.Context) {
 	}
 }
 
-func (n *Node) handleConnection(conn net.Conn) error {
+func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 	ctxLog := ctxlog.Op("node.handleConnection").
 		With().
 		Str("node", n.Metadata().String()).
@@ -301,8 +300,7 @@ func (n *Node) handleConnection(conn net.Conn) error {
 
 	ctxLog.Info().Msg("connected")
 
-	peer.Receive()
-	return nil
+	return peer.Receive(ctx)
 }
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.

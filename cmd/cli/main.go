@@ -123,7 +123,7 @@ func main() {
 
 	if addressIP != "" {
 		go func() {
-			if err := nd.ConnectTo(addressIP); err != nil {
+			if err := nd.ConnectTo(ctx, addressIP); err != nil {
 				log.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
 			}
 		}()
@@ -134,7 +134,7 @@ func main() {
 			discovering.WithMaxPeers(maxPeers),
 			discovering.WithDelay(discoverDelay),
 			discovering.WithPort(port),
-		).Discover(nd)
+		).Discover(ctx, nd)
 	}
 
 	nd.Start(ctx)
