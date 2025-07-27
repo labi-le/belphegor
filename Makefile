@@ -29,7 +29,7 @@ PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
 .PHONY: run
 run:
-	go run $(MAIN_PATH) --node_discover=true --debug --scan_delay=1s
+	WAYLAND_DEBUG=1 go run $(MAIN_PATH) --node_discover=true --debug --scan_delay=1s
 
 .PHONY: build
 build: clean
@@ -134,3 +134,6 @@ dist:
         -v $(PWD):/go/src/github.com/labi-le/belphegor \
         -w /go/src/github.com/labi-le/belphegor \
         goreleaser/goreleaser release --clean --snapshot
+
+fake-update-clipboard:
+	while true; do uuidgen | wl-copy; sleep 3; done

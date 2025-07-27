@@ -10,7 +10,7 @@ import (
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/wlr"
 	"github.com/labi-le/belphegor/pkg/console"
 	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
@@ -101,7 +101,7 @@ func main() {
 	}
 
 	nd := node.New(
-		clipboard.New(),
+		wlr.Must(log.Logger),
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
 		node.NewChannel(),
 		node.WithPublicPort(port),

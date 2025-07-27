@@ -15,6 +15,9 @@ require (
 )
 
 require (
+	deedles.dev/wl v0.0.0-20250103021037-596c362c83fe // indirect
+	deedles.dev/ximage v0.0.0-20240822204332-810acd4cf757 // indirect
+	deedles.dev/xsync v0.0.0-20230106004123-a7c0ce39da93 // indirect
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
