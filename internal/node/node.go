@@ -20,7 +20,7 @@ var (
 )
 
 type Node struct {
-	clipboard clipboard.Manager
+	clipboard clipboard.Eventful
 	peers     *Storage
 	channel   *Channel
 	options   *Options
@@ -130,7 +130,7 @@ func NewOptions(opts ...Option) *Options {
 
 // New creates a new instance of Node with the specified settings
 func New(
-	clipboard clipboard.Manager,
+	clipboard clipboard.Eventful,
 	peers *Storage,
 	channel *Channel,
 	opts ...Option,
@@ -222,7 +222,7 @@ func (n *Node) Start(ctx context.Context) {
 		Str("metadata", n.options.Metadata.String()).
 		Msg("started")
 
-	go n.MonitorBuffer()
+	go n.MonitorBuffer(ctx)
 
 	for {
 		select {
@@ -346,16 +346,17 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 }
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
-func (n *Node) MonitorBuffer() {
+func (n *Node) MonitorBuffer(ctx context.Context) {
 	ctxLog := ctxlog.Op("node.MonitorBuffer")
 
-	var (
-		currentClipboard = n.fetchClipboardData()
-	)
-
+	ch := make(chan clipboard.Update)
+	go n.clipboard.Watch(ctx, ch)
 	go func() {
-		for range time.Tick(n.options.ClipboardScanDelay) {
-			newClipboard := n.fetchClipboardData()
+		var (
+			currentClipboard = domain.MessageFrom((<-ch).Data, n.Metadata().UniqueID())
+		)
+		for up := range ch {
+			newClipboard := domain.MessageFrom(up.Data, n.Metadata().UniqueID())
 			if !newClipboard.Duplicate(currentClipboard) {
 				ctxLog.
 					Trace().
@@ -366,25 +367,41 @@ func (n *Node) MonitorBuffer() {
 				n.channel.Send(currentClipboard)
 			}
 		}
+		//
+		//for range time.Tick(n.options.ClipboardScanDelay) {
+		//	newClipboard := n.fetchClipboardData()
+		//	if !newClipboard.Duplicate(currentClipboard) {
+		//		ctxLog.
+		//			Trace().
+		//			Int64("msg_id", newClipboard.ID()).
+		//			Msg("local clipboard changed")
+		//
+		//		currentClipboard = newClipboard
+		//		n.channel.Send(currentClipboard)
+		//	}
+		//}
 	}()
 	for msg := range n.channel.Listen() {
 		if msg.From() != n.options.Metadata.UniqueID() {
-			n.setClipboardData(msg)
+			log.Trace().Int64("msg_id", msg.ID()).Msg("set clipboard data")
+
+			n.clipboard.Write(msg.RawData())
+			//n.setClipboardData(msg)
 		}
 
 		go n.Broadcast(msg, msg.From())
 	}
 }
 
-func (n *Node) fetchClipboardData() domain.Message {
-	clip, _ := n.clipboard.Get()
-	return domain.MessageFrom(clip, n.Metadata().UniqueID())
-}
-
-func (n *Node) setClipboardData(m domain.Message) {
-	log.Trace().Int64("msg_id", m.ID()).Msg("set clipboard data")
-	_ = n.clipboard.Set(m.RawData())
-}
+//func (n *Node) fetchClipboardData() domain.Message {
+//	clip, _ := n.clipboard.Get()
+//	return domain.MessageFrom(clip, n.Metadata().UniqueID())
+//}
+//
+//func (n *Node) setClipboardData(m domain.Message) {
+//	log.Trace().Int64("msg_id", m.ID()).Msg("set clipboard data")
+//	_ = n.clipboard.Set(m.RawData())
+//}
 
 func (n *Node) Notify(message string, v ...any) {
 	n.options.Notifier.Notify(message, v...)
