@@ -13,4 +13,6 @@ type Storage[key any, val any] interface {
 	Exist(k key) bool
 	// Tap calls the specified function for parallel each node in the storage.
 	Tap(fn func(key, val) bool)
+	// Len number of elements in storage
+	Len() int
 }

@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"time"
+
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
@@ -11,8 +14,6 @@ import (
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/rs/zerolog/log"
-	"net"
-	"time"
 )
 
 var (
@@ -355,6 +356,11 @@ func (n *Node) MonitorBuffer() {
 
 	go func() {
 		for range time.Tick(n.options.ClipboardScanDelay) {
+			if n.peers.Len() == 0 {
+				// do not check the buffer if there are no nodes ready to synchronize with us
+				continue
+			}
+
 			newClipboard := n.fetchClipboardData()
 			if !newClipboard.Duplicate(currentClipboard) {
 				ctxLog.
