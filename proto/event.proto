@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package belphegor;
+
+import "google/protobuf/timestamp.proto";
+import "handshake.proto";
+import "message.proto";
+
+option go_package = "internal/types/proto";
+
+message Event {
+  Type Type = 1;
+  google.protobuf.Timestamp Created = 2;
+
+  oneof Payload {
+    HeartbeatPayload Heartbeat = 3;
+    Message Update = 4;
+    Handshake Handshake = 5;
+  }
+}
+
+message HeartbeatPayload {}
+
+enum Type {
+  HEARTBEAT = 0;
+  UPDATE = 1;
+  HANDSHAKE = 2;
+}

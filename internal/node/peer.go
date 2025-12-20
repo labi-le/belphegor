@@ -5,12 +5,13 @@ import (
 	"crypto"
 	"errors"
 	"fmt"
-	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/encrypter"
 	"io"
 	"net"
 	"net/netip"
+
+	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/labi-le/belphegor/pkg/ctxlog"
+	"github.com/labi-le/belphegor/pkg/encrypter"
 )
 
 type PeerOption func(*Peer)
@@ -22,7 +23,7 @@ func WithConn(conn net.Conn) PeerOption {
 	}
 }
 
-func WithMetaData(meta domain.MetaData) PeerOption {
+func WithMetaData(meta domain.Device) PeerOption {
 	return func(p *Peer) {
 		p.metaData = meta
 	}
@@ -51,7 +52,7 @@ func AcquirePeer(opts ...PeerOption) *Peer {
 type Peer struct {
 	conn       net.Conn
 	addr       netip.AddrPort
-	metaData   domain.MetaData
+	metaData   domain.Device
 	channel    *Channel
 	cipher     *encrypter.Cipher
 	stringRepr string
@@ -59,7 +60,7 @@ type Peer struct {
 
 func (p *Peer) Addr() netip.AddrPort { return p.addr }
 
-func (p *Peer) MetaData() domain.MetaData { return p.metaData }
+func (p *Peer) MetaData() domain.Device { return p.metaData }
 
 func (p *Peer) Conn() net.Conn { return p.conn }
 
@@ -87,7 +88,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 		Msg("disconnected")
 
 	type readResult struct {
-		msg domain.Message
+		msg domain.EventMessage
 		err error
 	}
 	resultChan := make(chan readResult, 1)
@@ -118,7 +119,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 
 			ctxLog.Trace().Msgf(
 				"received %d from %s",
-				res.msg.ID(),
+				res.msg.Payload.ID,
 				p.String(),
 			)
 		}

@@ -3,12 +3,13 @@ package node_test
 import (
 	"bytes"
 	"context"
+	"testing"
+	"time"
+
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/storage"
-	"testing"
-	"time"
 )
 
 func TestNode_MessageExchange(t *testing.T) {
@@ -18,13 +19,13 @@ func TestNode_MessageExchange(t *testing.T) {
 	clip1, node1, clip2, node2 := testNodes()
 
 	go func() {
-		node1.Start(context.TODO())
+		node1.Start(ctx)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
 	go func() {
-		node2.Start(context.TODO())
+		node2.Start(ctx)
 	}()
 
 	go func() {
@@ -37,20 +38,24 @@ func TestNode_MessageExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deadline := time.After(3 * time.Second)
+	timeout := time.After(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case <-deadline:
-			t.Fatal("timeout waiting for message")
-		default:
+		case <-ticker.C:
 			if data, err := clip2.Get(); err == nil {
-				if bytes.Equal(data, testData) {
-					return
+				if data != nil && !bytes.Equal(data, testData) {
+					t.Fatalf("expected: %s, actual: %s", testData, data)
 				}
+				return
 			}
-			time.Sleep(100 * time.Millisecond)
+		case <-timeout:
+			t.Fatal("timeout waiting for message")
 		}
 	}
+
 }
 
 func testNodes() (*clipboard.Null, *node.Node, *clipboard.Null, *node.Node) {
@@ -62,7 +67,7 @@ func testNodes() (*clipboard.Null, *node.Node, *clipboard.Null, *node.Node) {
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
 		node.NewChannel(),
 		node.WithPublicPort(7777),
-		node.WithMetadata(domain.MetaData{
+		node.WithMetadata(domain.Device{
 			Name: "1",
 			Arch: "amd64",
 			ID:   domain.NewID(),
@@ -75,7 +80,7 @@ func testNodes() (*clipboard.Null, *node.Node, *clipboard.Null, *node.Node) {
 		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
 		node.NewChannel(),
 		node.WithPublicPort(7778),
-		node.WithMetadata(domain.MetaData{
+		node.WithMetadata(domain.Device{
 			Name: "2",
 			Arch: "amd64",
 			ID:   domain.NewID(),

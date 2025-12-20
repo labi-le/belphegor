@@ -2,13 +2,14 @@ package domain
 
 import (
 	"fmt"
-	"github.com/labi-le/belphegor/internal/types/proto"
 	"os"
 	"os/user"
 	"runtime"
+
+	"github.com/labi-le/belphegor/internal/types/proto"
 )
 
-type MetaData struct {
+type Device struct {
 	Name string
 	Arch string
 	ID   UniqueID
@@ -16,7 +17,7 @@ type MetaData struct {
 
 var defaultMetadata = initDefaultMetadata()
 
-func initDefaultMetadata() MetaData {
+func initDefaultMetadata() Device {
 	hostname, _ := os.Hostname()
 	usr, _ := user.Current()
 	name := "unknown@unknown"
@@ -24,34 +25,34 @@ func initDefaultMetadata() MetaData {
 		name = fmt.Sprintf("%s@%s", usr.Username, hostname)
 	}
 
-	return MetaData{
+	return Device{
 		Name: name,
 		Arch: runtime.GOARCH,
 		ID:   NewID(),
 	}
 }
 
-func SelfMetaData() MetaData {
+func SelfMetaData() Device {
 	return defaultMetadata
 }
 
-func (meta MetaData) UniqueID() UniqueID {
+func (meta Device) UniqueID() UniqueID {
 	return meta.ID
 }
 
-func (meta MetaData) String() string {
+func (meta Device) String() string {
 	return fmt.Sprintf("%s (%d)", meta.Name, meta.ID)
 }
 
-func MetaDataFromProto(device *proto.Device) MetaData {
-	return MetaData{
+func MetaDataFromProto(device *proto.Device) Device {
+	return Device{
 		Name: device.Name,
 		Arch: device.Arch,
 		ID:   device.ID,
 	}
 }
 
-func (meta MetaData) Proto() *proto.Device {
+func (meta Device) Proto() *proto.Device {
 	return &proto.Device{
 		Name: meta.Name,
 		Arch: meta.Arch,

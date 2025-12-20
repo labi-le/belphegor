@@ -2,10 +2,11 @@ package protoutil
 
 import (
 	"encoding/binary"
+	"io"
+
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
-	"io"
 )
 
 const (
@@ -23,8 +24,8 @@ func encode(src proto.Message) []byte {
 }
 
 // EncodeWriter encodes the source interface writes it to the destination io.Writer.
-func EncodeWriter(src Proto[proto.Message], w io.Writer) (int, error) {
-	encoded := encode(src.Proto())
+func EncodeWriter(src proto.Message, w io.Writer) (int, error) {
+	encoded := encode(src)
 
 	combined := byteslice.Get(Length + len(encoded))
 	defer byteslice.Put(combined)
@@ -61,6 +62,6 @@ func dataLen(r io.Reader) (int, error) {
 	return int(binary.BigEndian.Uint32(lenBytes)), nil
 }
 
-type Proto[T proto.Message] interface {
-	Proto() T
+type Proto interface {
+	Proto() proto.Message
 }

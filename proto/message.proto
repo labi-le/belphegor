@@ -1,5 +1,4 @@
 syntax = "proto3";
-import "header.proto";
 
 package belphegor;
 
@@ -7,11 +6,13 @@ option go_package = "internal/types/proto";
 
 // Message represents clipboard data and its associated metadata
 message Message {
-  Data Data = 1;
-  Header Header = 2;
+  int64 ID = 1;
+  bytes Data = 2;
+  Mime MimeType = 3;
 }
 
-// Data represents the clipboard data
-message Data {
-  bytes Raw = 1;
+enum Mime {
+  TEXT = 0;
+  IMAGE = 1;
 }
+

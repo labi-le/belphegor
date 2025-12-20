@@ -35,7 +35,7 @@ type Options struct {
 	WriteTimeout       time.Duration
 	Notifier           notification.Notifier
 	Discovering        DiscoverOptions
-	Metadata           domain.MetaData
+	Metadata           domain.Device
 }
 
 type DiscoverOptions struct {
@@ -88,7 +88,7 @@ func WithDiscovering(opt DiscoverOptions) Option {
 		o.Discovering = opt
 	}
 }
-func WithMetadata(opt domain.MetaData) Option {
+func WithMetadata(opt domain.Device) Option {
 	return func(o *Options) {
 		o.Metadata = opt
 	}
@@ -164,7 +164,7 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	return nil
 }
 
-func (n *Node) addPeer(hisHand domain.Greet, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
+func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
 	ctxLog := ctxlog.Op("node.addPeer")
 
 	metadata := hisHand.MetaData
@@ -281,7 +281,7 @@ func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 	}
 
 	peer, addErr := n.addPeer(
-		hisHand,
+		hisHand.Payload,
 		cipher,
 		conn,
 	)
@@ -305,10 +305,10 @@ func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 }
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
-func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
+func (n *Node) Broadcast(msg domain.EventMessage) {
 	ctxLog := ctxlog.Op("node.Broadcast").
 		With().
-		Int64("msg_id", msg.ID()).
+		Int64("msg_id", msg.Payload.ID).
 		Logger()
 
 	n.peers.Tap(func(id domain.UniqueID, peer *Peer) bool {
@@ -317,7 +317,7 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 			Str("node", peer.String()).
 			Logger()
 
-		if id == ignore {
+		if id == msg.From {
 			ctx.Trace().Msg("exclude")
 			return true
 		}
@@ -334,7 +334,7 @@ func (n *Node) Broadcast(msg domain.Message, ignore domain.UniqueID) {
 		}
 		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
 
-		_, encErr := msg.WriteEncrypted(peer.Signer(), peer.Conn())
+		_, encErr := msg.Payload.WriteEncrypted(peer.Signer(), peer.Conn())
 		if encErr != nil {
 			ctx.Trace().
 				AnErr("WriteEncrypted", encErr).
@@ -362,40 +362,42 @@ func (n *Node) MonitorBuffer() {
 			}
 
 			newClipboard := n.fetchClipboardData()
-			if !newClipboard.Duplicate(currentClipboard) {
+			if !newClipboard.Payload.Duplicate(currentClipboard.Payload) {
 				ctxLog.
 					Trace().
-					Int64("msg_id", newClipboard.ID()).
+					Int64("msg_id", newClipboard.Payload.ID).
 					Msg("local clipboard changed")
 
 				currentClipboard = newClipboard
 				n.channel.Send(currentClipboard)
+
+				go n.Broadcast(currentClipboard)
 			}
 		}
 	}()
 	for msg := range n.channel.Listen() {
-		if msg.From() != n.options.Metadata.UniqueID() {
-			n.setClipboardData(msg)
+		if msg.From != n.options.Metadata.UniqueID() {
+			n.setClipboardData(msg.Payload)
 		}
 
-		go n.Broadcast(msg, msg.From())
+		go n.Broadcast(msg)
 	}
 }
 
-func (n *Node) fetchClipboardData() domain.Message {
+func (n *Node) fetchClipboardData() domain.Event[domain.Message] {
 	clip, _ := n.clipboard.Get()
-	return domain.MessageFrom(clip, n.Metadata().UniqueID())
+	return domain.MessageFrom(clip, n.Metadata().ID)
 }
 
 func (n *Node) setClipboardData(m domain.Message) {
-	log.Trace().Int64("msg_id", m.ID()).Msg("set clipboard data")
-	_ = n.clipboard.Set(m.RawData())
+	log.Trace().Int64("msg_id", m.ID).Msg("set clipboard data")
+	_ = n.clipboard.Set(m.Data)
 }
 
 func (n *Node) Notify(message string, v ...any) {
 	n.options.Notifier.Notify(message, v...)
 }
 
-func (n *Node) Metadata() domain.MetaData {
+func (n *Node) Metadata() domain.Device {
 	return n.options.Metadata
 }

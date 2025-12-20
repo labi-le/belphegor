@@ -2,11 +2,12 @@ package domain_test
 
 import (
 	"bytes"
-	"github.com/labi-le/belphegor/internal/types/domain"
 	"image"
 	"image/color"
 	"image/png"
 	"testing"
+
+	"github.com/labi-le/belphegor/internal/types/domain"
 )
 
 func TestMessage_Duplicate(t *testing.T) {
@@ -16,62 +17,38 @@ func TestMessage_Duplicate(t *testing.T) {
 
 	tests := []struct {
 		name string
-		msg  domain.Message
-		new  domain.Message
+		msg  domain.EventMessage
+		new  domain.EventMessage
 		want bool
 	}{
 		{
 			name: "same message reference",
-			msg:  domain.MessageFrom([]byte("test"), 1),
-			new:  domain.MessageFrom([]byte("test"), 1),
+			msg:  domain.MessageFrom([]byte(", 1test"), 1),
+			new:  domain.MessageFrom([]byte(", 1test"), 1),
 			want: true,
 		},
 		{
 			name: "same text content",
-			msg:  domain.MessageFrom([]byte("test"), 1),
-			new:  domain.MessageFrom([]byte("test"), 2),
+			msg:  domain.MessageFrom([]byte(", 1test"), 1),
+			new:  domain.MessageFrom([]byte(", 1test"), 2),
 			want: true,
 		},
 		{
 			name: "different text content",
-			msg:  domain.MessageFrom([]byte("test1"), 1),
-			new:  domain.MessageFrom([]byte("test2"), 1),
+			msg:  domain.MessageFrom([]byte(", 1test1"), 1),
+			new:  domain.MessageFrom([]byte(", 1test2"), 2),
 			want: false,
 		},
 		{
 			name: "same image different source",
-			msg: domain.Message{
-				Data: domain.NewData(img1),
-				Header: domain.NewHeader(
-					domain.UniqueID(1),
-					domain.MimeTypeImage,
-				),
-			},
-			new: domain.Message{
-				Data: domain.NewData(img1),
-				Header: domain.NewHeader(
-					domain.UniqueID(2),
-					domain.MimeTypeImage,
-				),
-			},
+			msg:  domain.MessageFrom(img1, 1),
+			new:  domain.MessageFrom(img1, 2),
 			want: true,
 		},
 		{
 			name: "different images",
-			msg: domain.Message{
-				Data: domain.NewData(img1),
-				Header: domain.NewHeader(
-					domain.UniqueID(1),
-					domain.MimeTypeImage,
-				),
-			},
-			new: domain.Message{
-				Data: domain.NewData(img2),
-				Header: domain.NewHeader(
-					domain.UniqueID(1),
-					domain.MimeTypeImage,
-				),
-			},
+			msg:  domain.MessageFrom(img1, 1),
+			new:  domain.MessageFrom(img2, 1),
 			want: false,
 		},
 	}
@@ -82,7 +59,7 @@ func TestMessage_Duplicate(t *testing.T) {
 				tt.new = tt.msg
 			}
 
-			if got := tt.msg.Duplicate(tt.new); got != tt.want {
+			if got := tt.msg.Payload.Duplicate(tt.new.Payload); got != tt.want {
 				t.Errorf("%s: Message.Duplicate() = %v, want %v", tt.name, got, tt.want)
 			}
 		})
@@ -153,8 +130,8 @@ func BenchmarkMessage_Duplicate(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				msg := domain.MessageFrom(bm.msg.data, bm.msg.id)
-				msg.Duplicate(domain.MessageFrom(bm.new.data, bm.new.id))
+				msg := domain.MessageFrom(bm.msg.data, 1)
+				msg.Payload.Duplicate(domain.MessageFrom(bm.new.data, 1).Payload)
 			}
 		})
 	}

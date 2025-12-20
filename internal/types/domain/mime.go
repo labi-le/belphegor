@@ -44,6 +44,6 @@ func GetMimeType(data []byte) string {
 	}
 }
 
-func MimeFromData(src []byte) MimeType {
+func mimeFromData(src []byte) MimeType {
 	return parseMimeType(GetMimeType(src))
 }

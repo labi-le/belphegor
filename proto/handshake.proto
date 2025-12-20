@@ -5,9 +5,9 @@ package belphegor;
 
 option go_package = "internal/types/proto";
 
-// GreetMessage represents the greeting message
+// Handshake represents the greeting message
 // Used to shake hands with other nodes
-message GreetMessage {
+message Handshake {
   string Version = 2;
   Device Device = 3;
   uint32 Port = 5;
