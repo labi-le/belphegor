@@ -7,12 +7,13 @@ import (
 	"runtime"
 
 	"github.com/labi-le/belphegor/internal/types/proto"
+	"github.com/labi-le/belphegor/pkg/id"
 )
 
 type Device struct {
+	ID   id.Unique
 	Name string
 	Arch string
-	ID   UniqueID
 }
 
 var defaultMetadata = initDefaultMetadata()
@@ -28,7 +29,7 @@ func initDefaultMetadata() Device {
 	return Device{
 		Name: name,
 		Arch: runtime.GOARCH,
-		ID:   NewID(),
+		ID:   id.New(),
 	}
 }
 
@@ -36,12 +37,12 @@ func SelfMetaData() Device {
 	return defaultMetadata
 }
 
-func (meta Device) UniqueID() UniqueID {
+func (meta Device) UniqueID() id.Unique {
 	return meta.ID
 }
 
 func (meta Device) String() string {
-	return fmt.Sprintf("%s (%d)", meta.Name, meta.ID)
+	return meta.Name
 }
 
 func MetaDataFromProto(device *proto.Device) Device {

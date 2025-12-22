@@ -62,6 +62,6 @@ func dataLen(r io.Reader) (int, error) {
 	return int(binary.BigEndian.Uint32(lenBytes)), nil
 }
 
-type Proto interface {
-	Proto() proto.Message
+type Proto[T proto.Message] interface {
+	Proto() T
 }

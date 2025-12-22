@@ -2,18 +2,26 @@ package node
 
 import (
 	"context"
+	"crypto"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
+	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/rs/zerolog/log"
+	pb "google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
@@ -208,6 +216,7 @@ func (n *Node) Start(ctx context.Context) {
 	l, err := lc.Listen(ctx, "tcp4", fmt.Sprintf(":%d", n.options.PublicPort))
 	if err != nil {
 		ctxLog.Err(err).Msg("failed to listen")
+		return
 	}
 	defer l.Close()
 
@@ -263,7 +272,7 @@ func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 		Str("node", n.Metadata().String()).
 		Logger()
 
-	hs, cipherErr := newHandshake(n.options.BitSize, n.Metadata())
+	hs, cipherErr := newHandshake(n.options.BitSize, n.Metadata(), n.options.PublicPort)
 	if cipherErr != nil {
 		ctxLog.
 			Err(cipherErr).
@@ -311,7 +320,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 		Int64("msg_id", msg.Payload.ID).
 		Logger()
 
-	n.peers.Tap(func(id domain.UniqueID, peer *Peer) bool {
+	n.peers.Tap(func(id id.Unique, peer *Peer) bool {
 		ctx := ctxLog.
 			With().
 			Str("node", peer.String()).
@@ -334,7 +343,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 		}
 		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
 
-		_, encErr := msg.Payload.WriteEncrypted(peer.Signer(), peer.Conn())
+		_, encErr := WriteEncryptedMessage(msg, peer.Signer(), peer.Conn())
 		if encErr != nil {
 			ctx.Trace().
 				AnErr("WriteEncrypted", encErr).
@@ -386,7 +395,7 @@ func (n *Node) MonitorBuffer() {
 
 func (n *Node) fetchClipboardData() domain.Event[domain.Message] {
 	clip, _ := n.clipboard.Get()
-	return domain.MessageFrom(clip, n.Metadata().ID)
+	return domain.MessageNew(clip, n.Metadata().ID)
 }
 
 func (n *Node) setClipboardData(m domain.Message) {
@@ -400,4 +409,35 @@ func (n *Node) Notify(message string, v ...any) {
 
 func (n *Node) Metadata() domain.Device {
 	return n.options.Metadata
+}
+
+func ReceiveMessage(conn net.Conn, decrypter crypto.Decrypter, data domain.Device) (domain.EventMessage, error) {
+	var event proto.Event
+	if decodeEnc := protoutil.DecodeReader(conn, &event); decodeEnc != nil {
+		return domain.EventMessage{}, decodeEnc
+	}
+
+	payload, ok := event.Payload.(*proto.Event_Message)
+	if ok == false {
+		return domain.EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, event.Payload)
+	}
+
+	return domain.MessageFromEncrypted(&event, data, func(encrypted []byte) ([]byte, error) {
+		return decrypter.Decrypt(rand.Reader, payload.Message.Content, nil)
+	})
+
+}
+
+func WriteEncryptedMessage(msg domain.EventMessage, signer crypto.Signer, writer io.Writer) (int, error) {
+	dat, _ := pb.Marshal(msg.Payload.Proto())
+	encrypted, err := signer.Sign(rand.Reader, dat, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	encEv := &proto.Event{
+		Created: timestamppb.New(msg.Created),
+		Payload: &proto.Event_Message{Message: &proto.EncryptedMessage{ID: msg.Payload.ID, Content: encrypted}},
+	}
+	return protoutil.EncodeWriter(encEv, writer)
 }

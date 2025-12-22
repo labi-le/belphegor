@@ -9,16 +9,4 @@ message Device {
   string Name = 1;
   string Arch = 2;
   int64 ID = 3;
-  Clipboard Provider = 4;
-}
-
-// ClipboardProvider represents the clipboard provider
-// Used to identify the clipboard provider
-enum Clipboard {
-  NULL = 0;
-  XCLIP = 1;
-  XSEL = 2;
-  WL_CLIPBOARD = 3;
-  PBPASTE = 4;
-  WINDOWS_NT_10 = 5;
 }

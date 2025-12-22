@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/labi-le/belphegor/pkg/id"
 )
 
 func TestMessage_Duplicate(t *testing.T) {
@@ -23,32 +24,32 @@ func TestMessage_Duplicate(t *testing.T) {
 	}{
 		{
 			name: "same message reference",
-			msg:  domain.MessageFrom([]byte(", 1test"), 1),
-			new:  domain.MessageFrom([]byte(", 1test"), 1),
+			msg:  domain.MessageNew([]byte(", 1test"), 1),
+			new:  domain.MessageNew([]byte(", 1test"), 1),
 			want: true,
 		},
 		{
 			name: "same text content",
-			msg:  domain.MessageFrom([]byte(", 1test"), 1),
-			new:  domain.MessageFrom([]byte(", 1test"), 2),
+			msg:  domain.MessageNew([]byte(", 1test"), 1),
+			new:  domain.MessageNew([]byte(", 1test"), 2),
 			want: true,
 		},
 		{
 			name: "different text content",
-			msg:  domain.MessageFrom([]byte(", 1test1"), 1),
-			new:  domain.MessageFrom([]byte(", 1test2"), 2),
+			msg:  domain.MessageNew([]byte(", 1test1"), 1),
+			new:  domain.MessageNew([]byte(", 1test2"), 2),
 			want: false,
 		},
 		{
 			name: "same image different source",
-			msg:  domain.MessageFrom(img1, 1),
-			new:  domain.MessageFrom(img1, 2),
+			msg:  domain.MessageNew(img1, 1),
+			new:  domain.MessageNew(img1, 2),
 			want: true,
 		},
 		{
 			name: "different images",
-			msg:  domain.MessageFrom(img1, 1),
-			new:  domain.MessageFrom(img2, 1),
+			msg:  domain.MessageNew(img1, 1),
+			new:  domain.MessageNew(img2, 1),
 			want: false,
 		},
 	}
@@ -60,7 +61,7 @@ func TestMessage_Duplicate(t *testing.T) {
 			}
 
 			if got := tt.msg.Payload.Duplicate(tt.new.Payload); got != tt.want {
-				t.Errorf("%s: Message.Duplicate() = %v, want %v", tt.name, got, tt.want)
+				t.Errorf("%s: Content.Duplicate() = %v, want %v", tt.name, got, tt.want)
 			}
 		})
 	}
@@ -86,7 +87,7 @@ func createTestImage(t *testing.T, width, height int, c color.Color) []byte {
 func BenchmarkMessage_Duplicate(b *testing.B) {
 	type raw struct {
 		data []byte
-		id   domain.UniqueID
+		id   id.Unique
 	}
 	benchmarks := []struct {
 		name     string
@@ -130,8 +131,8 @@ func BenchmarkMessage_Duplicate(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				msg := domain.MessageFrom(bm.msg.data, 1)
-				msg.Payload.Duplicate(domain.MessageFrom(bm.new.data, 1).Payload)
+				msg := domain.MessageNew(bm.msg.data, 1)
+				msg.Payload.Duplicate(domain.MessageNew(bm.new.data, 1).Payload)
 			}
 		})
 	}

@@ -16,3 +16,7 @@ enum Mime {
   IMAGE = 1;
 }
 
+message EncryptedMessage {
+  int64 ID = 1;
+  bytes Content = 2;
+}

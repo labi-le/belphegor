@@ -95,7 +95,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 
 	go func() {
 		for {
-			msg, err := domain.ReceiveMessage(p.Conn(), p.cipher)
+			msg, err := ReceiveMessage(p.Conn(), p.cipher, p.MetaData())
 			resultChan <- readResult{msg: msg, err: err}
 		}
 	}()
@@ -112,7 +112,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 					return nil
 				}
 
-				return res.err
+				return fmt.Errorf("error decoding: %w", res.err)
 			}
 
 			p.channel.Send(res.msg)

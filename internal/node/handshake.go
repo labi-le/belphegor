@@ -18,7 +18,7 @@ type handshake struct {
 	private crypto.Decrypter
 }
 
-func newHandshake(bitSize int, meta domain.Device) (*handshake, error) {
+func newHandshake(bitSize int, meta domain.Device, port int) (*handshake, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, bitSize)
 	if err != nil {
 		return nil, fmt.Errorf("generate key: %w", err)
@@ -27,7 +27,9 @@ func newHandshake(bitSize int, meta domain.Device) (*handshake, error) {
 	return &handshake{
 		my: domain.NewGreet(
 			domain.WithPublicKey(encrypter.PublicKey2Bytes(privateKey.Public())),
-			domain.WithMetadata(meta)),
+			domain.WithMetadata(meta),
+			domain.WithPort(uint16(port)),
+		),
 		private: privateKey,
 	}, nil
 }

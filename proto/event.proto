@@ -9,13 +9,12 @@ import "message.proto";
 option go_package = "internal/types/proto";
 
 message Event {
-  Type Type = 1;
-  google.protobuf.Timestamp Created = 2;
+  google.protobuf.Timestamp Created = 1;
 
   oneof Payload {
-    HeartbeatPayload Heartbeat = 3;
-    Message Update = 4;
-    Handshake Handshake = 5;
+    HeartbeatPayload Heartbeat = 2;
+    EncryptedMessage Message = 3;
+    Handshake Handshake = 4;
   }
 }
 

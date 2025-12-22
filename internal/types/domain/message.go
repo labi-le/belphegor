@@ -2,50 +2,67 @@ package domain
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rand"
-	"io"
-	"net"
+	"fmt"
 	"time"
 
 	"github.com/labi-le/belphegor/internal/types/proto"
-	"github.com/labi-le/belphegor/pkg/image"
+	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/rs/zerolog/log"
 	pb "google.golang.org/protobuf/proto"
 )
 
-type EventMessage = Event[Message]
+var (
+	_ protoutil.Proto[*proto.Message]          = Message{}
+	_ protoutil.Proto[*proto.EncryptedMessage] = EncryptedMessage{}
+)
 
-type Message struct {
-	Data Data
-	Mime MimeType
-	ID   UniqueID
-}
+type EventMessage = Event[Message]
+type EventEncryptedMessage = Event[EncryptedMessage]
 
 type Data []byte
 
-// MessageFrom creates a new Message with the provided data.
-func MessageFrom(data []byte, owner UniqueID) EventMessage {
+type Message struct {
+	ID   id.Unique
+	Data Data
+	Mime MimeType
+}
+
+type EncryptedMessage struct {
+	ID      id.Unique
+	Content []byte
+}
+
+func (e EncryptedMessage) Proto() *proto.EncryptedMessage {
+	return &proto.EncryptedMessage{
+		ID:      e.ID,
+		Content: e.Content,
+	}
+}
+
+// MessageNew creates a new Message with the provided data.
+func MessageNew(data []byte, owner id.Unique) EventMessage {
 	return EventMessage{
-		Type:    TypeUpdate,
 		From:    owner,
 		Created: time.Now(),
 		Payload: Message{
 			Data: data,
 			Mime: mimeFromData(data),
-			ID:   NewID(),
+			ID:   id.New(),
 		},
 	}
 }
 
-func MessageFromProto(m *proto.Message) EventMessage {
-	return NewEvent[Message](
-		Message{
-			Data: m.Data,
-			Mime: MimeType(m.MimeType),
-			ID:   m.ID,
-		})
+func MessageFromProto(p *proto.Message) Message {
+	if p == nil {
+		return Message{}
+	}
+	return Message{
+		ID:   p.ID,
+		Data: p.Data,
+		Mime: MimeType(p.MimeType),
+	}
 }
 
 func (m Message) Duplicate(new Message) bool {
@@ -58,11 +75,7 @@ func (m Message) Duplicate(new Message) bool {
 	}
 
 	if m.Mime == MimeTypeImage {
-		//if m.Event.ClipboardProvider == new.Event.ClipboardProvider {
-		//	return bytes.Equal(m.Data.Raw, new.Data.Raw)
-		//}
-
-		identical, err := image.EqualMSE(
+		identical, err := mime.EqualMSE(
 			bytes.NewReader(m.Data),
 			bytes.NewReader(new.Data),
 		)
@@ -76,41 +89,38 @@ func (m Message) Duplicate(new Message) bool {
 	return bytes.Equal(m.Data, new.Data)
 }
 
-func (m Message) Proto() pb.Message {
+func (m Message) Proto() *proto.Message {
 	return &proto.Message{
-		ID:       m.ID,
 		Data:     m.Data,
 		MimeType: proto.Mime(m.Mime),
 	}
 }
 
-func (m Message) WriteEncrypted(signer crypto.Signer, writer io.Writer) (int, error) {
-	dat, _ := pb.Marshal(m.Proto())
-	encrypted, err := signer.Sign(rand.Reader, dat, nil)
+type DecryptFn func(encrypted []byte) ([]byte, error)
+
+func MessageFromEncrypted(ev *proto.Event, data Device, fn DecryptFn) (EventMessage, error) {
+	payload, ok := ev.Payload.(*proto.Event_Message)
+	if ok == false {
+		return EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, ev.Payload)
+	}
+
+	decrypted, err := fn(payload.Message.Content)
 	if err != nil {
-		return 0, err
-	}
-
-	msg := EncryptedMessage{encrypted}
-	return protoutil.EncodeWriter(msg.Proto(), writer)
-}
-
-func ReceiveMessage(conn net.Conn, decrypter crypto.Decrypter) (EventMessage, error) {
-	var message proto.Message
-
-	var encrypt proto.EncryptedMessage
-	if decodeEnc := protoutil.DecodeReader(conn, &encrypt); decodeEnc != nil {
-		return EventMessage{}, decodeEnc
-	}
-
-	decrypt, decErr := decrypter.Decrypt(rand.Reader, encrypt.Message, nil)
-	if decErr != nil {
-		return EventMessage{}, decErr
-	}
-
-	if err := pb.Unmarshal(decrypt, &message); err != nil {
 		return EventMessage{}, err
 	}
 
-	return MessageFromProto(&message), nil
+	var msg proto.Message
+	if err := pb.Unmarshal(decrypted, &msg); err != nil {
+		return EventMessage{}, fmt.Errorf("MessageFromEncrypted: %w", err)
+	}
+
+	return EventMessage{
+		From:    data.ID,
+		Created: ev.Created.AsTime(),
+		Payload: Message{
+			ID:   payload.Message.ID,
+			Data: msg.Data,
+			Mime: MimeType(msg.MimeType),
+		},
+	}, nil
 }

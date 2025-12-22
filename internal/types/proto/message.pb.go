@@ -128,6 +128,58 @@ func (x *Message) GetMimeType() Mime {
 	return Mime_TEXT
 }
 
+type EncryptedMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	Content       []byte                 `protobuf:"bytes,2,opt,name=Content,proto3" json:"Content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EncryptedMessage) Reset() {
+	*x = EncryptedMessage{}
+	mi := &file_message_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EncryptedMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EncryptedMessage) ProtoMessage() {}
+
+func (x *EncryptedMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EncryptedMessage.ProtoReflect.Descriptor instead.
+func (*EncryptedMessage) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *EncryptedMessage) GetID() int64 {
+	if x != nil {
+		return x.ID
+	}
+	return 0
+}
+
+func (x *EncryptedMessage) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
 var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
@@ -136,7 +188,10 @@ const file_message_proto_rawDesc = "" +
 	"\aMessage\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12\x12\n" +
 	"\x04Data\x18\x02 \x01(\fR\x04Data\x12+\n" +
-	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType*\x1b\n" +
+	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType\"<\n" +
+	"\x10EncryptedMessage\x12\x0e\n" +
+	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12\x18\n" +
+	"\aContent\x18\x02 \x01(\fR\aContent*\x1b\n" +
 	"\x04Mime\x12\b\n" +
 	"\x04TEXT\x10\x00\x12\t\n" +
 	"\x05IMAGE\x10\x01B\x16Z\x14internal/types/protob\x06proto3"
@@ -154,10 +209,11 @@ func file_message_proto_rawDescGZIP() []byte {
 }
 
 var file_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_message_proto_goTypes = []any{
-	(Mime)(0),       // 0: belphegor.Mime
-	(*Message)(nil), // 1: belphegor.Message
+	(Mime)(0),                // 0: belphegor.Mime
+	(*Message)(nil),          // 1: belphegor.Message
+	(*EncryptedMessage)(nil), // 2: belphegor.EncryptedMessage
 }
 var file_message_proto_depIdxs = []int32{
 	0, // 0: belphegor.Message.MimeType:type_name -> belphegor.Mime
@@ -179,7 +235,7 @@ func file_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
