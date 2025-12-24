@@ -2,15 +2,14 @@ package wlr
 
 import (
 	"context"
-	wl "deedles.dev/wl/client"
 	"errors"
-	"github.com/labi-le/belphegor/pkg/clipboard"
-	"github.com/labi-le/belphegor/pkg/pipe/pipe"
-	"github.com/labi-le/belphegor/pkg/pool/byteslice"
-	"github.com/rs/zerolog"
-	"io"
+	"fmt"
 	"os"
-	"syscall"
+	"sync/atomic"
+
+	wl "deedles.dev/wl/client"
+	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/rs/zerolog"
 )
 
 var Supported = (func() bool {
@@ -20,92 +19,99 @@ var Supported = (func() bool {
 })()
 
 type Wlr struct {
-	reader *reader
-	writer *writer
-	preset *preset
-	logger zerolog.Logger
+	reader   *reader
+	writer   *writer
+	preset   *preset
+	logger   zerolog.Logger
+	dataChan chan ClipboardData
+	closed   atomic.Bool
 }
 
 func Must(log zerolog.Logger) *Wlr {
-	r, err := wl.Dial()
+	client, err := wl.Dial()
 	if err != nil {
 		panic(err)
 	}
-	return New(r, pipe.MustNonBlock(log), log)
+	return New(client, log)
 }
 
-func New(client *wl.Client, p pipe.RWPipe, log zerolog.Logger) *Wlr {
+func New(client *wl.Client, log zerolog.Logger) *Wlr {
 	preset := newPreset(client, log)
-	return &Wlr{
-		reader: newReader(preset, p, log),
-		writer: newWriter(preset, log),
-		preset: preset,
-		logger: log.With().Str("component", "wlr").Logger(),
+
+	dataChan := make(chan ClipboardData, 10)
+
+	wlr := &Wlr{
+		preset:   preset,
+		logger:   log.With().Str("component", "wlr").Logger(),
+		dataChan: dataChan,
+	}
+
+	wlr.reader = newReader(preset, dataChan, log)
+	wlr.writer = newWriter(preset, wlr.reader, log)
+
+	return wlr
+}
+
+func (w *Wlr) Watch(ctx context.Context, update chan<- clipboard.Update) error {
+	log := w.logger.With().Str("op", "wlr.Watch").Logger()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- w.Run(ctx)
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+
+		case runErr := <-errCh:
+			if runErr != nil {
+				return fmt.Errorf("wlr.Watch: %w", runErr)
+			}
+			return nil
+
+		case clipData, ok := <-w.dataChan:
+			if !ok {
+				log.Trace().Msg("*wlr.dataChan closed")
+				return nil
+			}
+			if len(clipData.Data) > 0 {
+				update <- clipboard.Update{Data: clipData.Data}
+			}
+		}
 	}
 }
 
-func (w *Wlr) Watch(ctx context.Context, update chan<- clipboard.Update) {
-	go func() {
-		err := w.Run(ctx)
-		if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
-			w.logger.Error().Err(err).Msg("wlr.Run exited with error")
-		}
-		close(update)
-	}()
-
-	go func() {
-		buffer := byteslice.Get(65536) // 64KB buffer
-		defer byteslice.Put(buffer)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				n, err := syscall.Read(int(w.reader.pipe.ReadFd().Fd()), buffer)
-				if err != nil {
-					if err == io.EOF || errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.EBADF) {
-						w.logger.Trace().Msg("Pipe closed, exiting watch loop.")
-						return
-					}
-					if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) {
-						continue
-					}
-
-					update <- clipboard.Update{Data: nil, Err: err}
-					continue
-				}
-
-				if n > 0 {
-					dataCopy := make([]byte, n)
-					copy(dataCopy, buffer[:n])
-					update <- clipboard.Update{Data: dataCopy, Err: nil}
-				}
-			}
-		}
-	}()
-
-	<-ctx.Done()
-}
-
 func (w *Wlr) Write(data []byte) (int, error) {
+	log := w.logger.With().Str("op", "wlr.Write").Logger()
+
+	if w.closed.Load() {
+		log.Warn().
+			Bool("closed", true).
+			Msg("wlr is closed, ignoring write")
+		return 0, errors.New("clipboard is closed")
+	}
+
 	return w.writer.Write(data)
 }
 
 func (w *Wlr) Run(ctx context.Context) error {
+	log := w.logger.With().Str("op", "wlr.Run").Logger()
+
 	err := w.preset.Setup()
 	if err != nil {
 		return err
 	}
 
 	w.preset.device.Listener = w.reader
+
 	w.preset.device.OnDelete = func() {
 		_ = w.preset.client.RoundTrip()
-		w.logger.Trace().Uint32("device.OnDelete free", w.preset.device.ID()).Send()
+		log.Trace().
+			Uint32("device_id", w.preset.device.ID()).
+			Msg("device deleted")
 	}
-	//
-	//w.device = w.deviceManager.GetDataDevice(w.seat)
-	//w.device.Listener = (*deviceListener2)(w)
 
 	for {
 		select {
@@ -117,7 +123,9 @@ func (w *Wlr) Run(ctx context.Context) error {
 			}
 			err := ev()
 			if err != nil {
-				w.logger.Err(err).Send()
+				log.Error().
+					Err(err).
+					Msg("event processing error")
 				return err
 			}
 		}
@@ -125,9 +133,36 @@ func (w *Wlr) Run(ctx context.Context) error {
 }
 
 func (w *Wlr) Close() error {
+	log := w.logger.With().Str("op", "wlr.Close").Logger()
+
+	log.Debug().
+		Msg("closing wlr clipboard")
+
+	w.closed.Store(true)
+
 	if err := w.writer.Close(); err != nil {
+		log.Error().
+			Str("closer", "writer").
+			Err(err).
+			Msg("failed to close writer")
+	}
+
+	if err := w.reader.Close(); err != nil {
+		log.Error().
+			Str("closer", "reader").
+			Err(err).
+			Msg("failed to close reader")
+	}
+
+	if err := w.preset.client.Close(); err != nil {
+		log.Error().
+			Str("closer", "client").
+			Err(err).
+			Msg("failed to close client")
 		return err
 	}
 
-	return w.reader.Close()
+	close(w.dataChan)
+
+	return nil
 }

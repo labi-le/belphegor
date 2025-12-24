@@ -10,8 +10,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/labi-le/belphegor/internal/netstack"
-	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/clipboard"
@@ -19,7 +17,6 @@ import (
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/protoutil"
-	"github.com/rs/zerolog/log"
 	pb "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -29,122 +26,21 @@ var (
 )
 
 type Node struct {
-	clipboard clipboard.Manager
+	clipboard clipboard.Eventful
 	peers     *Storage
 	channel   *Channel
-	options   *Options
-}
-
-type Options struct {
-	PublicPort         int
-	BitSize            int
-	KeepAlive          time.Duration
-	ClipboardScanDelay time.Duration
-	WriteTimeout       time.Duration
-	Notifier           notification.Notifier
-	Discovering        DiscoverOptions
-	Metadata           domain.Device
-}
-
-type DiscoverOptions struct {
-	Enable   bool
-	Delay    time.Duration
-	MaxPeers int
-}
-
-// Option defines the method to configure Options
-type Option func(*Options)
-
-func WithPublicPort(port int) Option {
-	return func(o *Options) {
-		o.PublicPort = port
-	}
-}
-
-func WithBitSize(size int) Option {
-	return func(o *Options) {
-		o.BitSize = size
-	}
-}
-
-func WithKeepAlive(duration time.Duration) Option {
-	return func(o *Options) {
-		o.KeepAlive = duration
-	}
-}
-
-func WithClipboardScanDelay(delay time.Duration) Option {
-	return func(o *Options) {
-		o.ClipboardScanDelay = delay
-	}
-}
-
-func WithWriteTimeout(timeout time.Duration) Option {
-	return func(o *Options) {
-		o.WriteTimeout = timeout
-	}
-}
-
-func WithNotifier(notifier notification.Notifier) Option {
-	return func(o *Options) {
-		o.Notifier = notifier
-	}
-}
-
-func WithDiscovering(opt DiscoverOptions) Option {
-	return func(o *Options) {
-		o.Discovering = opt
-	}
-}
-func WithMetadata(opt domain.Device) Option {
-	return func(o *Options) {
-		o.Metadata = opt
-	}
-}
-
-var defaultOptions = &Options{
-	PublicPort:         netstack.RandomPort(),
-	BitSize:            2048,
-	KeepAlive:          time.Minute,
-	ClipboardScanDelay: 2 * time.Second,
-	WriteTimeout:       5 * time.Second,
-	Notifier:           new(notification.BeepDecorator),
-	Discovering: DiscoverOptions{
-		Enable:   true,
-		Delay:    5 * time.Minute,
-		MaxPeers: 5,
-	},
-	Metadata: domain.SelfMetaData(),
-}
-
-// NewOptions creates Options with provided options
-func NewOptions(opts ...Option) *Options {
-	options := &Options{
-		PublicPort:         defaultOptions.PublicPort,
-		BitSize:            defaultOptions.BitSize,
-		KeepAlive:          defaultOptions.KeepAlive,
-		ClipboardScanDelay: defaultOptions.ClipboardScanDelay,
-		WriteTimeout:       defaultOptions.WriteTimeout,
-		Notifier:           defaultOptions.Notifier,
-		Discovering:        defaultOptions.Discovering,
-		Metadata:           defaultOptions.Metadata,
-	}
-
-	for _, opt := range opts {
-		opt(options)
-	}
-
-	return options
+	options   Options
 }
 
 // New creates a new instance of Node with the specified settings
 func New(
-	clipboard clipboard.Manager,
+	clipboard clipboard.Eventful,
 	peers *Storage,
 	channel *Channel,
 	opts ...Option,
 ) *Node {
 	options := NewOptions(opts...)
+
 	return &Node{
 		clipboard: clipboard,
 		peers:     peers,
@@ -192,7 +88,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, conn 
 		}
 	}
 
-	peer := AcquirePeer(
+	peer := NewPeer(
 		WithConn(conn),
 		WithMetaData(metadata),
 		WithChannel(n.channel),
@@ -207,7 +103,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, conn 
 }
 
 // Start starts the node by listening for incoming connections on the specified public port
-func (n *Node) Start(ctx context.Context) {
+func (n *Node) Start(ctx context.Context) error {
 	defer n.channel.Close()
 
 	ctxLog := ctxlog.Op("node.Start")
@@ -216,7 +112,7 @@ func (n *Node) Start(ctx context.Context) {
 	l, err := lc.Listen(ctx, "tcp4", fmt.Sprintf(":%d", n.options.PublicPort))
 	if err != nil {
 		ctxLog.Err(err).Msg("failed to listen")
-		return
+		return fmt.Errorf("node.Start: %w", err)
 	}
 	defer l.Close()
 
@@ -232,23 +128,28 @@ func (n *Node) Start(ctx context.Context) {
 		Str("metadata", n.options.Metadata.String()).
 		Msg("started")
 
-	go n.MonitorBuffer()
+	go n.MonitorBuffer(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
+
 		default:
 			conn, netErr := l.Accept()
 			if netErr != nil {
 				if errors.Is(netErr, net.ErrClosed) {
-					return
+					ctxLog.
+						Warn().
+						Err(netErr).
+						Msg("connection accept error")
+					continue
 				}
 				ctxLog.
 					Fatal().
 					Err(netErr).
 					Msg("failed to accept connection")
-				return
+				return fmt.Errorf("node.Start: %w", netErr)
 			}
 
 			ctxLog.
@@ -274,18 +175,11 @@ func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 
 	hs, cipherErr := newHandshake(n.options.BitSize, n.Metadata(), n.options.PublicPort)
 	if cipherErr != nil {
-		ctxLog.
-			Err(cipherErr).
-			Msg("generate key error")
 		return cipherErr
 	}
 
 	hisHand, cipher, greetErr := hs.exchange(conn)
 	if greetErr != nil {
-		ctxLog.Error().
-			Err(greetErr).
-			Str("step", "greeting").
-			Msg("greeting failed")
 		return greetErr
 	}
 
@@ -327,7 +221,6 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 			Logger()
 
 		if id == msg.From {
-			ctx.Trace().Msg("exclude")
 			return true
 		}
 
@@ -341,7 +234,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 				Msg("cannot set write deadline")
 			return true
 		}
-		defer peer.Conn().SetWriteDeadline(time.Time{}) // Reset the deadline when done
+		defer peer.Conn().SetWriteDeadline(time.Time{})
 
 		_, encErr := WriteEncryptedMessage(msg, peer.Signer(), peer.Conn())
 		if encErr != nil {
@@ -356,51 +249,55 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 }
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
-func (n *Node) MonitorBuffer() {
+func (n *Node) MonitorBuffer(ctx context.Context) error {
 	ctxLog := ctxlog.Op("node.MonitorBuffer")
 
-	var (
-		currentClipboard = n.fetchClipboardData()
-	)
+	updates, watchErr := make(chan clipboard.Update), make(chan error, 1)
+	go func() {
+		if err := n.clipboard.Watch(ctx, updates); err != nil {
+			watchErr <- err
+		}
+	}()
 
 	go func() {
-		for range time.Tick(n.options.ClipboardScanDelay) {
-			if n.peers.Len() == 0 {
-				// do not check the buffer if there are no nodes ready to synchronize with us
-				continue
-			}
-
-			newClipboard := n.fetchClipboardData()
-			if !newClipboard.Payload.Duplicate(currentClipboard.Payload) {
+		var (
+			current = domain.NewMessage((<-updates).Data)
+		)
+		for update := range updates {
+			msg := domain.NewMessage(update.Data)
+			if !msg.Duplicate(current) {
 				ctxLog.
 					Trace().
-					Int64("msg_id", newClipboard.Payload.ID).
+					Int64("msg_id", msg.ID).
 					Msg("local clipboard changed")
 
-				currentClipboard = newClipboard
-				n.channel.Send(currentClipboard)
-
-				go n.Broadcast(currentClipboard)
+				current = msg
+				n.channel.Send(current.Event(n.Metadata().UniqueID()))
 			}
 		}
 	}()
-	for msg := range n.channel.Listen() {
-		if msg.From != n.options.Metadata.UniqueID() {
-			n.setClipboardData(msg.Payload)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case err := <-watchErr:
+			if err != nil {
+				return fmt.Errorf("node.MonitorBuffer: %w", err)
+			}
+			return nil
+		case msg := <-n.channel.Listen():
+			if msg.From != n.options.Metadata.UniqueID() {
+				ctxLog.Trace().Int64("msg_id", msg.Payload.ID).Msg("set clipboard data")
+
+				if _, err := n.clipboard.Write(msg.Payload.Data); err != nil {
+					ctxLog.Error().Err(err).Send()
+				}
+			}
+
+			go n.Broadcast(msg)
 		}
-
-		go n.Broadcast(msg)
 	}
-}
-
-func (n *Node) fetchClipboardData() domain.Event[domain.Message] {
-	clip, _ := n.clipboard.Get()
-	return domain.MessageNew(clip, n.Metadata().ID)
-}
-
-func (n *Node) setClipboardData(m domain.Message) {
-	log.Trace().Int64("msg_id", m.ID).Msg("set clipboard data")
-	_ = n.clipboard.Set(m.Data)
 }
 
 func (n *Node) Notify(message string, v ...any) {

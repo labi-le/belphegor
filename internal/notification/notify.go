@@ -2,6 +2,7 @@ package notification
 
 import (
 	"fmt"
+
 	"github.com/gen2brain/beeep"
 	"github.com/rs/zerolog/log"
 )

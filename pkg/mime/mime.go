@@ -1,39 +1,114 @@
 package mime
 
-import "bytes"
+import (
+	"bytes"
+	"strings"
+)
 
-var imageMimeType = map[string]struct {
-}{
-	"image/png":  {},
-	"image/jpeg": {},
-	"image/bmp":  {},
-	"image/gif":  {},
+var (
+	imageTypes = map[string]struct{}{
+		"image/png":  {},
+		"image/jpeg": {},
+		"image/jpg":  {},
+		"image/gif":  {},
+		"image/bmp":  {},
+		"image/webp": {},
+		"image/tiff": {},
+	}
+
+	textTypes = map[string]struct{}{
+		"text/plain;charset=utf-8": {},
+		"text/plain":               {},
+		"utf8_string":              {},
+		"text/html":                {},
+		"text":                     {},
+		"string":                   {},
+	}
+
+	supportedTypes map[string]struct{}
+)
+
+func init() {
+	supportedTypes = make(map[string]struct{}, len(imageTypes)+len(textTypes))
+	for k := range imageTypes {
+		supportedTypes[k] = struct{}{}
+	}
+	for k := range textTypes {
+		supportedTypes[k] = struct{}{}
+	}
 }
 
-func HasPicture(mimeType string) bool {
-	_, ok := imageMimeType[mimeType]
+func SupportedTypes() map[string]struct{} {
+	return supportedTypes
+}
+
+func IsImage(mimeType string) bool {
+	_, ok := imageTypes[strings.ToLower(mimeType)]
 	return ok
+}
+
+func IsText(mimeType string) bool {
+	_, ok := textTypes[strings.ToLower(mimeType)]
+	return ok
+}
+
+func IsSupported(mimeType string) bool {
+	_, ok := supportedTypes[strings.ToLower(mimeType)]
+	return ok
+}
+
+func TextTypesList() []string {
+	return []string{
+		"text/plain;charset=utf-8",
+		"text/plain",
+		"TEXT",
+		"STRING",
+		"UTF8_STRING",
+	}
 }
 
 func Type(data []byte) string {
 	switch {
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x89, 0x50, 0x4E, 0x47}): // PNG
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x89, 0x50, 0x4E, 0x47}):
 		return "image/png"
-	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0xFF, 0xD8}): // JPEG
+	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0xFF, 0xD8}):
 		return "image/jpeg"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x47, 0x49, 0x46, 0x38}): // GIF
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x47, 0x49, 0x46, 0x38}):
 		return "image/gif"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x25, 0x50, 0x44, 0x46}): // PDF
-		return "application/pdf"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x50, 0x4B, 0x03, 0x04}): // ZIP
-		return "application/zip"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x52, 0x61, 0x72, 0x21}): // RAR
-		return "application/x-rar-compressed"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x1F, 0x8B, 0x08, 0x00}): // GZIP
-		return "application/gzip"
-	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0x42, 0x4D}): // BMP
+	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0x42, 0x4D}):
 		return "image/bmp"
+	case len(data) >= 12 && bytes.Equal(data[8:12], []byte("WEBP")):
+		return "image/webp"
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x25, 0x50, 0x44, 0x46}):
+		return "application/pdf"
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x50, 0x4B, 0x03, 0x04}):
+		return "application/zip"
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x52, 0x61, 0x72, 0x21}):
+		return "application/x-rar-compressed"
+	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0x1F, 0x8B}):
+		return "application/gzip"
 	default:
-		return "application/octet-stream"
+		return ""
 	}
+}
+
+func IsTextData(data []byte) bool {
+	if len(data) == 0 {
+		return true
+	}
+
+	checkLen := len(data)
+	if checkLen > 512 {
+		checkLen = 512
+	}
+
+	nonPrintable := 0
+	for i := 0; i < checkLen; i++ {
+		b := data[i]
+		if b < 0x20 && b != '\t' && b != '\n' && b != '\r' {
+			nonPrintable++
+		}
+	}
+
+	return float64(nonPrintable)/float64(checkLen) < 0.1
 }

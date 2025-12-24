@@ -5,11 +5,10 @@ import (
 )
 
 type Eventful interface {
-	Watch(ctx context.Context, update chan<- Update)
+	Watch(ctx context.Context, update chan<- Update) error
 	Write(p []byte) (n int, err error)
 }
 
 type Update struct {
 	Data []byte
-	Err  error
 }
