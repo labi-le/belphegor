@@ -1,12 +1,13 @@
-package domain
+package id
 
 import (
+	"sync"
+
 	"github.com/bwmarrin/snowflake"
 	"github.com/rs/zerolog/log"
-	"sync"
 )
 
-type UniqueID = int64
+type Unique = int64
 
 type idGenerator struct {
 	node *snowflake.Node
@@ -26,6 +27,6 @@ func (g *idGenerator) nextID() int64 {
 	return g.node.Generate().Int64()
 }
 
-func NewID() UniqueID {
+func New() Unique {
 	return generator.nextID()
 }

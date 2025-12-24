@@ -112,13 +112,7 @@ dump:
 	@echo "Created at: $$(date)" >> project_code.txt
 	@echo "" >> project_code.txt
 	@find . -type f \( \
-		-name "*.go" -o \
-		-name "*.yml" -o \
-		-name "*.yaml" -o \
 		-name "*.proto" -o \
-		-name "*.mod" -o \
-		-name "*.sum" -o \
-		-name "*.nix" -o \
 		-name "Makefile" \
 	\) | while read file; do \
 		echo "=== FILE: $$file ===" >> project_code.txt; \

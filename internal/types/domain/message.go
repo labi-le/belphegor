@@ -2,66 +2,82 @@ package domain
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rand"
+	"fmt"
+	"time"
+
 	"github.com/labi-le/belphegor/internal/types/proto"
-	"github.com/labi-le/belphegor/pkg/image"
+	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/rs/zerolog/log"
 	pb "google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
-	"io"
-	"net"
 )
 
+var (
+	_ protoutil.Proto[*proto.Message]          = Message{}
+	_ protoutil.Proto[*proto.EncryptedMessage] = EncryptedMessage{}
+)
+
+type EventMessage = Event[Message]
+type EventEncryptedMessage = Event[EncryptedMessage]
+
+type Data []byte
+
 type Message struct {
-	Data   Data
-	Header Header
+	ID   id.Unique
+	Data Data
+	Mime MimeType
 }
 
-// MessageFrom creates a new Message with the provided data.
-func MessageFrom(data []byte, from UniqueID) Message {
-	return Message{
-		Data: NewData(data),
-		Header: NewHeader(
-			from,
-			MimeFromData(data),
-		),
+type EncryptedMessage struct {
+	ID      id.Unique
+	Content []byte
+}
+
+func (e EncryptedMessage) Proto() *proto.EncryptedMessage {
+	return &proto.EncryptedMessage{
+		ID:      e.ID,
+		Content: e.Content,
 	}
 }
 
-func MessageFromProto(m *proto.Message) Message {
+// MessageNew creates a new Message with the provided data.
+func MessageNew(data []byte, owner id.Unique) EventMessage {
+	return EventMessage{
+		From:    owner,
+		Created: time.Now(),
+		Payload: Message{
+			Data: data,
+			Mime: mimeFromData(data),
+			ID:   id.New(),
+		},
+	}
+}
+
+func MessageFromProto(p *proto.Message) Message {
+	if p == nil {
+		return Message{}
+	}
 	return Message{
-		Data: Data{
-			Raw: m.Data.Raw,
-		},
-		Header: Header{
-			ID:                m.Header.ID,
-			Created:           m.Header.Created.AsTime(),
-			From:              m.Header.From,
-			MimeType:          MimeType(m.Header.MimeType),
-			ClipboardProvider: ClipboardProvider(m.Header.ClipboardProvider.Number()),
-		},
+		ID:   p.ID,
+		Data: p.Data,
+		Mime: MimeType(p.MimeType),
 	}
 }
 
 func (m Message) Duplicate(new Message) bool {
-	if m.Header.ID == new.Header.ID {
+	if m.ID == new.ID {
 		return true
 	}
 
-	if m.Header.MimeType != new.Header.MimeType {
+	if m.Mime != new.Mime {
 		return false
 	}
 
-	if m.Header.MimeType == MimeTypeImage {
-		if m.Header.ClipboardProvider == new.Header.ClipboardProvider {
-			return bytes.Equal(m.Data.Raw, new.Data.Raw)
-		}
-
-		identical, err := image.EqualMSE(
-			bytes.NewReader(m.Data.Raw),
-			bytes.NewReader(new.Data.Raw),
+	if m.Mime == MimeTypeImage {
+		identical, err := mime.EqualMSE(
+			bytes.NewReader(m.Data),
+			bytes.NewReader(new.Data),
 		)
 		if err != nil {
 			log.Error().AnErr("image.EqualMSE", err).Msg("failed to compare images")
@@ -70,63 +86,41 @@ func (m Message) Duplicate(new Message) bool {
 		return identical
 	}
 
-	return bytes.Equal(m.Data.Raw, new.Data.Raw)
+	return bytes.Equal(m.Data, new.Data)
 }
 
-func (m Message) From() UniqueID {
-	return m.Header.From
-}
-
-func (m Message) ID() UniqueID {
-	return m.Header.ID
-}
-
-func (m Message) RawData() []byte {
-	return m.Data.Raw
-}
-
-func (m Message) Proto() pb.Message {
+func (m Message) Proto() *proto.Message {
 	return &proto.Message{
-		Data: &proto.Data{
-			Raw: m.Data.Raw,
-		},
-		Header: &proto.Header{
-			From:              m.From(),
-			MimeType:          proto.Mime(m.Header.MimeType),
-			ID:                m.ID(),
-			Created:           timestamppb.New(m.Header.Created),
-			ClipboardProvider: proto.Clipboard(m.Header.ClipboardProvider),
-		},
+		Data:     m.Data,
+		MimeType: proto.Mime(m.Mime),
 	}
 }
 
-func (m Message) WriteEncrypted(signer crypto.Signer, writer io.Writer) (int, error) {
-	dat, _ := pb.Marshal(m.Proto())
-	encrypted, err := signer.Sign(rand.Reader, dat, nil)
+type DecryptFn func(encrypted []byte) ([]byte, error)
+
+func MessageFromEncrypted(ev *proto.Event, data Device, fn DecryptFn) (EventMessage, error) {
+	payload, ok := ev.Payload.(*proto.Event_Message)
+	if ok == false {
+		return EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, ev.Payload)
+	}
+
+	decrypted, err := fn(payload.Message.Content)
 	if err != nil {
-		return 0, err
+		return EventMessage{}, err
 	}
 
-	msg := EncryptedMessage{encrypted}
-	return protoutil.EncodeWriter(msg, writer)
-}
-
-func ReceiveMessage(conn net.Conn, decrypter crypto.Decrypter) (Message, error) {
-	var message proto.Message
-
-	var encrypt proto.EncryptedMessage
-	if decodeEnc := protoutil.DecodeReader(conn, &encrypt); decodeEnc != nil {
-		return Message{}, decodeEnc
+	var msg proto.Message
+	if err := pb.Unmarshal(decrypted, &msg); err != nil {
+		return EventMessage{}, fmt.Errorf("MessageFromEncrypted: %w", err)
 	}
 
-	decrypt, decErr := decrypter.Decrypt(rand.Reader, encrypt.Message, nil)
-	if decErr != nil {
-		return Message{}, decErr
-	}
-
-	if err := pb.Unmarshal(decrypt, &message); err != nil {
-		return Message{}, err
-	}
-
-	return MessageFromProto(&message), nil
+	return EventMessage{
+		From:    data.ID,
+		Created: ev.Created.AsTime(),
+		Payload: Message{
+			ID:   payload.Message.ID,
+			Data: msg.Data,
+			Mime: MimeType(msg.MimeType),
+		},
+	}, nil
 }

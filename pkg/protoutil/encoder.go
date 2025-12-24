@@ -2,37 +2,35 @@ package protoutil
 
 import (
 	"encoding/binary"
-	"github.com/labi-le/belphegor/pkg/pool/byteslice"
-	"github.com/rs/zerolog/log"
-	"google.golang.org/protobuf/proto"
 	"io"
+
+	"github.com/labi-le/belphegor/pkg/pool/byteslice"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	Length = 4
+	Length            = 4
+	DefaultBufferSize = 2048
 )
 
-// encode encodes the source interface and returns the encoded byte slice.
-func encode(src proto.Message) []byte {
-	encoded, err := proto.Marshal(src)
+func EncodeWriter(src proto.Message, w io.Writer) (int, error) {
+	buf := byteslice.Get(DefaultBufferSize)
+	defer byteslice.Put(buf)
+
+	target := buf[:Length]
+
+	var err error
+	options := proto.MarshalOptions{}
+	target, err = options.MarshalAppend(target, src)
 	if err != nil {
-		log.Error().AnErr("encode", err).Msg("failed to encode clipboard data")
+		return 0, err
 	}
 
-	return encoded
-}
+	msgLen := len(target) - Length
 
-// EncodeWriter encodes the source interface writes it to the destination io.Writer.
-func EncodeWriter(src Proto[proto.Message], w io.Writer) (int, error) {
-	encoded := encode(src.Proto())
+	binary.BigEndian.PutUint32(target[:Length], uint32(msgLen))
 
-	combined := byteslice.Get(Length + len(encoded))
-	defer byteslice.Put(combined)
-
-	binary.BigEndian.PutUint32(combined[:Length], uint32(len(encoded)))
-	copy(combined[Length:], encoded)
-
-	return w.Write(combined[:Length+len(encoded)])
+	return w.Write(target)
 }
 
 func DecodeReader(r io.Reader, dst proto.Message) error {
@@ -52,13 +50,13 @@ func DecodeReader(r io.Reader, dst proto.Message) error {
 }
 
 func dataLen(r io.Reader) (int, error) {
-	lenBytes := byteslice.Get(Length)
-	defer byteslice.Put(lenBytes)
+	var header [Length]byte
 
-	if _, err := io.ReadFull(r, lenBytes); err != nil {
+	if _, err := io.ReadFull(r, header[:]); err != nil {
 		return 0, err
 	}
-	return int(binary.BigEndian.Uint32(lenBytes)), nil
+
+	return int(binary.BigEndian.Uint32(header[:])), nil
 }
 
 type Proto[T proto.Message] interface {

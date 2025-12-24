@@ -1,0 +1,28 @@
+syntax = "proto3";
+import "device.proto";
+
+package belphegor;
+
+option go_package = "internal/types/proto";
+
+// Handshake represents the greeting message
+// Used to shake hands with other nodes
+message Handshake {
+  string Version = 1;
+  Device Device = 2;
+  uint32 Port = 3;
+  bytes PublicKey = 4;
+  Clipboard Provider = 5;
+}
+
+
+// ClipboardProvider represents the clipboard provider
+// Used to identify the clipboard provider
+enum Clipboard {
+  NULL = 0;
+  XCLIP = 1;
+  XSEL = 2;
+  WL_CLIPBOARD = 3;
+  PBPASTE = 4;
+  WINDOWS_NT_10 = 5;
+}

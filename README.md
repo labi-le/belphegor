@@ -16,7 +16,7 @@ ___
 ### Dependencies
 
 - linux:
-    * xclip or xsel (for skufs) or wl-clipboard (linux)
+    * wl-clipboard (wayland) | xclip or xsel (x11)  
 - macos:
     * pbpaste
 - windows:

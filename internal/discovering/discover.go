@@ -3,6 +3,9 @@ package discovering
 import (
 	"context"
 	"fmt"
+	"net"
+	"time"
+
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	proto2 "github.com/labi-le/belphegor/internal/types/proto"
@@ -10,8 +13,6 @@ import (
 	"github.com/labi-le/belphegor/pkg/ip"
 	"github.com/schollz/peerdiscovery"
 	"google.golang.org/protobuf/proto"
-	"net"
-	"time"
 )
 
 type Discover struct {
@@ -81,7 +82,7 @@ func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 					return
 				}
 
-				var msg proto2.GreetMessage
+				var msg proto2.Event
 				if protoErr := proto.Unmarshal(d.Payload, &msg); protoErr != nil {
 					ctxLog.Err(protoErr).Msg("failed to unmarshal payload")
 					return
@@ -89,18 +90,12 @@ func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 				greet := domain.GreetFromProto(&msg)
 
 				ctxLog.Trace().
-					Str("peer", greet.MetaData.String()).
+					Str("peer", greet.Payload.MetaData.String()).
 					Str("address", peerIP.String()).
-					Uint32("port", greet.Port).
+					Uint32("port", greet.Payload.Port).
 					Msg("discovered")
 
-				go n.ConnectTo(
-					ctx,
-					fmt.Sprintf(
-						"%s:%d",
-						peerIP.String(),
-						greet.Port,
-					))
+				go n.ConnectTo(ctx, createConnDsn(peerIP, greet))
 			},
 		},
 	)
@@ -110,9 +105,17 @@ func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 	}
 }
 
-func createPayload(metadata domain.MetaData, port int) []byte {
+func createConnDsn(peerIP net.IP, greet domain.EventHandshake) string {
+	return fmt.Sprintf(
+		"%s:%d",
+		peerIP.String(),
+		greet.Payload.Port,
+	)
+}
+
+func createPayload(metadata domain.Device, port int) []byte {
 	greet := domain.NewGreet(domain.WithMetadata(metadata))
-	greet.Port = uint32(port)
+	greet.Payload.Port = uint32(port)
 	byt, _ := proto.Marshal(greet.Proto())
 	return byt
 }

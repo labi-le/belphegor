@@ -2,10 +2,12 @@ package storage
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 type SyncMap[key any, val any] struct {
-	m sync.Map
+	m     sync.Map
+	count atomic.Int64
 }
 
 // NewSyncMapStorage creates a new SyncMap.
@@ -14,11 +16,17 @@ func NewSyncMapStorage[key any, val any]() *SyncMap[key, val] {
 }
 
 func (s *SyncMap[key, val]) Add(k key, v val) {
-	s.m.Store(k, v)
+	_, loaded := s.m.LoadOrStore(k, v)
+	if !loaded {
+		s.count.Add(1)
+	}
 }
 
 func (s *SyncMap[key, val]) Delete(k key) {
-	s.m.Delete(k)
+	_, loaded := s.m.LoadAndDelete(k)
+	if loaded {
+		s.count.Add(-1)
+	}
 }
 
 func (s *SyncMap[key, val]) Get(k key) (val, bool) {
@@ -51,4 +59,8 @@ func (s *SyncMap[key, val]) Tap(fn func(key, val) bool) {
 	})
 
 	wg.Wait()
+}
+
+func (s *SyncMap[key, val]) Len() int {
+	return int(s.count.Load())
 }

@@ -4,23 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"time"
+
 	"github.com/labi-le/belphegor/internal"
 	"github.com/labi-le/belphegor/internal/discovering"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
-	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/clipboard/wlr"
+	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/console"
+	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	flag "github.com/spf13/pflag"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"time"
 )
 
 const LockFile = "belphegor.lck"
@@ -101,8 +102,8 @@ func main() {
 	}
 
 	nd := node.New(
-		wlr.Must(log.Logger),
-		storage.NewSyncMapStorage[domain.UniqueID, *node.Peer](),
+		clipboard.New(),
+		storage.NewSyncMapStorage[id.Unique, *node.Peer](),
 		node.NewChannel(),
 		node.WithPublicPort(port),
 		node.WithBitSize(bitSize),

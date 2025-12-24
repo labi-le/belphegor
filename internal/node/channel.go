@@ -1,29 +1,34 @@
 package node
 
 import (
+	"sync/atomic"
+
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"sync"
 )
 
 // Channel is an interface for managing clipboard data
 type Channel struct {
-	new chan domain.Message
-	old domain.Message
-	mu  sync.Mutex
+	new chan domain.EventMessage
+	old atomic.Pointer[domain.EventMessage]
 }
 
-func (c *Channel) Send(msg domain.Message) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *Channel) Send(msg domain.EventMessage) {
+	msgRef := &msg
 
-	if c.old.Duplicate(msg) {
-		return
+	for {
+		old := c.old.Load()
+		if old != nil && old.Payload.Duplicate(msgRef.Payload) {
+			return
+		}
+
+		if c.old.CompareAndSwap(old, msgRef) {
+			c.new <- msg
+			return
+		}
 	}
-	c.old = msg
-	c.new <- msg
 }
 
-func (c *Channel) Listen() <-chan domain.Message {
+func (c *Channel) Listen() <-chan domain.EventMessage {
 	return c.new
 }
 
@@ -34,7 +39,6 @@ func (c *Channel) Close() error {
 
 func NewChannel() *Channel {
 	return &Channel{
-		new: make(chan domain.Message),
-		old: domain.Message{},
+		new: make(chan domain.EventMessage),
 	}
 }
