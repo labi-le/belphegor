@@ -41,8 +41,8 @@ func WithCipher(cipher *encrypter.Cipher) PeerOption {
 	}
 }
 
-func AcquirePeer(opts ...PeerOption) *Peer {
-	p := &Peer{}
+func NewPeer(opts ...PeerOption) *Peer {
+	p := new(Peer)
 	for _, opt := range opts {
 		opt(p)
 	}

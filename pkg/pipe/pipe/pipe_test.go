@@ -3,13 +3,14 @@ package pipe_test
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/labi-le/belphegor/pkg/pipe"
-	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"math/rand"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/labi-le/belphegor/pkg/pipe"
+	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 )
 
 func generateText(size int) string {

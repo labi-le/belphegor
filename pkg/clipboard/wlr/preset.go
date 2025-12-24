@@ -1,9 +1,10 @@
 package wlr
 
 import (
-	wl "deedles.dev/wl/client"
 	"errors"
 	"fmt"
+
+	wl "deedles.dev/wl/client"
 	"github.com/rs/zerolog"
 )
 

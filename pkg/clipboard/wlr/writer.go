@@ -3,22 +3,26 @@ package wlr
 import (
 	"bytes"
 	"errors"
-	"github.com/rs/zerolog"
 	"sync"
 	"syscall"
+
+	"github.com/rs/zerolog"
 )
 
 type writer struct {
 	*preset
 	logger zerolog.Logger
+	reader *reader
 
 	mu           sync.Mutex
 	activeSource *ZwlrDataControlSourceV1
+	closed       bool
 }
 
-func newWriter(preset *preset, log zerolog.Logger) *writer {
+func newWriter(preset *preset, reader *reader, log zerolog.Logger) *writer {
 	return &writer{
 		preset: preset,
+		reader: reader,
 		logger: log.With().Str("component", "writer").Logger(),
 	}
 }
@@ -31,28 +35,42 @@ type sourceListener struct {
 
 func (s *sourceListener) Send(mime string, fd int) {
 	ctxLog := s.logger.With().Str("op", "Send").Logger()
-	ctxLog.Trace().Msgf("writing %d bytes to fd: %d", len(s.data), fd)
 
-	_, err := syscall.Write(fd, s.data)
-	if err != nil {
-		ctxLog.Error().AnErr("syscall.Write", err).Msg("failed to write clipboard data")
+	total := 0
+	for total < len(s.data) {
+		n, err := syscall.Write(fd, s.data[total:])
+		if err != nil {
+			if errors.Is(err, syscall.EPIPE) {
+				ctxLog.Debug().
+					Int("written", total).
+					Int("total", len(s.data)).
+					Msg("Reader closed pipe early (normal)")
+			} else {
+				ctxLog.Error().Err(err).Int("written", total).Msg("Failed to write clipboard data")
+			}
+			break
+		}
+		total += n
 	}
 
 	if err := syscall.Close(fd); err != nil {
-		ctxLog.Error().AnErr("syscall.Close", err).Msg("failed to close fd")
+		ctxLog.Error().Err(err).Msg("Failed to close fd")
 	}
 }
 
-func (s *sourceListener) Cancelled() {
-	s.logger.Trace().Str("op", "Cancelled").Msgf("source %d cancelled", s.source.ID())
-	s.source.Destroy()
-}
+func (s *sourceListener) Cancelled() {}
 
 func (w *writer) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	if w.closed {
+		w.logger.Warn().Msg("Writer is closed, ignoring write")
+		return 0, errors.New("writer is closed")
+	}
+
 	if w.deviceManager == nil {
+		w.logger.Error().Msg("Data control manager not initialized")
 		return 0, errors.New("data control manager not initialized")
 	}
 
@@ -68,7 +86,8 @@ func (w *writer) Write(p []byte) (n int, err error) {
 	source.Listener = listener
 
 	typ := mimeType(p)
-	if typ == "" || mimeTypeText(p) {
+	if typ == "" || isTextData(p) {
+		source.Offer("text/plain;charset=utf-8")
 		source.Offer("text/plain")
 		source.Offer("TEXT")
 		source.Offer("STRING")
@@ -80,56 +99,66 @@ func (w *writer) Write(p []byte) (n int, err error) {
 	w.device.SetSelection(source)
 	w.activeSource = source
 
+	if w.reader != nil {
+		w.reader.IgnoreNextSelection()
+	}
+
 	return len(p), nil
 }
 
 func (w *writer) Close() error {
-	return w.client.Close()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.logger.Debug().Msg("Closing writer")
+	w.closed = true
+
+	w.device.SetSelection(new(ZwlrDataControlSourceV1))
+	w.activeSource = nil
+
+	return nil
 }
 
 func mimeType(data []byte) string {
 	switch {
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x89, 0x50, 0x4E, 0x47}): // PNG
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x89, 0x50, 0x4E, 0x47}):
 		return "image/png"
-	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0xFF, 0xD8}): // JPEG
+	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0xFF, 0xD8}):
 		return "image/jpeg"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x47, 0x49, 0x46, 0x38}): // GIF
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x47, 0x49, 0x46, 0x38}):
 		return "image/gif"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x25, 0x50, 0x44, 0x46}): // PDF
-		return "application/pdf"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x50, 0x4B, 0x03, 0x04}): // ZIP
-		return "application/zip"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x52, 0x61, 0x72, 0x21}): // RAR
-		return "application/x-rar-compressed"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x1F, 0x8B, 0x08, 0x00}): // GZIP
-		return "application/gzip"
-	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0x42, 0x4D}): // BMP
+	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0x42, 0x4D}):
 		return "image/bmp"
+	case len(data) >= 12 && bytes.Equal(data[8:12], []byte("WEBP")):
+		return "image/webp"
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x25, 0x50, 0x44, 0x46}):
+		return "application/pdf"
+	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x50, 0x4B, 0x03, 0x04}):
+		return "application/zip"
 	default:
 		return ""
 	}
 }
 
-func mimeTypeText(mimeType []byte) bool {
-	if bytes.HasPrefix(mimeType, []byte("text/")) {
+func isTextData(data []byte) bool {
+	if len(data) == 0 {
 		return true
 	}
 
-	if bytes.Equal(mimeType, []byte("TEXT")) ||
-		bytes.Equal(mimeType, []byte("STRING")) ||
-		bytes.Equal(mimeType, []byte("UTF8_STRING")) {
-		return true
+	checkLen := len(data)
+	if checkLen > 512 {
+		checkLen = 512
 	}
 
-	if bytes.Contains(mimeType, []byte("json")) ||
-		bytes.HasSuffix(mimeType, []byte("script")) ||
-		bytes.HasSuffix(mimeType, []byte("xml")) ||
-		bytes.HasSuffix(mimeType, []byte("yaml")) ||
-		bytes.HasSuffix(mimeType, []byte("csv")) ||
-		bytes.HasSuffix(mimeType, []byte("ini")) {
-		return true
+	nonPrintable := 0
+	for i := 0; i < checkLen; i++ {
+		b := data[i]
+		if b < 0x20 && b != '\t' && b != '\n' && b != '\r' {
+			if b < 0x80 {
+				nonPrintable++
+			}
+		}
 	}
 
-	return bytes.Contains(mimeType, []byte("application/vnd.ms-publisher")) ||
-		bytes.HasSuffix(mimeType, []byte("pgp-keys"))
+	return float64(nonPrintable)/float64(checkLen) < 0.1
 }

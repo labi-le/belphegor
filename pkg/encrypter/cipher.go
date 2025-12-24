@@ -9,8 +9,9 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"errors"
-	"github.com/rs/zerolog/log"
 	"io"
+
+	"github.com/rs/zerolog/log"
 )
 
 type Cipher struct {

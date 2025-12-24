@@ -1,8 +1,9 @@
 package domain
 
 import (
+	"fmt"
+
 	"github.com/labi-le/belphegor/pkg/clipboard"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -35,7 +36,7 @@ func ClipboardProviderFromManager(m clipboard.Manager) ClipboardProvider {
 	case clipboard.NullClipboard:
 		return ClipboardNull
 	default:
-		log.Fatal().Msgf("unimplemented device: %s", m.Name())
+		panic(fmt.Errorf("unimplemented device: %s", m.Name()))
 	}
 
 	// unreachable

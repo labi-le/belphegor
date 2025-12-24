@@ -21,7 +21,7 @@ type handshake struct {
 func newHandshake(bitSize int, meta domain.Device, port int) (*handshake, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, bitSize)
 	if err != nil {
-		return nil, fmt.Errorf("generate key: %w", err)
+		return nil, fmt.Errorf("generate key error: %w", err)
 	}
 
 	return &handshake{

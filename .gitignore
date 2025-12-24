@@ -9,6 +9,7 @@ cmake-build-*/
 
 # IntelliJ
 out/
+build
 
 
 # JIRA plugin

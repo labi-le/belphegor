@@ -108,19 +108,26 @@ sri-hash:
 
 .PHONY: dump
 dump:
-	@echo "=== START PROJECT CODE DUMP ===" > project_code.txt
-	@echo "Created at: $$(date)" >> project_code.txt
-	@echo "" >> project_code.txt
-	@find . -type f \( \
-		-name "*.proto" -o \
-		-name "Makefile" \
-	\) | while read file; do \
-		echo "=== FILE: $$file ===" >> project_code.txt; \
-		echo "=== START CODE ===" >> project_code.txt; \
-		cat "$$file" >> project_code.txt; \
-		echo "=== END CODE ===" >> project_code.txt; \
-		echo "" >> project_code.txt; \
-	done
+	@{ \
+		echo "=== START PROJECT CODE DUMP ==="; \
+		echo ""; \
+		echo "=== PROJECT TREE ==="; \
+		nix run nixpkgs#tree -- . || echo "(tree failed)"; \
+		echo ""; \
+		find pkg/clipboard/wlr -type f \( \
+			-name "*.go" -o \
+			-name "*.yml" -o \
+			-name "*.yaml" -o \
+			-name "*.proto" -o \ -name "*.mod" -o \
+			-name "*.sum" -o \
+			-name "*.nix" -o \
+			-name "Makefile" \
+		\) | sort | while read file; do \
+			echo "=== FILE: $$file ==="; \
+			cat "$$file"; \
+			echo ""; \
+		done; \
+	} | wl-copy
 
 .PHONY: dist
 dist:
@@ -130,4 +137,4 @@ dist:
         goreleaser/goreleaser release --clean --snapshot
 
 fake-update-clipboard:
-	while true; do uuidgen | wl-copy; sleep 3; done
+	while true; do uuidgen | wl-copy; sleep 0.2; done

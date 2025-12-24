@@ -4,146 +4,64 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sync"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
-	"github.com/rs/zerolog"
 	"golang.org/x/sys/unix"
 )
-
-var _ RWPipe = &Reusable{}
 
 var (
 	ErrNilPipe      = fmt.Errorf("pipe: nil pipe provided")
 	ErrFailedCreate = fmt.Errorf("pipe: failed to create pipe")
-	ErrClose        = fmt.Errorf("pipe: failted to close")
 )
 
 type RWPipe interface {
-	// Fd returns a valid file descriptor for write
+	// Fd returns write file descriptor for Wayland (ownership will be transferred)
 	Fd() *os.File
-	// ReadFd returns a valid file descriptor for read
+	// ReadFd returns read file descriptor
 	ReadFd() *os.File
-	// Close pipe
+	// Close closes only the read end
 	Close() error
 }
 
-type Fd interface {
-	Fd() uintptr
-	Close() error
-}
-
-// Reusable
-//
-// Non thread-safe
+// Reusable represents a pipe for reading clipboard data from Wayland
 type Reusable struct {
-	rfd, wfd *os.File
-	logger   zerolog.Logger
-	mu       sync.RWMutex
+	rfd *os.File
+	wfd *os.File
 }
 
-func MustNonBlock(log zerolog.Logger) *Reusable {
-	p, err := NewNonBlock(log)
+func MustNonBlock() *Reusable {
+	p, err := NewNonBlock()
 	if err != nil {
 		panic(err)
 	}
-
 	return p
 }
 
-func NewNonBlock(log zerolog.Logger) (*Reusable, error) {
+func NewNonBlock() (*Reusable, error) {
 	r, w, err := os.Pipe()
 	if err != nil {
-		return &Reusable{}, errors.Join(ErrFailedCreate, err)
+		return nil, errors.Join(ErrFailedCreate, err)
 	}
 
 	return &Reusable{
-		rfd:    r,
-		wfd:    w,
-		logger: log.With().Str("component", "pipe").Logger(),
+		rfd: r,
+		wfd: w,
 	}, nil
 }
 
-func (w *Reusable) Close() error {
-	w.logger.Trace().Msg("close called")
-
-	//w.mu.Lock()
-	//defer w.mu.Unlock()
-
-	w.logger.Trace().Ints("close(:rfd, :wfd)", []int{int(w.rfd.Fd()), int(w.wfd.Fd())}).Send()
-
-	if err := w.rfd.Close(); err != nil {
-		return errors.Join(ErrClose, err)
-	}
-	if err := w.wfd.Close(); err != nil {
-		return errors.Join(ErrClose, err)
-	}
-
-	return nil
+// Close closes only the read end. Write end is managed by Wayland compositor
+func (p *Reusable) Close() error {
+	return p.rfd.Close()
 }
 
-func (w *Reusable) Fd() *os.File {
-	w.logger.Trace().Msg("fd called")
-
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.logger.Trace().Int("write_fd", int(w.wfd.Fd())).Send()
-	return w.wfd
+func (p *Reusable) Fd() *os.File {
+	return p.wfd
 }
 
-func (w *Reusable) ReadFd() *os.File {
-	w.logger.Trace().Msg("readfd called")
-
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.logger.Trace().Int("read_fd", int(w.rfd.Fd())).Send()
-	return w.rfd
-}
-
-func waitForReadable(fd uintptr, lastRead time.Time, hasData bool) (int, bool, error) {
-	if hasData && time.Since(lastRead) >= 5*time.Millisecond {
-		return 0, true, nil
-	}
-
-	pfd := unix.PollFd{
-		Fd:     int32(fd),
-		Events: unix.POLLIN | unix.POLLPRI | unix.POLLERR | unix.POLLHUP | unix.POLLNVAL,
-	}
-
-	pollTimeout := uintptr(100) // 100ms timeout after read first portion cake
-	if !hasData {
-		pollTimeout = ^uintptr(0) // inf wait
-	}
-
-	for {
-		_, _, errno := syscall.Syscall(syscall.SYS_POLL,
-			uintptr(unsafe.Pointer(&pfd)),
-			1,
-			pollTimeout,
-		)
-
-		if errno != 0 {
-			if errno == syscall.EINTR {
-				continue
-			}
-			return 0, false, fmt.Errorf("poll error: %w", errno)
-		}
-
-		if pfd.Revents&(unix.POLLERR|unix.POLLNVAL|unix.POLLHUP) != 0 {
-			return 0, false, fmt.Errorf("poll error event: %v", pfd.Revents)
-		}
-
-		if pfd.Revents&unix.POLLIN != 0 {
-			return readableSize(fd), false, nil
-		}
-
-		return 0, false, nil
-	}
+func (p *Reusable) ReadFd() *os.File {
+	return p.rfd
 }
 
 func FromPipe(pipe uintptr) ([]byte, error) {
@@ -151,13 +69,21 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 		return nil, ErrNilPipe
 	}
 
-	buffer := byteslice.Get(capacity(pipe))
-	defer byteslice.Put(buffer)
-	total := 0
+	const (
+		initialCap  = 4096
+		readTimeout = 100 * time.Millisecond
+		dataDelay   = 5 * time.Millisecond
+	)
 
+	buffer := byteslice.Get(initialCap)
+	defer byteslice.Put(buffer)
+
+	total := 0
 	lastRead := time.Now()
+	hasData := false
+
 	for {
-		size, timeout, err := waitForReadable(pipe, lastRead, total > 0)
+		timeout, err := waitForData(pipe, lastRead, hasData, readTimeout, dataDelay)
 		if err != nil {
 			return nil, err
 		}
@@ -166,17 +92,8 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 			break
 		}
 
-		if size == 0 {
-			continue
-		}
-
-		if total+size > cap(buffer) {
-			newCap := cap(buffer) * 2
-			if newCap < total+size {
-				newCap = total + size
-			}
-
-			newBuf := byteslice.Get(newCap)
+		if total == cap(buffer) {
+			newBuf := byteslice.Get(cap(buffer) * 2)
 			copy(newBuf, buffer[:total])
 			byteslice.Put(buffer)
 			buffer = newBuf
@@ -184,18 +101,64 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 
 		n, err := syscall.Read(int(pipe), buffer[total:cap(buffer)])
 		if err != nil {
-			if errCode, ok := err.(syscall.Errno); ok &&
-				(errCode == syscall.EAGAIN || errCode == syscall.EINTR) {
+			if errno, ok := err.(syscall.Errno); ok &&
+				(errno == syscall.EAGAIN || errno == syscall.EINTR) {
 				continue
 			}
 			return nil, err
 		}
 
-		if n > 0 {
-			total += n
-			lastRead = time.Now()
+		if n == 0 {
+			break
 		}
+
+		total += n
+		lastRead = time.Now()
+		hasData = true
 	}
 
-	return buffer[:total], nil
+	result := make([]byte, total)
+	copy(result, buffer[:total])
+	return result, nil
+}
+
+func waitForData(fd uintptr, lastRead time.Time, hasData bool, readTimeout, dataDelay time.Duration) (bool, error) {
+	if hasData && time.Since(lastRead) >= dataDelay {
+		return true, nil
+	}
+
+	fds := []unix.PollFd{{
+		Fd:     int32(fd),
+		Events: unix.POLLIN | unix.POLLERR | unix.POLLHUP | unix.POLLNVAL,
+	}}
+
+	timeout := -1
+	if hasData {
+		timeout = int(readTimeout.Milliseconds())
+	}
+
+	for {
+		n, err := unix.Poll(fds, timeout)
+		if err != nil {
+			if err == syscall.EINTR {
+				continue
+			}
+			return false, fmt.Errorf("poll error: %w", err)
+		}
+
+		if n == 0 {
+			return true, nil
+		}
+
+		re := fds[0].Revents
+		if re&(unix.POLLERR|unix.POLLNVAL) != 0 {
+			return true, fmt.Errorf("poll error revents=%v", re)
+		}
+		if re&unix.POLLHUP != 0 {
+			return true, nil
+		}
+		if re&unix.POLLIN != 0 {
+			return false, nil
+		}
+	}
 }

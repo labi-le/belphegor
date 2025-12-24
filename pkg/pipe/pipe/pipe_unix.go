@@ -1,9 +1,10 @@
 package pipe
 
 import (
-	"golang.org/x/sys/unix"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 func readableSize(fd uintptr) int {

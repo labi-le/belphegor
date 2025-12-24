@@ -1,10 +1,11 @@
 package wlr
 
 import (
-	wl "deedles.dev/wl/client"
-	"deedles.dev/wl/wire"
 	"fmt"
 	"os"
+
+	wl "deedles.dev/wl/client"
+	"deedles.dev/wl/wire"
 )
 
 const (
