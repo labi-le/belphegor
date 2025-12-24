@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestNode_MessageExchange(t *testing.T) {
@@ -49,6 +52,10 @@ func TestNode_MessageExchange(t *testing.T) {
 			name: "json like payload",
 			msg:  []byte(`{"event":"clipboard_update","value":"random english text","ok":true}`),
 		},
+		{
+			name: "10mb",
+			msg:  []byte(strings.Repeat("a", 10<<20)),
+		},
 	}
 
 	initConn, clip1, clip2 := testNodes(t)
@@ -60,8 +67,8 @@ func TestNode_MessageExchange(t *testing.T) {
 
 			_ = clip1.Set(tc.msg)
 
-			timeout := time.After(3 * time.Second)
-			ticker := time.NewTicker(1 * time.Second)
+			timeout := time.After(10 * time.Second)
+			ticker := time.NewTicker(100 * time.Millisecond)
 			defer ticker.Stop()
 
 			for {
@@ -85,7 +92,7 @@ func TestNode_MessageExchange(t *testing.T) {
 	}
 }
 
-func testNodes(t *testing.T) (func(ctx context.Context), *clipboard.Null, *clipboard.Null) {
+func testNodes(t testing.TB) (func(ctx context.Context), *clipboard.Null, *clipboard.Null) {
 	clip1 := new(clipboard.Null)
 	_ = clip1.Set([]byte("a"))
 
@@ -104,6 +111,7 @@ func testNodes(t *testing.T) (func(ctx context.Context), *clipboard.Null, *clipb
 			Arch: "amd64",
 			ID:   id.New(),
 		}),
+		node.WithClipboardScanDelay(100*time.Millisecond),
 	)
 
 	clip2 := new(clipboard.Null)
@@ -136,4 +144,63 @@ func testNodes(t *testing.T) (func(ctx context.Context), *clipboard.Null, *clipb
 	}
 
 	return initConn, clip1, clip2
+}
+
+func BenchmarkNode_MessageExchange(b *testing.B) {
+	log.Logger = zerolog.Nop()
+
+	benchmarks := []struct {
+		name string
+		size int
+	}{
+		{"1KB", 1024},
+		//{"64KB", 64 * 1024},
+		//{"512KB", 512 * 1024},
+		//{"1MB", 1024 * 1024},
+	}
+
+	initConn, clip1, clip2 := testNodes(b)
+	go initConn(b.Context())
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			time.Sleep(50 * time.Millisecond)
+
+			timeout := time.After(10 * time.Second)
+			ticker := time.NewTicker(100 * time.Millisecond)
+			defer ticker.Stop()
+
+			payload := make([]byte, bm.size)
+
+			b.ReportAllocs()
+			b.ResetTimer() // Сбрасываем таймер и счетчик аллокаций
+
+			for i := 0; i < b.N; i++ {
+				payload[0] = byte(i)
+
+				_ = clip1.Set(payload)
+
+				done := false
+				for !done {
+					select {
+					case <-ticker.C:
+						data, _ := clip2.Get()
+						if data == nil {
+							continue
+						}
+
+						if len(data) != len(payload) {
+							b.Fatal("error")
+						}
+
+						done = true
+						continue
+					case <-timeout:
+						b.Fatal("timeout waiting for message")
+					}
+				}
+			}
+		})
+	}
+
 }
