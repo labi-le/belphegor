@@ -14,7 +14,7 @@ import (
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
-	"github.com/labi-le/belphegor/pkg/clipboard/wlr"
+	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/console"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/storage"
@@ -102,7 +102,7 @@ func main() {
 	}
 
 	nd := node.New(
-		wlr.Must(log.Logger),
+		clipboard.New(),
 		storage.NewSyncMapStorage[id.Unique, *node.Peer](),
 		node.NewChannel(),
 		node.WithPublicPort(port),

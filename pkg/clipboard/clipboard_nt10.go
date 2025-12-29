@@ -22,13 +22,13 @@ import (
 	"golang.org/x/image/bmp"
 )
 
-var _ Eventful = &windows{}
+var _ Eventful = &Windows{}
 
-func New() Eventful {
-	return &windows{}
+func New() *Windows {
+	return new(Windows)
 }
 
-type windows struct{}
+type Windows struct{}
 
 const (
 	wmClipboardUpdate = 0x031D
@@ -51,11 +51,11 @@ type wndClassEx struct {
 	IconSm     syscall.Handle
 }
 
-func (w *windows) Watch(ctx context.Context, update chan<- Update) error {
+func (w *Windows) Watch(ctx context.Context, update chan<- Update) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	hInstance, _ := kernel32.NewProc("GetModuleHandleW").Call(0)
+	hInstance, _, _ := kernel32.NewProc("GetModuleHandleW").Call(0)
 	clsNamePtr, _ := syscall.UTF16PtrFromString(className)
 
 	wndProc := syscall.NewCallback(func(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
@@ -147,7 +147,7 @@ func (w *windows) Watch(ctx context.Context, update chan<- Update) error {
 }
 
 // Write implements Eventful.Write
-func (w *windows) Write(p []byte) (n int, err error) {
+func (w *Windows) Write(p []byte) (n int, err error) {
 	mime := http.DetectContentType(p)
 	fmtType := FmtText
 	if mime == "image/png" || mime == "image/jpeg" || mime == "image/gif" {
@@ -162,8 +162,8 @@ func (w *windows) Write(p []byte) (n int, err error) {
 }
 
 // Name returns the implementation name
-func (w *windows) Name() string {
-	return "WindowsNT10"
+func (w *Windows) Name() string {
+	return WindowsNT10
 }
 
 var (
@@ -521,10 +521,8 @@ func writeImage(buf []byte) error {
 }
 
 const (
-	cFmtBitmap      = 2
 	cFmtUnicodeText = 13
 	cFmtDIBV5       = 17
-	cFmtDataObject  = 49161
 	gmemMoveable    = 0x0002
 )
 
@@ -584,21 +582,18 @@ var (
 	getClipboardData           = user32.MustFindProc("GetClipboardData")
 	setClipboardData           = user32.MustFindProc("SetClipboardData")
 	isClipboardFormatAvailable = user32.MustFindProc("IsClipboardFormatAvailable")
-	enumClipboardFormats       = user32.MustFindProc("EnumClipboardFormats")
-	getClipboardSequenceNumber = user32.MustFindProc("GetClipboardSequenceNumber")
-	registerClipboardFormatA   = user32.MustFindProc("RegisterClipboardFormatA")
 
-	addClipboardFormatListener    = user32.NewProc("AddClipboardFormatListener")
-	removeClipboardFormatListener = user32.NewProc("RemoveClipboardFormatListener")
-	createWindowEx                = user32.NewProc("CreateWindowExW")
-	defWindowProc                 = user32.NewProc("DefWindowProcW")
-	registerClassEx               = user32.NewProc("RegisterClassExW")
-	getMessage                    = user32.NewProc("GetMessageW")
-	dispatchMessage               = user32.NewProc("DispatchMessageW")
-	translateMessage              = user32.NewProc("TranslateMessageW")
-	postQuitMessage               = user32.NewProc("PostQuitMessage")
-	destroyWindow                 = user32.NewProc("DestroyWindow")
-	postMessage                   = user32.NewProc("PostMessageW")
+	addClipboardFormatListener    = user32.MustFindProc("AddClipboardFormatListener")
+	removeClipboardFormatListener = user32.MustFindProc("RemoveClipboardFormatListener")
+	createWindowEx                = user32.MustFindProc("CreateWindowExW")
+	defWindowProc                 = user32.MustFindProc("DefWindowProcW")
+	registerClassEx               = user32.MustFindProc("RegisterClassExW")
+	getMessage                    = user32.MustFindProc("GetMessageW")
+	dispatchMessage               = user32.MustFindProc("DispatchMessageW")
+	translateMessage              = user32.MustFindProc("TranslateMessage")
+	postQuitMessage               = user32.MustFindProc("PostQuitMessage")
+	destroyWindow                 = user32.MustFindProc("DestroyWindow")
+	postMessage                   = user32.MustFindProc("PostMessageW")
 
 	gLock   = kernel32.NewProc("GlobalLock")
 	gUnlock = kernel32.NewProc("GlobalUnlock")

@@ -21,7 +21,7 @@ const (
 	ClipboardWindowsNT10
 )
 
-func ClipboardProviderFromManager(m clipboard.Manager) ClipboardProvider {
+func ClipboardProviderFromManager(m clipboard.Eventful) ClipboardProvider {
 	switch m.Name() {
 	case clipboard.XSel:
 		return ClipboardXSel
