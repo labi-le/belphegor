@@ -1,15 +1,6 @@
-// Copyright 2021 The golang.design Initiative Authors.
-// All rights reserved. Use of this source code is governed
-// by a MIT license that can be found in the LICENSE file.
-//
-// Written by Changkun Ou <changkun.de>
-
 //go:build windows
 
 package clipboard
-
-// Interacting with Clipboard on Windows:
-// https://docs.microsoft.com/zh-cn/windows/win32/dataxchg/using-the-clipboard
 
 import (
 	"bytes"
@@ -21,7 +12,6 @@ import (
 	"image/color"
 	"image/png"
 	"net/http"
-	"os"
 	"reflect"
 	"runtime"
 	"syscall"
@@ -32,58 +22,151 @@ import (
 	"golang.org/x/image/bmp"
 )
 
-func New() Manager {
+var _ Eventful = &windows{}
+
+func New() Eventful {
 	return &windows{}
 }
 
 type windows struct{}
 
-func (p *windows) Get() ([]byte, error) {
-	//select {
-	//case text := <-watch(context.Background(), FmtText):
-	//	buf = text
-	//case img := <-watch(context.Background(), FmtImage):
-	//	buf = img
-	//}
-	//
-	//return buf, nil
+const (
+	wmClipboardUpdate = 0x031D
+	wmDestroy         = 0x0002
+	className         = "BelphegorClipboardListener"
+)
 
-	var (
-		buf []byte
+type wndClassEx struct {
+	Size       uint32
+	Style      uint32
+	WndProc    uintptr
+	ClsExtra   int32
+	WndExtra   int32
+	Instance   syscall.Handle
+	Icon       syscall.Handle
+	Cursor     syscall.Handle
+	Background syscall.Handle
+	MenuName   *uint16
+	ClassName  *uint16
+	IconSm     syscall.Handle
+}
+
+func (w *windows) Watch(ctx context.Context, update chan<- Update) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	hInstance, _ := kernel32.NewProc("GetModuleHandleW").Call(0)
+	clsNamePtr, _ := syscall.UTF16PtrFromString(className)
+
+	wndProc := syscall.NewCallback(func(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
+		switch msg {
+		case wmClipboardUpdate:
+			data := Read(FmtImage)
+			if data == nil {
+				data = Read(FmtText)
+			}
+
+			if len(data) > 0 {
+				// Non-blocking send
+				select {
+				case update <- Update{Data: data}:
+				default:
+				}
+			}
+			return 0
+
+		case wmDestroy:
+			postQuitMessage.Call(0)
+			return 0
+		}
+
+		ret, _, _ := defWindowProc.Call(uintptr(hwnd), uintptr(msg), wparam, lparam)
+		return ret
+	})
+
+	wc := wndClassEx{
+		Size:      uint32(unsafe.Sizeof(wndClassEx{})),
+		Instance:  syscall.Handle(hInstance),
+		WndProc:   wndProc,
+		ClassName: clsNamePtr,
+	}
+
+	registerClassEx.Call(uintptr(unsafe.Pointer(&wc)))
+
+	hwnd, _, _ := createWindowEx.Call(
+		0,
+		uintptr(unsafe.Pointer(clsNamePtr)),
+		uintptr(unsafe.Pointer(clsNamePtr)),
+		0, 0, 0, 0, 0,
+		0,
+		0, 0, 0,
 	)
 
-	buf = Read(FmtImage)
-	if buf != nil {
-		return buf, nil
+	if hwnd == 0 {
+		return fmt.Errorf("failed to create window listener")
 	}
 
-	buf = Read(FmtText)
-	if buf != nil {
-		return buf, nil
+	ret, _, _ := addClipboardFormatListener.Call(hwnd)
+	if ret == 0 {
+		destroyWindow.Call(hwnd)
+		return fmt.Errorf("failed to add clipboard format listener")
 	}
 
-	return nil, nil
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			postMessage.Call(hwnd, wmDestroy, 0, 0)
+		case <-done:
+		}
+	}()
 
-	//return clipboardGet(exec.Command("powershell.exe", "-command", "Get-Clipboard"))
+	var msg struct {
+		Hwnd    syscall.Handle
+		Message uint32
+		WParam  uintptr
+		LParam  uintptr
+		Time    uint32
+		Pt      struct{ X, Y int32 }
+	}
+
+	for {
+		r, _, _ := getMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+		if int32(r) <= 0 {
+			break
+		}
+		translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
+	}
+
+	close(done)
+
+	removeClipboardFormatListener.Call(hwnd)
+
+	return nil
 }
 
-func (p *windows) Set(data []byte) error {
-	mime := http.DetectContentType(data)
-	if mime == "image/png" {
-		_, err := write(FmtImage, data)
-		return err
+// Write implements Eventful.Write
+func (w *windows) Write(p []byte) (n int, err error) {
+	mime := http.DetectContentType(p)
+	fmtType := FmtText
+	if mime == "image/png" || mime == "image/jpeg" || mime == "image/gif" {
+		fmtType = FmtImage
 	}
 
-	_, err := write(FmtText, data)
-	return err
+	_, err = write(fmtType, p)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
-func (p *windows) Name() string {
-	return WindowsNT10
+// Name returns the implementation name
+func (w *windows) Name() string {
+	return "WindowsNT10"
 }
 
 var (
-	// activate only for running tests.
 	debug          = false
 	errUnavailable = errors.New("clipboard unavailable")
 	errUnsupported = errors.New("unsupported format")
@@ -100,9 +183,111 @@ const (
 	FmtImage
 )
 
-// readText reads the clipboard and returns the text data if presents.
-// The caller is responsible for opening/closing the clipboard before
-// calling this function.
+// Read returns a chunk of bytes of the clipboard data if it presents
+// in the desired format t presents. Otherwise, it returns nil.
+func Read(t Format) []byte {
+	buf, err := read(t)
+	if err != nil {
+		return nil
+	}
+	return buf
+}
+
+func read(t Format) (buf []byte, err error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	var format uintptr
+	switch t {
+	case FmtImage:
+		format = cFmtDIBV5
+	case FmtText:
+		fallthrough
+	default:
+		format = cFmtUnicodeText
+	}
+
+	// check if clipboard is avaliable for the requested format
+	r, _, err := isClipboardFormatAvailable.Call(format)
+	if r == 0 {
+		return nil, errUnavailable
+	}
+
+	// Retry loop for OpenClipboard
+	for i := 0; i < 5; i++ {
+		r, _, _ = openClipboard.Call(0)
+		if r != 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if r == 0 {
+		return nil, errors.New("failed to open clipboard")
+	}
+	defer closeClipboard.Call()
+
+	switch format {
+	case cFmtDIBV5:
+		return readImage()
+	case cFmtUnicodeText:
+		fallthrough
+	default:
+		return readText()
+	}
+}
+
+func write(t Format, buf []byte) (<-chan struct{}, error) {
+	errch := make(chan error)
+	changed := make(chan struct{}, 1)
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
+		// Retry loop for OpenClipboard
+		var r uintptr
+		for i := 0; i < 5; i++ {
+			r, _, _ = openClipboard.Call(0)
+			if r != 0 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if r == 0 {
+			errch <- errors.New("failed to open clipboard")
+			return
+		}
+
+		switch t {
+		case FmtImage:
+			err := writeImage(buf)
+			if err != nil {
+				errch <- err
+				closeClipboard.Call()
+				return
+			}
+		case FmtText:
+			fallthrough
+		default:
+			err := writeText(buf)
+			if err != nil {
+				errch <- err
+				closeClipboard.Call()
+				return
+			}
+		}
+		closeClipboard.Call()
+
+		errch <- nil
+		close(changed)
+	}()
+
+	err := <-errch
+	if err != nil {
+		return nil, err
+	}
+	return changed, nil
+}
+
 func readText() (buf []byte, err error) {
 	hMem, _, err := getClipboardData.Call(cFmtUnicodeText)
 	if hMem == 0 {
@@ -129,16 +314,12 @@ func readText() (buf []byte, err error) {
 	return []byte(string(utf16.Decode(s))), nil
 }
 
-// writeText writes given data to the clipboard. It is the caller's
-// responsibility for opening/closing the clipboard before calling
-// this function.
 func writeText(buf []byte) error {
 	r, _, err := emptyClipboard.Call()
 	if r == 0 {
 		return fmt.Errorf("failed to clear clipboard: %w", err)
 	}
 
-	// empty text, we are done here.
 	if len(buf) == 0 {
 		return nil
 	}
@@ -159,7 +340,6 @@ func writeText(buf []byte) error {
 	}
 	defer gUnlock.Call(hMem)
 
-	// no return value
 	memMove.Call(p, uintptr(unsafe.Pointer(&s[0])),
 		uintptr(len(s)*int(unsafe.Sizeof(s[0]))))
 
@@ -172,13 +352,9 @@ func writeText(buf []byte) error {
 	return nil
 }
 
-// readImage reads the clipboard and returns PNG encoded image data
-// if presents. The caller is responsible for opening/closing the
-// clipboard before calling this function.
 func readImage() ([]byte, error) {
 	hMem, _, err := getClipboardData.Call(cFmtDIBV5)
 	if hMem == 0 {
-		// second chance to try FmtDIB
 		return readImageDib()
 	}
 	p, _, err := gLock.Call(hMem)
@@ -187,10 +363,7 @@ func readImage() ([]byte, error) {
 	}
 	defer gUnlock.Call(hMem)
 
-	// inspect header information
 	info := (*bitmapV5Header)(unsafe.Pointer(p))
-
-	// maybe deal with other formats?
 	if info.BitCount != 32 {
 		return nil, errUnsupported
 	}
@@ -215,7 +388,6 @@ func readImage() ([]byte, error) {
 			img.SetRGBA(xhat, yhat, color.RGBA{r, g, b, a})
 		}
 	}
-	// always use PNG encoding.
 	var buf bytes.Buffer
 	png.Encode(&buf, img)
 	return buf.Bytes(), nil
@@ -277,8 +449,6 @@ func writeImage(buf []byte) error {
 	if r == 0 {
 		return fmt.Errorf("failed to clear clipboard: %w", err)
 	}
-
-	// empty text, we are done here.
 	if len(buf) == 0 {
 		return nil
 	}
@@ -312,26 +482,13 @@ func writeImage(buf []byte) error {
 	info.Planes = 1
 	info.Compression = 0 // BI_RGB
 	info.SizeImage = uint32(4 * info.Width * info.Height)
-	info.RedMask = 0xff0000 // default mask
+	info.RedMask = 0xff0000
 	info.GreenMask = 0xff00
 	info.BlueMask = 0xff
 	info.AlphaMask = 0xff000000
-	info.BitCount = 32 // we only deal with 32 bpp at the moment.
-	// Use calibrated RGB values as Go's image/png assumes linear color space.
-	// Other options:
-	// - LCS_CALIBRATED_RGB = 0x00000000
-	// - LCS_sRGB = 0x73524742
-	// - LCS_WINDOWS_COLOR_SPACE = 0x57696E20
-	// https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/eb4bbd50-b3ce-4917-895c-be31f214797f
+	info.BitCount = 32
 	info.CSType = 0x73524742
-	// Use GL_IMAGES for GamutMappingIntent
-	// Other options:
-	// - LCS_GM_ABS_COLORIMETRIC = 0x00000008
-	// - LCS_GM_BUSINESS = 0x00000001
-	// - LCS_GM_GRAPHICS = 0x00000002
-	// - LCS_GM_IMAGES = 0x00000004
-	// https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/9fec0834-607d-427d-abd5-ab240fb0db38
-	info.Intent = 4 // LCS_GM_IMAGES
+	info.Intent = 4
 
 	infob := make([]byte, int(unsafe.Sizeof(info)))
 	for i, v := range *(*[unsafe.Sizeof(info)]byte)(unsafe.Pointer(&info)) {
@@ -363,179 +520,14 @@ func writeImage(buf []byte) error {
 	return nil
 }
 
-func read(t Format) (buf []byte, err error) {
-	// On Windows, OpenClipboard and CloseClipboard must be executed on
-	// the same thread. Thus, lock the OS thread for further execution.
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	var format uintptr
-	switch t {
-	case FmtImage:
-		format = cFmtDIBV5
-	case FmtText:
-		fallthrough
-	default:
-		format = cFmtUnicodeText
-	}
-
-	// check if clipboard is avaliable for the requested format
-	r, _, err := isClipboardFormatAvailable.Call(format)
-	if r == 0 {
-		return nil, errUnavailable
-	}
-
-	// try again until open clipboard successed
-	for {
-		r, _, _ = openClipboard.Call()
-		if r == 0 {
-			continue
-		}
-		break
-	}
-	defer closeClipboard.Call()
-
-	switch format {
-	case cFmtDIBV5:
-		return readImage()
-	case cFmtUnicodeText:
-		fallthrough
-	default:
-		return readText()
-	}
-}
-
-// write writes the given data to clipboard and
-// returns true if success or false if failed.
-func write(t Format, buf []byte) (<-chan struct{}, error) {
-	errch := make(chan error)
-	changed := make(chan struct{}, 1)
-	go func() {
-		// make sure GetClipboardSequenceNumber happens with
-		// OpenClipboard on the same thread.
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		for {
-			r, _, _ := openClipboard.Call(0)
-			if r == 0 {
-				continue
-			}
-			break
-		}
-
-		// var param uintptr
-		switch t {
-		case FmtImage:
-			err := writeImage(buf)
-			if err != nil {
-				errch <- err
-				closeClipboard.Call()
-				return
-			}
-		case FmtText:
-			fallthrough
-		default:
-			// param = cFmtUnicodeText
-			err := writeText(buf)
-			if err != nil {
-				errch <- err
-				closeClipboard.Call()
-				return
-			}
-		}
-		// Close the clipboard otherwise other applications cannot
-		// paste the data.
-		closeClipboard.Call()
-
-		cnt, _, _ := getClipboardSequenceNumber.Call()
-		errch <- nil
-		for {
-			time.Sleep(time.Second)
-			cur, _, _ := getClipboardSequenceNumber.Call()
-			if cur != cnt {
-				changed <- struct{}{}
-				close(changed)
-				return
-			}
-		}
-	}()
-	err := <-errch
-	if err != nil {
-		return nil, err
-	}
-	return changed, nil
-}
-
-func watch(ctx context.Context, t Format) <-chan []byte {
-	recv := make(chan []byte, 1)
-	ready := make(chan struct{})
-	go func() {
-		// not sure if we are too slow or the user too fast :)
-		ti := time.NewTicker(time.Second)
-		cnt, _, _ := getClipboardSequenceNumber.Call()
-		ready <- struct{}{}
-		for {
-			select {
-			case <-ctx.Done():
-				close(recv)
-				return
-			case <-ti.C:
-				cur, _, _ := getClipboardSequenceNumber.Call()
-				if cnt != cur {
-					b := Read(t)
-					if b == nil {
-						continue
-					}
-					recv <- b
-					cnt = cur
-				}
-			}
-		}
-	}()
-	<-ready
-	return recv
-}
-
-// Read returns a chunk of bytes of the clipboard data if it presents
-// in the desired format t presents. Otherwise, it returns nil.
-func Read(t Format) []byte {
-	buf, err := read(t)
-	if err != nil {
-		//fmt.Fprintf(os.Stderr, "read clipboard err: %v\n", err)
-		return nil
-	}
-	return buf
-}
-
-// Write writes a given buffer to the clipboard in a specified format.
-// Write returned a receive-only channel can receive an empty struct
-// as a signal, which indicates the clipboard has been overwritten from
-// this write.
-// If format t indicates an image, then the given buf assumes
-// the image data is PNG encoded.
-func Write(t Format, buf []byte) <-chan struct{} {
-	changed, err := write(t, buf)
-	if err != nil {
-		if debug {
-			fmt.Fprintf(os.Stderr, "write to clipboard err: %v\n", err)
-		}
-		return nil
-	}
-	return changed
-}
-
 const (
-	cFmtBitmap      = 2 // Win+PrintScreen
+	cFmtBitmap      = 2
 	cFmtUnicodeText = 13
 	cFmtDIBV5       = 17
-	// Screenshot taken from special shortcut is in different format (why??), see:
-	// https://jpsoft.com/forums/threads/detecting-clipboard-format.5225/
-	cFmtDataObject = 49161 // Shift+Win+s, returned from enumClipboardFormats
-	gmemMoveable   = 0x0002
+	cFmtDataObject  = 49161
+	gmemMoveable    = 0x0002
 )
 
-// BITMAPV5Header structure, see:
-// https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv5header
 type bitmapV5Header struct {
 	Size          uint32
 	Width         int32
@@ -555,7 +547,7 @@ type bitmapV5Header struct {
 	CSType        uint32
 	Endpoints     struct {
 		CiexyzRed, CiexyzGreen, CiexyzBlue struct {
-			CiexyzX, CiexyzY, CiexyzZ int32 // FXPT2DOT30
+			CiexyzX, CiexyzY, CiexyzZ int32
 		}
 	}
 	GammaRed    uint32
@@ -581,67 +573,36 @@ type bitmapHeader struct {
 	ClrImportant  uint32
 }
 
-// Calling a Windows DLL, see:
-// https://github.com/golang/go/wiki/WindowsDLLs
+// Win32 API
 var (
-	user32 = syscall.MustLoadDLL("user32")
-	// Opens the clipboard for examination and prevents other
-	// applications from modifying the clipboard content.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-openclipboard
-	openClipboard = user32.MustFindProc("OpenClipboard")
-	// Closes the clipboard.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard
-	closeClipboard = user32.MustFindProc("CloseClipboard")
-	// Empties the clipboard and frees handles to data in the clipboard.
-	// The function then assigns ownership of the clipboard to the
-	// window that currently has the clipboard open.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-emptyclipboard
-	emptyClipboard = user32.MustFindProc("EmptyClipboard")
-	// Retrieves data from the clipboard in a specified format.
-	// The clipboard must have been opened previously.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboarddata
-	getClipboardData = user32.MustFindProc("GetClipboardData")
-	// Places data on the clipboard in a specified clipboard format.
-	// The window must be the current clipboard owner, and the
-	// application must have called the OpenClipboard function. (When
-	// responding to the WM_RENDERFORMAT message, the clipboard owner
-	// must not call OpenClipboard before calling SetClipboardData.)
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata
-	setClipboardData = user32.MustFindProc("SetClipboardData")
-	// Determines whether the clipboard contains data in the specified format.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-isclipboardformatavailable
-	isClipboardFormatAvailable = user32.MustFindProc("IsClipboardFormatAvailable")
-	// Clipboard data formats are stored in an ordered list. To perform
-	// an enumeration of clipboard data formats, you make a series of
-	// calls to the EnumClipboardFormats function. For each call, the
-	// format parameter specifies an available clipboard format, and the
-	// function returns the next available clipboard format.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-isclipboardformatavailable
-	enumClipboardFormats = user32.MustFindProc("EnumClipboardFormats")
-	// Retrieves the clipboard sequence number for the current window station.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboardsequencenumber
-	getClipboardSequenceNumber = user32.MustFindProc("GetClipboardSequenceNumber")
-	// Registers a new clipboard format. This format can then be used as
-	// a valid clipboard format.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerclipboardformata
-	registerClipboardFormatA = user32.MustFindProc("RegisterClipboardFormatA")
-
+	user32   = syscall.MustLoadDLL("user32")
 	kernel32 = syscall.NewLazyDLL("kernel32")
 
-	// Locks a global memory object and returns a pointer to the first
-	// byte of the object's memory block.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock
-	gLock = kernel32.NewProc("GlobalLock")
-	// Decrements the lock count associated with a memory object that was
-	// allocated with GMEM_MOVEABLE. This function has no effect on memory
-	// objects allocated with GMEM_FIXED.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalunlock
+	openClipboard              = user32.MustFindProc("OpenClipboard")
+	closeClipboard             = user32.MustFindProc("CloseClipboard")
+	emptyClipboard             = user32.MustFindProc("EmptyClipboard")
+	getClipboardData           = user32.MustFindProc("GetClipboardData")
+	setClipboardData           = user32.MustFindProc("SetClipboardData")
+	isClipboardFormatAvailable = user32.MustFindProc("IsClipboardFormatAvailable")
+	enumClipboardFormats       = user32.MustFindProc("EnumClipboardFormats")
+	getClipboardSequenceNumber = user32.MustFindProc("GetClipboardSequenceNumber")
+	registerClipboardFormatA   = user32.MustFindProc("RegisterClipboardFormatA")
+
+	addClipboardFormatListener    = user32.NewProc("AddClipboardFormatListener")
+	removeClipboardFormatListener = user32.NewProc("RemoveClipboardFormatListener")
+	createWindowEx                = user32.NewProc("CreateWindowExW")
+	defWindowProc                 = user32.NewProc("DefWindowProcW")
+	registerClassEx               = user32.NewProc("RegisterClassExW")
+	getMessage                    = user32.NewProc("GetMessageW")
+	dispatchMessage               = user32.NewProc("DispatchMessageW")
+	translateMessage              = user32.NewProc("TranslateMessageW")
+	postQuitMessage               = user32.NewProc("PostQuitMessage")
+	destroyWindow                 = user32.NewProc("DestroyWindow")
+	postMessage                   = user32.NewProc("PostMessageW")
+
+	gLock   = kernel32.NewProc("GlobalLock")
 	gUnlock = kernel32.NewProc("GlobalUnlock")
-	// Allocates the specified number of bytes from the heap.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalalloc
-	gAlloc = kernel32.NewProc("GlobalAlloc")
-	// Frees the specified global memory object and invalidates its handle.
-	// https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalfree
+	gAlloc  = kernel32.NewProc("GlobalAlloc")
 	gFree   = kernel32.NewProc("GlobalFree")
 	memMove = kernel32.NewProc("RtlMoveMemory")
 )
