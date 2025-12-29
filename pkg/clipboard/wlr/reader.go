@@ -3,6 +3,7 @@ package wlr
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/labi-le/belphegor/pkg/pipe/pipe"
@@ -36,17 +37,20 @@ func newReader(preset *preset, dataChan chan<- ClipboardData, log zerolog.Logger
 
 func (r *reader) IgnoreNextSelection() {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.ignoreNextSelection = true
+	r.mu.Unlock()
+
+	time.AfterFunc(200*time.Millisecond, func() {
+		r.mu.Lock()
+		r.ignoreNextSelection = false
+		r.mu.Unlock()
+	})
 }
 
 func (r *reader) DataOffer(id *ZwlrDataControlOfferV1) {
 	if id == nil {
 		return
 	}
-	r.logger.Trace().
-		Uint32("offer_id", id.ID()).
-		Msg("data offer received")
 
 	if r.currentOffer != nil {
 		r.currentOffer.Destroy()
@@ -67,9 +71,6 @@ func (r *reader) Selection(offer *ZwlrDataControlOfferV1) {
 
 	r.mu.Lock()
 	shouldIgnore := r.ignoreNextSelection
-	if shouldIgnore {
-		r.ignoreNextSelection = false
-	}
 	r.mu.Unlock()
 
 	if shouldIgnore {
@@ -95,7 +96,7 @@ func (r *reader) Selection(offer *ZwlrDataControlOfferV1) {
 		Str("mime", selectedMime).
 		Msg("selected MIME type")
 
-	p, err := pipe.NewNonBlock()
+	p, err := pipe.New()
 	if err != nil {
 		r.logger.Error().
 			Uint32("offer_id", offer.ID()).
@@ -181,13 +182,14 @@ func (r *reader) readPipeData(mimeType string, p pipe.RWPipe) {
 			}
 			return
 		}
-		r.logger.Trace().
-			Int("fd", int(readFd)).
-			Int("bytes_read", len(res.data)).
-			Str("mime", mimeType).
-			Msg("read data from pipe")
 
 		if len(res.data) > 0 {
+			r.logger.Trace().
+				Int("fd", int(readFd)).
+				Int("bytes_read", len(res.data)).
+				Str("mime", mimeType).
+				Msg("read data from pipe")
+
 			r.dataChan <- ClipboardData{
 				Data:     res.data,
 				MimeType: mimeType,

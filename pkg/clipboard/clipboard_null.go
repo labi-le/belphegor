@@ -10,7 +10,7 @@ type Null struct {
 }
 
 func NewNull() *Null {
-	return &Null{RootUpdate: make(chan []byte, 1), data: make(chan []byte, 2)}
+	return &Null{RootUpdate: make(chan []byte), data: make(chan []byte)}
 }
 
 func (n *Null) Watch(_ context.Context, up chan<- Update) error {

@@ -13,14 +13,12 @@ var (
 		"image/gif":  {},
 		"image/bmp":  {},
 		"image/webp": {},
-		"image/tiff": {},
 	}
 
 	textTypes = map[string]struct{}{
 		"text/plain;charset=utf-8": {},
 		"text/plain":               {},
 		"utf8_string":              {},
-		"text/html":                {},
 		"text":                     {},
 		"string":                   {},
 	}
@@ -57,16 +55,6 @@ func IsSupported(mimeType string) bool {
 	return ok
 }
 
-func TextTypesList() []string {
-	return []string{
-		"text/plain;charset=utf-8",
-		"text/plain",
-		"TEXT",
-		"STRING",
-		"UTF8_STRING",
-	}
-}
-
 func Type(data []byte) string {
 	switch {
 	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x89, 0x50, 0x4E, 0x47}):
@@ -88,27 +76,6 @@ func Type(data []byte) string {
 	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0x1F, 0x8B}):
 		return "application/gzip"
 	default:
-		return ""
+		return "text"
 	}
-}
-
-func IsTextData(data []byte) bool {
-	if len(data) == 0 {
-		return true
-	}
-
-	checkLen := len(data)
-	if checkLen > 512 {
-		checkLen = 512
-	}
-
-	nonPrintable := 0
-	for i := 0; i < checkLen; i++ {
-		b := data[i]
-		if b < 0x20 && b != '\t' && b != '\n' && b != '\r' {
-			nonPrintable++
-		}
-	}
-
-	return float64(nonPrintable)/float64(checkLen) < 0.1
 }

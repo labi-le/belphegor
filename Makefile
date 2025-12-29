@@ -29,7 +29,7 @@ PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
 .PHONY: run
 run:
-	WAYLAND_DEBUG=1 go run $(MAIN_PATH) --node_discover=true --debug --scan_delay=1s
+	WAYLAND_DEBUG=0 go run $(MAIN_PATH) --node_discover=true --debug --scan_delay=1s
 
 .PHONY: build
 build: clean
@@ -114,11 +114,11 @@ dump:
 		echo "=== PROJECT TREE ==="; \
 		nix run nixpkgs#tree -- . || echo "(tree failed)"; \
 		echo ""; \
-		find pkg/clipboard/wlr -type f \( \
+		find internal -type f \( \
 			-name "*.go" -o \
 			-name "*.yml" -o \
 			-name "*.yaml" -o \
-			-name "*.proto" -o \ -name "*.mod" -o \
+			-name "*.proto" -o \
 			-name "*.sum" -o \
 			-name "*.nix" -o \
 			-name "Makefile" \

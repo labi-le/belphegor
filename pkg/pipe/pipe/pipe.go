@@ -31,15 +31,7 @@ type Reusable struct {
 	wfd *os.File
 }
 
-func MustNonBlock() *Reusable {
-	p, err := NewNonBlock()
-	if err != nil {
-		panic(err)
-	}
-	return p
-}
-
-func NewNonBlock() (*Reusable, error) {
+func New() (*Reusable, error) {
 	r, w, err := os.Pipe()
 	if err != nil {
 		return nil, errors.Join(ErrFailedCreate, err)
@@ -70,9 +62,9 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 	}
 
 	const (
-		initialCap  = 4096
+		initialCap  = 64 * 1024
 		readTimeout = 100 * time.Millisecond
-		dataDelay   = 5 * time.Millisecond
+		dataDelay   = 10 * time.Millisecond
 	)
 
 	buffer := byteslice.Get(initialCap)
@@ -100,11 +92,7 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 		}
 
 		n, err := syscall.Read(int(pipe), buffer[total:cap(buffer)])
-		if err != nil {
-			if errno, ok := err.(syscall.Errno); ok &&
-				(errno == syscall.EAGAIN || errno == syscall.EINTR) {
-				continue
-			}
+		if err != nil && !needWait(err) {
 			return nil, err
 		}
 
@@ -120,6 +108,11 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 	result := make([]byte, total)
 	copy(result, buffer[:total])
 	return result, nil
+}
+
+func needWait(err error) bool {
+	var errno syscall.Errno
+	return errors.As(err, &errno) && (errors.Is(errno, syscall.EAGAIN) || errors.Is(errno, syscall.EINTR))
 }
 
 func waitForData(fd uintptr, lastRead time.Time, hasData bool, readTimeout, dataDelay time.Duration) (bool, error) {

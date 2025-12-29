@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
@@ -139,11 +140,7 @@ func (n *Node) Start(ctx context.Context) error {
 			conn, netErr := l.Accept()
 			if netErr != nil {
 				if errors.Is(netErr, net.ErrClosed) {
-					ctxLog.
-						Warn().
-						Err(netErr).
-						Msg("connection accept error")
-					continue
+					break
 				}
 				ctxLog.
 					Fatal().
@@ -238,9 +235,17 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 
 		_, encErr := WriteEncryptedMessage(msg, peer.Signer(), peer.Conn())
 		if encErr != nil {
-			ctx.Trace().
-				AnErr("WriteEncrypted", encErr).
-				Msg("failed to write encrypted message")
+			if errors.Is(encErr, net.ErrClosed) ||
+				strings.Contains(encErr.Error(), "bad file descriptor") ||
+				strings.Contains(encErr.Error(), "use of closed network connection") {
+
+				ctx.Trace().Msg("connection closed during broadcast, removing peer")
+			} else {
+				ctx.Trace().
+					AnErr("WriteEncrypted", encErr).
+					Msg("failed to write encrypted message")
+			}
+
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
 

@@ -79,7 +79,11 @@ func (m Message) Duplicate(new Message) bool {
 		return false
 	}
 
-	if m.Mime == MimeTypeImage {
+	if bytes.Equal(m.Data, new.Data) {
+		return true
+	}
+
+	if m.Mime.IsImage() {
 		identical, err := mime.EqualMSE(
 			bytes.NewReader(m.Data),
 			bytes.NewReader(new.Data),
@@ -91,7 +95,7 @@ func (m Message) Duplicate(new Message) bool {
 		return identical
 	}
 
-	return bytes.Equal(m.Data, new.Data)
+	return false
 }
 
 func (m Message) Proto() *proto.Message {

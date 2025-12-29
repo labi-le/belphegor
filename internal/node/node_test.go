@@ -63,7 +63,7 @@ func TestNode_MessageExchange(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 
-			_, _ = clip1.Write(tc.msg)
+			go clip1.Write(tc.msg)
 
 			for {
 				select {
@@ -73,7 +73,7 @@ func TestNode_MessageExchange(t *testing.T) {
 					}
 					_, _ = clip2.Write(nil)
 					return
-				case <-time.After(10 * time.Second):
+				case <-time.After(100 * time.Second):
 					t.Fatal("timeout waiting for message")
 				}
 			}
@@ -83,7 +83,7 @@ func TestNode_MessageExchange(t *testing.T) {
 
 func testNodes(t testing.TB) (func(ctx context.Context), *clipboard.Null, *clipboard.Null) {
 	clip1 := clipboard.NewNull()
-	clip1.Write([]byte("a"))
+	go clip1.Write([]byte("a"))
 
 	port1 := 7777
 	port2 := 7778

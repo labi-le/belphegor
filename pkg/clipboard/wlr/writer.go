@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"syscall"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog"
 )
@@ -65,12 +66,12 @@ func (w *writer) Write(p []byte) (n int, err error) {
 	defer w.mu.Unlock()
 
 	if w.closed {
-		w.logger.Warn().Msg("Writer is closed, ignoring write")
+		w.logger.Warn().Msg("writer is closed, ignoring write")
 		return 0, errors.New("writer is closed")
 	}
 
 	if w.deviceManager == nil {
-		w.logger.Error().Msg("Data control manager not initialized")
+		w.logger.Error().Msg("data control manager not initialized")
 		return 0, errors.New("data control manager not initialized")
 	}
 
@@ -86,7 +87,7 @@ func (w *writer) Write(p []byte) (n int, err error) {
 	source.Listener = listener
 
 	typ := mimeType(p)
-	if typ == "" || isTextData(p) {
+	if typ == "" || utf8.Valid(p) {
 		source.Offer("text/plain;charset=utf-8")
 		source.Offer("text/plain")
 		source.Offer("TEXT")
@@ -96,12 +97,12 @@ func (w *writer) Write(p []byte) (n int, err error) {
 		source.Offer(typ)
 	}
 
-	w.device.SetSelection(source)
-	w.activeSource = source
-
 	if w.reader != nil {
 		w.reader.IgnoreNextSelection()
 	}
+
+	w.device.SetSelection(source)
+	w.activeSource = source
 
 	return len(p), nil
 }
@@ -138,27 +139,4 @@ func mimeType(data []byte) string {
 	default:
 		return ""
 	}
-}
-
-func isTextData(data []byte) bool {
-	if len(data) == 0 {
-		return true
-	}
-
-	checkLen := len(data)
-	if checkLen > 512 {
-		checkLen = 512
-	}
-
-	nonPrintable := 0
-	for i := 0; i < checkLen; i++ {
-		b := data[i]
-		if b < 0x20 && b != '\t' && b != '\n' && b != '\r' {
-			if b < 0x80 {
-				nonPrintable++
-			}
-		}
-	}
-
-	return float64(nonPrintable)/float64(checkLen) < 0.1
 }
