@@ -19,7 +19,7 @@ type reader struct {
 	*preset
 	logger zerolog.Logger
 
-	currentOffer *ZwlrDataControlOfferV1
+	currentOffer *controlOffer
 	mimeTypes    []string
 	dataChan     chan<- ClipboardData
 
@@ -47,7 +47,7 @@ func (r *reader) IgnoreNextSelection() {
 	})
 }
 
-func (r *reader) DataOffer(id *ZwlrDataControlOfferV1) {
+func (r *reader) DataOffer(id *controlOffer) {
 	if id == nil {
 		return
 	}
@@ -61,7 +61,7 @@ func (r *reader) DataOffer(id *ZwlrDataControlOfferV1) {
 	id.Listener = r
 }
 
-func (r *reader) Selection(offer *ZwlrDataControlOfferV1) {
+func (r *reader) Selection(offer *controlOffer) {
 	if offer == nil {
 		r.logger.Trace().
 			Bool("offer_nil", true).
@@ -200,7 +200,7 @@ func (r *reader) readPipeData(mimeType string, p pipe.RWPipe) {
 
 func (r *reader) Finished() {}
 
-func (r *reader) PrimarySelection(*ZwlrDataControlOfferV1) {}
+func (r *reader) PrimarySelection(*controlOffer) {}
 
 func (r *reader) Offer(mimeType string) {
 	r.mimeTypes = append(r.mimeTypes, mimeType)

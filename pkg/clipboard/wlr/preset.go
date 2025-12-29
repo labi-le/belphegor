@@ -8,13 +8,25 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type (
+	controlManager = ExtDataControlManagerV1
+	controlDevice  = ExtDataControlDeviceV1
+	controlOffer   = ExtDataControlOfferV1
+	controlSource  = ExtDataControlSourceV1
+)
+
+var (
+	managerInterface = ExtDataControlManagerV1Interface
+	binder           = BindExtDataControlManagerV1
+)
+
 type preset struct {
 	client        *wl.Client
 	registry      *wl.Registry
 	seat          *wl.Seat
-	deviceManager *ZwlrDataControlManagerV1
+	deviceManager *controlManager
 	display       *wl.Display
-	device        *ZwlrDataControlDeviceV1
+	device        *controlDevice
 	logger        zerolog.Logger
 }
 
@@ -30,8 +42,8 @@ func (ws *preset) Global(name uint32, inter string, version uint32) {
 	case wl.SeatInterface:
 		ws.seat = wl.BindSeat(ws.client, ws.registry, name, version)
 		ws.logger.Trace().Type("bound seat", ws.seat)
-	case ZwlrDataControlManagerV1Interface:
-		ws.deviceManager = BindZwlrDataControlManagerV1(ws.client, ws.registry, name, version)
+	case managerInterface:
+		ws.deviceManager = binder(ws.client, ws.registry, name, version)
 		ws.logger.Trace().Type("bound data device manager", ws.deviceManager)
 	}
 }

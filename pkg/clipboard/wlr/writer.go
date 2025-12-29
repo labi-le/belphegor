@@ -3,6 +3,7 @@ package wlr
 import (
 	"bytes"
 	"errors"
+	"os"
 	"sync"
 	"syscall"
 	"unicode/utf8"
@@ -16,7 +17,7 @@ type writer struct {
 	reader *reader
 
 	mu           sync.Mutex
-	activeSource *ZwlrDataControlSourceV1
+	activeSource *controlSource
 	closed       bool
 }
 
@@ -30,14 +31,15 @@ func newWriter(preset *preset, reader *reader, log zerolog.Logger) *writer {
 
 type sourceListener struct {
 	data   []byte
-	source *ZwlrDataControlSourceV1
+	source *controlSource
 	logger zerolog.Logger
 }
 
-func (s *sourceListener) Send(mime string, fd int) {
+func (s *sourceListener) Send(mime string, f *os.File) {
 	ctxLog := s.logger.With().Str("op", "Send").Logger()
 
 	total := 0
+	fd := int(f.Fd())
 	for total < len(s.data) {
 		n, err := syscall.Write(fd, s.data[total:])
 		if err != nil {
@@ -45,17 +47,17 @@ func (s *sourceListener) Send(mime string, fd int) {
 				ctxLog.Debug().
 					Int("written", total).
 					Int("total", len(s.data)).
-					Msg("Reader closed pipe early (normal)")
+					Msg("reader closed pipe early (normal)")
 			} else {
-				ctxLog.Error().Err(err).Int("written", total).Msg("Failed to write clipboard data")
+				ctxLog.Error().Err(err).Int("written", total).Msg("failed to write clipboard data")
 			}
 			break
 		}
 		total += n
 	}
 
-	if err := syscall.Close(fd); err != nil {
-		ctxLog.Error().Err(err).Msg("Failed to close fd")
+	if err := f.Close(); err != nil {
+		ctxLog.Error().Err(err).Msg("failed to close file")
 	}
 }
 
@@ -114,7 +116,7 @@ func (w *writer) Close() error {
 	w.logger.Debug().Msg("Closing writer")
 	w.closed = true
 
-	w.device.SetSelection(new(ZwlrDataControlSourceV1))
+	w.device.SetSelection(new(controlSource))
 	w.activeSource = nil
 
 	return nil
