@@ -79,7 +79,7 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 				return nil
 			}
 			if len(clipData.Data) > 0 {
-				update <- eventful.Update{Data: clipData.Data}
+				update <- eventful.Update{Data: clipData.Data, MimeType: clipData.MimeType}
 			}
 		}
 	}

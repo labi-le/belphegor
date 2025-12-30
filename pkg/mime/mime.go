@@ -26,21 +26,6 @@ const (
 	TypeBinary
 )
 
-type Detected struct {
-	Type Type
-	Mime string
-
-	Parent     Type
-	ParentMime string
-}
-
-func (d Detected) Effective() Type {
-	if d.Parent != TypeUnknown {
-		return d.Parent
-	}
-	return d.Type
-}
-
 func (t Type) IsImage() bool { return t == TypeImage }
 func (t Type) IsText() bool  { return t == TypeText }
 func (t Type) IsPath() bool  { return t == TypePath }
@@ -88,24 +73,17 @@ func init() {
 
 func SupportedTypes() TypeMap { return supportedTypes }
 
-func IsImage(mimeType string) bool {
-	_, ok := imageTypes[strings.ToLower(mimeType)]
-	return ok
-}
-
-func IsText(mimeType string) bool {
-	_, ok := textTypes[strings.ToLower(mimeType)]
-	return ok
-}
-
-func IsPath(mimeType string) bool {
-	_, ok := pathTypes[strings.ToLower(mimeType)]
-	return ok
-}
-
 func IsSupported(mimeType string) bool {
 	_, ok := supportedTypes[strings.ToLower(mimeType)]
 	return ok
+}
+
+func AsType(mimeType string) Type {
+	typ, ok := supportedTypes[strings.ToLower(mimeType)]
+	if !ok {
+		return TypeUnknown
+	}
+	return typ
 }
 
 func normalizeMime(ct string) string {
@@ -169,30 +147,6 @@ func fromBytesSniff(data []byte) string {
 
 func From(src []byte) Type {
 	return classifyMime(fromBytesSniff(src))
-}
-
-func Detect(src []byte) Detected {
-	m := fromBytesSniff(src)
-	return Detected{
-		Type: classifyMime(m),
-		Mime: m,
-	}
-}
-
-func DetectPathPayload(path string, payloadMime string) Detected {
-	payloadMime = normalizeMime(payloadMime)
-	if payloadMime == "" {
-		payloadMime = "text/uri-list"
-	}
-
-	parentMime := mimeFromPath(path)
-	return Detected{
-		Type: TypePath,
-		Mime: payloadMime,
-
-		Parent:     classifyMime(parentMime),
-		ParentMime: parentMime,
-	}
 }
 
 func mimeFromPath(path string) string {

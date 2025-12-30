@@ -14,7 +14,7 @@ import (
 
 type ClipboardData struct {
 	Data     []byte
-	MimeType string
+	MimeType mime.Type
 }
 
 type reader struct {
@@ -155,13 +155,14 @@ func (r *reader) readPipeData(mimeType string, p pipe.RWPipe) {
 	type result struct {
 		data []byte
 		err  error
+		mime string
 	}
 
 	resultChan := make(chan result, 1)
 
 	go func() {
 		data, err := pipe.FromPipe(readFd)
-		resultChan <- result{data: data, err: err}
+		resultChan <- result{data: data, err: err, mime: mimeType}
 	}()
 
 	select {
@@ -194,7 +195,7 @@ func (r *reader) readPipeData(mimeType string, p pipe.RWPipe) {
 
 			r.dataChan <- ClipboardData{
 				Data:     res.data,
-				MimeType: mimeType,
+				MimeType: mime.AsType(mimeType),
 			}
 		}
 	}

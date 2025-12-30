@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/labi-le/belphegor/internal/types/proto"
+	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/labi-le/belphegor/pkg/protoutil"
@@ -34,14 +35,6 @@ func (m Message) Event(owner id.Unique) EventMessage {
 		From:    owner,
 		Created: time.Now(),
 		Payload: m,
-	}
-}
-
-func NewMessage(data Data) Message {
-	return Message{
-		ID:   id.New(),
-		Data: data,
-		Mime: mime.From(data),
 	}
 }
 
@@ -132,4 +125,12 @@ func MessageFromEncrypted(ev *proto.Event, data Device, fn DecryptFn) (EventMess
 			Mime: mime.Type(msg.MimeType),
 		},
 	}, nil
+}
+
+func FromUpdate(update eventful.Update) Message {
+	return Message{
+		ID:   id.New(),
+		Data: update.Data,
+		Mime: update.MimeType,
+	}
 }

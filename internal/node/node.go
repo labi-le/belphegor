@@ -273,7 +273,7 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 			current domain.Message
 		)
 		for update := range updates {
-			msg := domain.NewMessage(update.Data)
+			msg := domain.FromUpdate(update)
 			if !msg.Duplicate(current) {
 				ctxLog.
 					Trace().
