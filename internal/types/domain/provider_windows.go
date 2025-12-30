@@ -9,11 +9,11 @@ import (
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/clipboard/null"
 	"github.com/labi-le/belphegor/pkg/clipboard/windows"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 var (
-	CurrentClipboardProvider = ClipboardProviderFromManager(clipboard.New(log.Logger))
+	CurrentClipboardProvider = ClipboardProviderFromManager(clipboard.New(zerolog.Nop()))
 )
 
 type ClipboardProvider int32

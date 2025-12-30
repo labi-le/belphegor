@@ -6,6 +6,7 @@ import (
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/rs/zerolog"
 )
 
 type Options struct {
@@ -17,6 +18,7 @@ type Options struct {
 	Notifier           notification.Notifier
 	Discovering        DiscoverOptions
 	Metadata           domain.Device
+	Logger             zerolog.Logger
 }
 
 type DiscoverOptions struct {
@@ -98,5 +100,11 @@ func WithDiscovering(opt DiscoverOptions) Option {
 func WithMetadata(opt domain.Device) Option {
 	return func(o *Options) {
 		o.Metadata = opt
+	}
+}
+
+func WithLogger(logger zerolog.Logger) Option {
+	return func(o *Options) {
+		o.Logger = logger
 	}
 }

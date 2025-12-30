@@ -20,7 +20,6 @@ import (
 	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	flag "github.com/spf13/pflag"
 )
 
@@ -67,17 +66,17 @@ func init() {
 	flag.BoolVar(&hidden, "hidden", false, "Hide console window (for windows user)")
 
 	flag.Parse()
-
-	initLogger(debug)
 }
 
 func main() {
+	logger := initLogger(debug)
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
 	if debug {
 		port = 7777
-		log.Info().Msg("debug mode enabled")
+		logger.Info().Msg("debug mode enabled")
 	}
 
 	if showVersion {
@@ -100,12 +99,11 @@ func main() {
 		console.HideConsoleWindow()
 	}
 
-	logger := log.Logger
-
 	nd := node.New(
 		clipboard.New(logger),
 		storage.NewSyncMapStorage[id.Unique, *node.Peer](),
 		node.NewChannel(),
+		node.WithLogger(logger),
 		node.WithPublicPort(port),
 		node.WithBitSize(bitSize),
 		node.WithKeepAlive(keepAlive),
@@ -119,20 +117,20 @@ func main() {
 		}),
 	)
 
-	// todo panic catch
-	lock := MustLock()
-	defer Unlock(lock)
+	lock := MustLock(logger)
+	defer Unlock(lock, logger)
 
 	if addressIP != "" {
 		go func() {
 			if err := nd.ConnectTo(ctx, addressIP); err != nil {
-				log.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
+				logger.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
 			}
 		}()
 	}
 
 	if discoverEnable {
 		go discovering.New(
+			discovering.WithLogger(logger),
 			discovering.WithMaxPeers(maxPeers),
 			discovering.WithDelay(discoverDelay),
 			discovering.WithPort(port),
@@ -140,9 +138,8 @@ func main() {
 	}
 
 	if err := nd.Start(ctx); err != nil {
-		log.Fatal().Err(err).Msg("failed to start node")
+		logger.Fatal().Err(err).Msg("failed to start node")
 	}
-
 }
 
 func notificationProvider(enable bool) notification.Notifier {
@@ -155,10 +152,10 @@ func notificationProvider(enable bool) notification.Notifier {
 	return new(notification.NullNotifier)
 }
 
-func initLogger(debug bool) {
-	if debug {
-		log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
+func initLogger(debug bool) zerolog.Logger {
+	output := zerolog.ConsoleWriter{Out: os.Stderr}
 
+	if debug {
 		zerolog.CallerMarshalFunc = func(_ uintptr, file string, line int) string {
 			short := file
 			for i := len(file) - 1; i > 0; i-- {
@@ -170,29 +167,37 @@ func initLogger(debug bool) {
 			file = short
 			return fmt.Sprintf("%s:%d", file, line)
 		}
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-		return
+		return zerolog.New(output).
+			Level(zerolog.TraceLevel).
+			With().
+			Timestamp().
+			Caller().
+			Logger()
 	}
 
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	return zerolog.New(output).
+		Level(zerolog.InfoLevel).
+		With().
+		Timestamp().
+		Logger()
 }
 
-func MustLock() lockfile.Lockfile {
+func MustLock(l zerolog.Logger) lockfile.Lockfile {
 	lock, _ := lockfile.New(filepath.Join(os.TempDir(), LockFile))
 
 	if lockErr := lock.TryLock(); lockErr != nil {
 		owner, err := lock.GetOwner()
 		if err != nil {
-			log.Fatal().Msgf(ErrCannotLock.Error(), err)
+			l.Fatal().Msgf(ErrCannotLock.Error(), err)
 		}
-		log.Fatal().Msgf(ErrAlreadyRunning.Error(), owner.Pid)
+		l.Fatal().Msgf(ErrAlreadyRunning.Error(), owner.Pid)
 	}
 
 	return lock
 }
 
-func Unlock(lock lockfile.Lockfile) {
+func Unlock(lock lockfile.Lockfile, l zerolog.Logger) {
 	if err := lock.Unlock(); err != nil {
-		log.Fatal().Msgf(ErrCannotUnlock.Error(), err)
+		l.Fatal().Msgf(ErrCannotUnlock.Error(), err)
 	}
 }

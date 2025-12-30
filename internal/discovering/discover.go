@@ -11,6 +11,7 @@ import (
 	proto2 "github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/ip"
+	"github.com/rs/zerolog"
 	"github.com/schollz/peerdiscovery"
 	"google.golang.org/protobuf/proto"
 )
@@ -19,6 +20,7 @@ type Discover struct {
 	maxPeers int
 	delay    time.Duration
 	port     int
+	logger   zerolog.Logger
 }
 
 var defaultConfig = &Discover{
@@ -50,6 +52,12 @@ func WithPort(port int) Option {
 	}
 }
 
+func WithLogger(logger zerolog.Logger) Option {
+	return func(d *Discover) {
+		d.logger = logger
+	}
+}
+
 // New creates a new Discover instance with the provided options
 func New(opts ...Option) *Discover {
 	d := &Discover{
@@ -67,7 +75,7 @@ func New(opts ...Option) *Discover {
 }
 
 func (d *Discover) Discover(ctx context.Context, n *node.Node) {
-	ctxLog := ctxlog.Op("discover.Discover")
+	ctxLog := ctxlog.Op(d.logger, "discover.Discover")
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
 			Payload:   createPayload(n.Metadata(), d.port),

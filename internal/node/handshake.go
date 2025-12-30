@@ -11,11 +11,13 @@ import (
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/protoutil"
+	"github.com/rs/zerolog"
 )
 
 type handshake struct {
 	my      domain.EventHandshake
 	private crypto.Decrypter
+	logger  zerolog.Logger
 }
 
 func newHandshake(bitSize int, meta domain.Device, port int) (*handshake, error) {
@@ -44,7 +46,7 @@ func (h *handshake) exchange(conn net.Conn) (domain.EventHandshake, *encrypter.C
 		return domain.EventHandshake{}, nil, fmt.Errorf("receive greeting: %w", err)
 	}
 
-	ctxLog := ctxlog.Op("handshake.exchangeGreetings")
+	ctxLog := ctxlog.Op(h.logger, "handshake.exchangeGreetings")
 	ctxLog.Trace().
 		Str("node", from.Payload.MetaData.String()).
 		Str("addr", conn.RemoteAddr().String()).

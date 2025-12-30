@@ -12,6 +12,7 @@ import (
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
+	"github.com/rs/zerolog"
 )
 
 type PeerOption func(*Peer)
@@ -56,6 +57,7 @@ type Peer struct {
 	channel    *Channel
 	cipher     *encrypter.Cipher
 	stringRepr string
+	logger     zerolog.Logger
 }
 
 func (p *Peer) Addr() netip.AddrPort { return p.addr }
@@ -81,7 +83,7 @@ func (p *Peer) String() string {
 }
 
 func (p *Peer) Receive(ctx context.Context) error {
-	ctxLog := ctxlog.Op("peer.Receive")
+	ctxLog := ctxlog.Op(p.logger, "peer.Receive")
 	defer ctxLog.
 		Info().
 		Str("node", p.String()).

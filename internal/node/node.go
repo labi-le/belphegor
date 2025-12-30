@@ -30,7 +30,7 @@ type Node struct {
 	clipboard eventful.Eventful
 	peers     *Storage
 	channel   *Channel
-	options   Options
+	opts      Options
 }
 
 // New creates a new instance of Node with the specified settings
@@ -46,13 +46,13 @@ func New(
 		clipboard: clipboard,
 		peers:     peers,
 		channel:   channel,
-		options:   options,
+		opts:      options,
 	}
 }
 
 // ConnectTo establishes a TCP connection to a remote clipboard at the specified address
 func (n *Node) ConnectTo(ctx context.Context, addr string) error {
-	ctxLog := ctxlog.Op("node.ConnectTo")
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.ConnectTo")
 
 	var lc net.Dialer
 	conn, err := lc.DialContext(ctx, "tcp4", addr)
@@ -70,7 +70,7 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 }
 
 func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, conn net.Conn) (*Peer, error) {
-	ctxLog := ctxlog.Op("node.addPeer")
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.addPeer")
 
 	metadata := hisHand.MetaData
 	if n.peers.Exist(metadata.UniqueID()) {
@@ -81,8 +81,8 @@ func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, conn 
 	if tcp, ok := conn.(*net.TCPConn); ok {
 		if err := tcp.SetKeepAliveConfig(net.KeepAliveConfig{
 			Enable:   true,
-			Idle:     n.options.KeepAlive,
-			Interval: n.options.KeepAlive,
+			Idle:     n.opts.KeepAlive,
+			Interval: n.opts.KeepAlive,
 			Count:    1,
 		}); err != nil {
 			return nil, err
@@ -107,10 +107,10 @@ func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, conn 
 func (n *Node) Start(ctx context.Context) error {
 	defer n.channel.Close()
 
-	ctxLog := ctxlog.Op("node.Start")
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
 
 	var lc net.ListenConfig
-	l, err := lc.Listen(ctx, "tcp4", fmt.Sprintf(":%d", n.options.PublicPort))
+	l, err := lc.Listen(ctx, "tcp4", fmt.Sprintf(":%d", n.opts.PublicPort))
 	if err != nil {
 		ctxLog.Err(err).Msg("failed to listen")
 		return fmt.Errorf("node.Start: %w", err)
@@ -126,7 +126,7 @@ func (n *Node) Start(ctx context.Context) error {
 	n.Notify("started on %s", addr)
 	ctxLog.Info().
 		Str("address", addr).
-		Str("metadata", n.options.Metadata.String()).
+		Str("metadata", n.opts.Metadata.String()).
 		Msg("started")
 
 	go n.MonitorBuffer(ctx)
@@ -165,12 +165,12 @@ func (n *Node) Start(ctx context.Context) error {
 }
 
 func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
-	ctxLog := ctxlog.Op("node.handleConnection").
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.handleConnection").
 		With().
 		Str("node", n.Metadata().String()).
 		Logger()
 
-	hs, cipherErr := newHandshake(n.options.BitSize, n.Metadata(), n.options.PublicPort)
+	hs, cipherErr := newHandshake(n.opts.BitSize, n.Metadata(), n.opts.PublicPort)
 	if cipherErr != nil {
 		return cipherErr
 	}
@@ -206,7 +206,7 @@ func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 
 // Broadcast sends a message to all connected nodes except those specified in the 'ignore' list.
 func (n *Node) Broadcast(msg domain.EventMessage) {
-	ctxLog := ctxlog.Op("node.Broadcast").
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.Broadcast").
 		With().
 		Int64("msg_id", msg.Payload.ID).
 		Logger()
@@ -224,7 +224,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 		ctx.Trace().Msg("sent")
 
 		// Set write timeout if the writer implements net.Conn
-		err := peer.Conn().SetWriteDeadline(time.Now().Add(n.options.WriteTimeout))
+		err := peer.Conn().SetWriteDeadline(time.Now().Add(n.opts.WriteTimeout))
 		if err != nil {
 			ctx.Trace().
 				AnErr("SetWriteDeadline", err).
@@ -255,7 +255,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 
 // MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
 func (n *Node) MonitorBuffer(ctx context.Context) error {
-	ctxLog := ctxlog.Op("node.MonitorBuffer")
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.MonitorBuffer")
 
 	updates, watchErr := make(chan eventful.Update), make(chan error, 1)
 	go func() {
@@ -292,7 +292,7 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 			}
 			return nil
 		case msg := <-n.channel.Listen():
-			if msg.From != n.options.Metadata.UniqueID() {
+			if msg.From != n.opts.Metadata.UniqueID() {
 				ctxLog.Trace().Int64("msg_id", msg.Payload.ID).Msg("set clipboard data")
 
 				if _, err := n.clipboard.Write(msg.Payload.Data); err != nil {
@@ -306,11 +306,11 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 }
 
 func (n *Node) Notify(message string, v ...any) {
-	n.options.Notifier.Notify(message, v...)
+	n.opts.Notifier.Notify(message, v...)
 }
 
 func (n *Node) Metadata() domain.Device {
-	return n.options.Metadata
+	return n.opts.Metadata
 }
 
 func ReceiveMessage(conn net.Conn, decrypter crypto.Decrypter, data domain.Device) (domain.EventMessage, error) {
