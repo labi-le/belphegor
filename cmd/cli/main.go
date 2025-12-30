@@ -54,7 +54,6 @@ func init() {
 	flag.IntVarP(&port, "port", "p", netstack.RandomPort(), "Port to use. Default: random")
 	flag.BoolVar(&discoverEnable, "node_discover", true, "Find local nodes on the network and connect to them")
 	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
-	flag.DurationVar(&scanDelay, "scan_delay", 2*time.Second, "Delay between scan local clipboard")
 	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
 	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
 	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
@@ -107,7 +106,6 @@ func main() {
 		node.WithPublicPort(port),
 		node.WithBitSize(bitSize),
 		node.WithKeepAlive(keepAlive),
-		node.WithClipboardScanDelay(scanDelay),
 		node.WithWriteTimeout(writeTimeout),
 		node.WithNotifier(notificationProvider(notify)),
 		node.WithDiscovering(node.DiscoverOptions{

@@ -10,15 +10,14 @@ import (
 )
 
 type Options struct {
-	PublicPort         int
-	BitSize            int
-	KeepAlive          time.Duration
-	ClipboardScanDelay time.Duration
-	WriteTimeout       time.Duration
-	Notifier           notification.Notifier
-	Discovering        DiscoverOptions
-	Metadata           domain.Device
-	Logger             zerolog.Logger
+	PublicPort   int
+	BitSize      int
+	KeepAlive    time.Duration
+	WriteTimeout time.Duration
+	Notifier     notification.Notifier
+	Discovering  DiscoverOptions
+	Metadata     domain.Device
+	Logger       zerolog.Logger
 }
 
 type DiscoverOptions struct {
@@ -31,12 +30,11 @@ type DiscoverOptions struct {
 type Option func(*Options)
 
 var defaultOptions = Options{
-	PublicPort:         netstack.RandomPort(),
-	BitSize:            2048,
-	KeepAlive:          time.Minute,
-	ClipboardScanDelay: 2 * time.Second,
-	WriteTimeout:       5 * time.Second,
-	Notifier:           new(notification.BeepDecorator),
+	PublicPort:   netstack.RandomPort(),
+	BitSize:      2048,
+	KeepAlive:    time.Minute,
+	WriteTimeout: 5 * time.Second,
+	Notifier:     new(notification.BeepDecorator),
 	Discovering: DiscoverOptions{
 		Enable:   true,
 		Delay:    5 * time.Minute,
@@ -71,12 +69,6 @@ func WithBitSize(size int) Option {
 func WithKeepAlive(duration time.Duration) Option {
 	return func(o *Options) {
 		o.KeepAlive = duration
-	}
-}
-
-func WithClipboardScanDelay(delay time.Duration) Option {
-	return func(o *Options) {
-		o.ClipboardScanDelay = delay
 	}
 }
 
