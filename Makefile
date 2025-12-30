@@ -1,6 +1,6 @@
 PACKAGE = belphegor
 
-MAIN_PATH = cmd/cli/main.go
+MAIN_PATH = cmd/cli/*.go
 BUILD_PATH = build/package/
 
 INSTALL_PATH = /usr/bin/
@@ -29,7 +29,7 @@ PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
 .PHONY: run
 run:
-	WAYLAND_DEBUG=0 go run $(MAIN_PATH) --node_discover=true --debug
+	WAYLAND_DEBUG=0 go run -tags release $(MAIN_PATH) --node_discover=true --debug
 
 .PHONY: build
 build: clean

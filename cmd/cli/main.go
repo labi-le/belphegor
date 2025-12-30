@@ -36,7 +36,6 @@ var (
 	port           int
 	discoverEnable bool
 	discoverDelay  time.Duration
-	scanDelay      time.Duration
 	keepAlive      time.Duration
 	writeTimeout   time.Duration
 	maxPeers       int
