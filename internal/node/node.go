@@ -177,7 +177,7 @@ func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 
 	hisHand, cipher, greetErr := hs.exchange(conn)
 	if greetErr != nil {
-		if errors.Is(greetErr, ErrMajorDifference) {
+		if errors.Is(greetErr, ErrVersionMismatch) {
 			return nil
 		}
 

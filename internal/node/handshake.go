@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	ErrMajorDifference = errors.New("nodes have major differences, handshake impossible")
+	ErrVersionMismatch = errors.New("nodes have major differences, handshake impossible")
 )
 
 type handshake struct {
@@ -64,7 +64,7 @@ func (h *handshake) exchange(conn net.Conn) (domain.EventHandshake, *encrypter.C
 			Str("local", h.my.Payload.Version).
 			Str("remote", from.Payload.Version).
 			Msg("version mismatch")
-		return domain.EventHandshake{}, nil, ErrMajorDifference
+		return domain.EventHandshake{}, nil, ErrVersionMismatch
 	}
 
 	return from, encrypter.NewCipher(h.private, encrypter.Bytes2PublicKey(from.Payload.PublicKey)), nil
