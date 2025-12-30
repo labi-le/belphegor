@@ -1,15 +1,17 @@
-package clipboard
+package eventful
 
 import (
 	"context"
+
+	"github.com/labi-le/belphegor/pkg/mime"
 )
 
 type Eventful interface {
 	Watch(ctx context.Context, update chan<- Update) error
 	Write(p []byte) (n int, err error)
-	Name() string
 }
 
 type Update struct {
-	Data []byte
+	Data     []byte
+	MimeType mime.Type
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/null"
 	"github.com/labi-le/belphegor/pkg/id"
 )
 
@@ -81,8 +81,8 @@ func TestNode_MessageExchange(t *testing.T) {
 	}
 }
 
-func testNodes(t testing.TB) (func(ctx context.Context), *clipboard.Null, *clipboard.Null) {
-	clip1 := clipboard.NewNull()
+func testNodes(t testing.TB) (func(ctx context.Context), *null.Clipboard, *null.Clipboard) {
+	clip1 := null.NewNull()
 	go clip1.Write([]byte("a"))
 
 	port1 := 7777
@@ -103,7 +103,7 @@ func testNodes(t testing.TB) (func(ctx context.Context), *clipboard.Null, *clipb
 		node.WithClipboardScanDelay(100*time.Millisecond),
 	)
 
-	clip2 := clipboard.NewNull()
+	clip2 := null.NewNull()
 
 	node2 := node.New(
 		clip2,

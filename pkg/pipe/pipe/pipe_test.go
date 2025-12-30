@@ -1,3 +1,5 @@
+//go:build unix
+
 package pipe_test
 
 import (

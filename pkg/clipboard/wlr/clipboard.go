@@ -1,3 +1,5 @@
+//go:build unix
+
 package wlr
 
 import (
@@ -8,7 +10,7 @@ import (
 	"sync/atomic"
 
 	wl "deedles.dev/wl/client"
-	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/rs/zerolog"
 )
 
@@ -18,7 +20,7 @@ var Supported = (func() bool {
 	return exist1 || exist2
 })()
 
-type Wlr struct {
+type Clipboard struct {
 	reader   *reader
 	writer   *writer
 	preset   *preset
@@ -27,7 +29,7 @@ type Wlr struct {
 	closed   atomic.Bool
 }
 
-func Must(log zerolog.Logger) *Wlr {
+func Must(log zerolog.Logger) *Clipboard {
 	client, err := wl.Dial()
 	if err != nil {
 		panic(err)
@@ -35,12 +37,12 @@ func Must(log zerolog.Logger) *Wlr {
 	return New(client, log)
 }
 
-func New(client *wl.Client, log zerolog.Logger) *Wlr {
+func New(client *wl.Client, log zerolog.Logger) *Clipboard {
 	preset := newPreset(client, log)
 
 	dataChan := make(chan ClipboardData, 10)
 
-	wlr := &Wlr{
+	wlr := &Clipboard{
 		preset:   preset,
 		logger:   log.With().Str("component", "wlr").Logger(),
 		dataChan: dataChan,
@@ -52,7 +54,7 @@ func New(client *wl.Client, log zerolog.Logger) *Wlr {
 	return wlr
 }
 
-func (w *Wlr) Watch(ctx context.Context, update chan<- clipboard.Update) error {
+func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
 	log := w.logger.With().Str("op", "wlr.Watch").Logger()
 
 	errCh := make(chan error, 1)
@@ -77,13 +79,13 @@ func (w *Wlr) Watch(ctx context.Context, update chan<- clipboard.Update) error {
 				return nil
 			}
 			if len(clipData.Data) > 0 {
-				update <- clipboard.Update{Data: clipData.Data}
+				update <- eventful.Update{Data: clipData.Data}
 			}
 		}
 	}
 }
 
-func (w *Wlr) Write(data []byte) (int, error) {
+func (w *Clipboard) Write(data []byte) (int, error) {
 	log := w.logger.With().Str("op", "wlr.Write").Logger()
 
 	if w.closed.Load() {
@@ -96,7 +98,7 @@ func (w *Wlr) Write(data []byte) (int, error) {
 	return w.writer.Write(data)
 }
 
-func (w *Wlr) Run(ctx context.Context) error {
+func (w *Clipboard) Run(ctx context.Context) error {
 	log := w.logger.With().Str("op", "wlr.Run").Logger()
 
 	err := w.preset.Setup()
@@ -132,7 +134,7 @@ func (w *Wlr) Run(ctx context.Context) error {
 	}
 }
 
-func (w *Wlr) Close() error {
+func (w *Clipboard) Close() error {
 	log := w.logger.With().Str("op", "wlr.Close").Logger()
 
 	log.Debug().

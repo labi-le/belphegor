@@ -98,11 +98,12 @@ func main() {
 
 	if hidden {
 		console.HideConsoleWindow()
-
 	}
 
+	logger := log.Logger
+
 	nd := node.New(
-		clipboard.New(),
+		clipboard.New(logger),
 		storage.NewSyncMapStorage[id.Unique, *node.Peer](),
 		node.NewChannel(),
 		node.WithPublicPort(port),

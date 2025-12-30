@@ -26,7 +26,7 @@ type Data []byte
 type Message struct {
 	ID   id.Unique
 	Data Data
-	Mime MimeType
+	Mime mime.Type
 }
 
 func (m Message) Event(owner id.Unique) EventMessage {
@@ -41,7 +41,7 @@ func NewMessage(data Data) Message {
 	return Message{
 		ID:   id.New(),
 		Data: data,
-		Mime: mimeFromData(data),
+		Mime: mime.From(data),
 	}
 }
 
@@ -64,7 +64,7 @@ func MessageNew(data []byte, owner id.Unique) EventMessage {
 		Created: time.Now(),
 		Payload: Message{
 			Data: data,
-			Mime: mimeFromData(data),
+			Mime: mime.From(data),
 			ID:   id.New(),
 		},
 	}
@@ -129,7 +129,7 @@ func MessageFromEncrypted(ev *proto.Event, data Device, fn DecryptFn) (EventMess
 		Payload: Message{
 			ID:   payload.Message.ID,
 			Data: msg.Data,
-			Mime: MimeType(msg.MimeType),
+			Mime: mime.Type(msg.MimeType),
 		},
 	}, nil
 }

@@ -2,43 +2,91 @@ package mime
 
 import (
 	"bytes"
+	"mime"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
+type (
+	Type    int32
+	TypeMap map[string]Type
+)
+
+const (
+	TypeUnknown Type = iota - 1
+
+	TypeText
+	TypeImage
+	TypePath
+
+	TypeAudio
+	TypeVideo
+	TypeBinary
+)
+
+type Detected struct {
+	Type Type
+	Mime string
+
+	Parent     Type
+	ParentMime string
+}
+
+func (d Detected) Effective() Type {
+	if d.Parent != TypeUnknown {
+		return d.Parent
+	}
+	return d.Type
+}
+
+func (t Type) IsImage() bool { return t == TypeImage }
+func (t Type) IsText() bool  { return t == TypeText }
+func (t Type) IsPath() bool  { return t == TypePath }
+
 var (
-	imageTypes = map[string]struct{}{
-		"image/png":  {},
-		"image/jpeg": {},
-		"image/jpg":  {},
-		"image/gif":  {},
-		"image/bmp":  {},
-		"image/webp": {},
+	imageTypes = TypeMap{
+		"image/png":  TypeImage,
+		"image/jpeg": TypeImage,
+		"image/jpg":  TypeImage,
+		"image/gif":  TypeImage,
+		"image/bmp":  TypeImage,
+		"image/webp": TypeImage,
 	}
 
-	textTypes = map[string]struct{}{
-		"text/plain;charset=utf-8": {},
-		"text/plain":               {},
-		"utf8_string":              {},
-		"text":                     {},
-		"string":                   {},
+	textTypes = TypeMap{
+		"text/plain":               TypeText,
+		"text/plain;charset=utf-8": TypeText,
+		"utf8_string":              TypeText,
+		"text":                     TypeText,
+		"string":                   TypeText,
 	}
 
-	supportedTypes map[string]struct{}
+	pathTypes = TypeMap{
+		"text/uri-list":                TypePath,
+		"application/x-cf-hdrop":       TypePath,
+		"application/x-ms-hdrop":       TypePath,
+		"x-special/gnome-copied-files": TypePath,
+	}
+
+	supportedTypes TypeMap
 )
 
 func init() {
-	supportedTypes = make(map[string]struct{}, len(imageTypes)+len(textTypes))
+	supportedTypes = make(TypeMap, len(imageTypes)+len(textTypes)+len(pathTypes))
 	for k := range imageTypes {
-		supportedTypes[k] = struct{}{}
+		supportedTypes[k] = imageTypes[k]
 	}
 	for k := range textTypes {
-		supportedTypes[k] = struct{}{}
+		supportedTypes[k] = textTypes[k]
+	}
+	for k := range pathTypes {
+		supportedTypes[k] = pathTypes[k]
 	}
 }
 
-func SupportedTypes() map[string]struct{} {
-	return supportedTypes
-}
+func SupportedTypes() TypeMap { return supportedTypes }
 
 func IsImage(mimeType string) bool {
 	_, ok := imageTypes[strings.ToLower(mimeType)]
@@ -50,12 +98,51 @@ func IsText(mimeType string) bool {
 	return ok
 }
 
+func IsPath(mimeType string) bool {
+	_, ok := pathTypes[strings.ToLower(mimeType)]
+	return ok
+}
+
 func IsSupported(mimeType string) bool {
 	_, ok := supportedTypes[strings.ToLower(mimeType)]
 	return ok
 }
 
-func Type(data []byte) string {
+func normalizeMime(ct string) string {
+	ct = strings.ToLower(strings.TrimSpace(ct))
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = strings.TrimSpace(ct[:i])
+	}
+	return ct
+}
+
+func classifyMime(ct string) Type {
+	ct = normalizeMime(ct)
+
+	if v, ok := supportedTypes[ct]; ok {
+		return v
+	}
+
+	switch {
+	case strings.HasPrefix(ct, "image/"):
+		return TypeImage
+	case strings.HasPrefix(ct, "text/"):
+		return TypeText
+	case strings.HasPrefix(ct, "video/"):
+		return TypeVideo
+	case strings.HasPrefix(ct, "audio/"):
+		return TypeAudio
+	case strings.HasPrefix(ct, "application/"):
+		return TypeBinary
+	default:
+		if ct == "" {
+			return TypeUnknown
+		}
+		return TypeBinary
+	}
+}
+
+func fromBytesSniff(data []byte) string {
 	switch {
 	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x89, 0x50, 0x4E, 0x47}):
 		return "image/png"
@@ -78,4 +165,53 @@ func Type(data []byte) string {
 	default:
 		return "text"
 	}
+}
+
+func From(src []byte) Type {
+	return classifyMime(fromBytesSniff(src))
+}
+
+func Detect(src []byte) Detected {
+	m := fromBytesSniff(src)
+	return Detected{
+		Type: classifyMime(m),
+		Mime: m,
+	}
+}
+
+func DetectPathPayload(path string, payloadMime string) Detected {
+	payloadMime = normalizeMime(payloadMime)
+	if payloadMime == "" {
+		payloadMime = "text/uri-list"
+	}
+
+	parentMime := mimeFromPath(path)
+	return Detected{
+		Type: TypePath,
+		Mime: payloadMime,
+
+		Parent:     classifyMime(parentMime),
+		ParentMime: parentMime,
+	}
+}
+
+func mimeFromPath(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext != "" {
+		if mt := mime.TypeByExtension(ext); mt != "" {
+			return normalizeMime(mt)
+		}
+	}
+
+	f, err := os.Open(path)
+	if err == nil {
+		defer f.Close()
+		h := make([]byte, 512)
+		n, _ := f.Read(h)
+		if n > 0 {
+			return normalizeMime(http.DetectContentType(h[:n]))
+		}
+	}
+
+	return "application/octet-stream"
 }

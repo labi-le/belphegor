@@ -13,7 +13,7 @@ import (
 
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/internal/types/proto"
-	"github.com/labi-le/belphegor/pkg/clipboard"
+	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/id"
@@ -27,7 +27,7 @@ var (
 )
 
 type Node struct {
-	clipboard clipboard.Eventful
+	clipboard eventful.Eventful
 	peers     *Storage
 	channel   *Channel
 	options   Options
@@ -35,7 +35,7 @@ type Node struct {
 
 // New creates a new instance of Node with the specified settings
 func New(
-	clipboard clipboard.Eventful,
+	clipboard eventful.Eventful,
 	peers *Storage,
 	channel *Channel,
 	opts ...Option,
@@ -257,7 +257,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 func (n *Node) MonitorBuffer(ctx context.Context) error {
 	ctxLog := ctxlog.Op("node.MonitorBuffer")
 
-	updates, watchErr := make(chan clipboard.Update), make(chan error, 1)
+	updates, watchErr := make(chan eventful.Update), make(chan error, 1)
 	go func() {
 		if err := n.clipboard.Watch(ctx, updates); err != nil {
 			watchErr <- err
@@ -266,7 +266,7 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 
 	go func() {
 		var (
-			current = domain.NewMessage((<-updates).Data)
+			current domain.Message
 		)
 		for update := range updates {
 			msg := domain.NewMessage(update.Data)
@@ -274,7 +274,7 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 				ctxLog.
 					Trace().
 					Int64("msg_id", msg.ID).
-					Msg("local clipboard changed")
+					Msg("clipboard changed")
 
 				current = msg
 				n.channel.Send(current.Event(n.Metadata().UniqueID()))
