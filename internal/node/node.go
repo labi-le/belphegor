@@ -170,13 +170,17 @@ func (n *Node) handleConnection(ctx context.Context, conn net.Conn) error {
 		Str("node", n.Metadata().String()).
 		Logger()
 
-	hs, cipherErr := newHandshake(n.opts.BitSize, n.Metadata(), n.opts.PublicPort)
+	hs, cipherErr := newHandshake(n.opts.BitSize, n.Metadata(), n.opts.PublicPort, n.opts.Logger)
 	if cipherErr != nil {
 		return cipherErr
 	}
 
 	hisHand, cipher, greetErr := hs.exchange(conn)
 	if greetErr != nil {
+		if errors.Is(greetErr, ErrMajorDifference) {
+			return nil
+		}
+
 		return greetErr
 	}
 

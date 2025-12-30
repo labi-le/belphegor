@@ -3,7 +3,7 @@ package domain
 import (
 	"io"
 
-	"github.com/labi-le/belphegor/internal"
+	"github.com/labi-le/belphegor/internal/metadata"
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/protoutil"
 )
@@ -20,7 +20,7 @@ type Handshake struct {
 
 func NewGreet(opts ...GreetOption) EventHandshake {
 	greet := &Handshake{
-		Version:  internal.Version,
+		Version:  metadata.Version,
 		Provider: CurrentClipboardProvider,
 	}
 

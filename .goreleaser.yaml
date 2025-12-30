@@ -25,9 +25,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -extldflags '-static'
-      - -X {{ .ModulePath }}/internal.Version={{ .Version }}
-      - -X {{ .ModulePath }}/internal.CommitHash={{ .Commit }}
-      - -X {{ .ModulePath }}/internal.BuildTime={{ .CommitDate }}
+      - -X {{ .ModulePath }}/internal/metadata.Version={{ .Version }}
+      - -X {{ .ModulePath }}/internal/metadata.CommitHash={{ .Commit }}
+      - -X {{ .ModulePath }}/internal/metadata.BuildTime={{ .CommitDate }}
 checksum:
   name_template: 'checksums.txt'
 snapshot:

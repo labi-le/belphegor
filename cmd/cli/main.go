@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/labi-le/belphegor/internal"
 	"github.com/labi-le/belphegor/internal/discovering"
+	"github.com/labi-le/belphegor/internal/metadata"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
@@ -82,9 +82,9 @@ func main() {
 		_, _ = fmt.Fprintf(
 			os.Stderr,
 			"version %s | commit %s | build time %s",
-			internal.Version,
-			internal.CommitHash,
-			internal.BuildTime,
+			metadata.Version,
+			metadata.CommitHash,
+			metadata.BuildTime,
 		)
 		return
 	}

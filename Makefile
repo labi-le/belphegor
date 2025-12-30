@@ -10,11 +10,11 @@ FULL_PATH = $(BUILD_PATH)$(PACKAGE)
 PWD = $(shell pwd)
 
 VERSION=$(shell git describe --tags --always --abbrev=0 --match='v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | sed 's/^.//')
-COMMIT_HASH=$(shell git rev-parse --short HEAD)
+COMMIT_HASH=$(shell git rev-parse HEAD)
 BUILD_TIMESTAMP=$(shell date '+%Y-%m-%dT%H:%M:%S')
 
 FULL_PACKAGE=$(shell go list -m)
-METADATA_PACKAGE=${FULL_PACKAGE}/internal
+METADATA_PACKAGE=${FULL_PACKAGE}/internal/metadata
 LDFLAGS=-ldflags="-X '${METADATA_PACKAGE}.Version=${VERSION}' \
                   -X '${METADATA_PACKAGE}.CommitHash=${COMMIT_HASH}' \
                   -X '${METADATA_PACKAGE}.BuildTime=${BUILD_TIMESTAMP}' \
@@ -29,7 +29,7 @@ PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
 .PHONY: run
 run:
-	WAYLAND_DEBUG=0 go run $(MAIN_PATH) --node_discover=true --debug --scan_delay=1s
+	WAYLAND_DEBUG=0 go run $(MAIN_PATH) --node_discover=true --debug
 
 .PHONY: build
 build: clean
