@@ -13,6 +13,7 @@ require (
 	golang.org/x/image v0.34.0
 	golang.org/x/sys v0.39.0
 	google.golang.org/protobuf v1.36.11
+	github.com/quic-go/quic-go v0.58.0
 )
 
 require (
@@ -30,5 +31,6 @@ require (
 	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
 	github.com/sergeymakinen/go-ico v1.0.0 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
+	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 )

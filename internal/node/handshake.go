@@ -13,6 +13,7 @@ import (
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/protoutil"
+	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
 )
 
@@ -43,7 +44,7 @@ func newHandshake(bitSize int, meta domain.Device, port int, logger zerolog.Logg
 	}, nil
 }
 
-func (h *handshake) exchange(conn net.Conn) (domain.EventHandshake, *encrypter.Cipher, error) {
+func (h *handshake) exchange(conn *quic.Stream, addr net.Addr) (domain.EventHandshake, *encrypter.Cipher, error) {
 	if _, err := protoutil.EncodeWriter(h.my.Proto(), conn); err != nil {
 		return domain.EventHandshake{}, nil, fmt.Errorf("send greeting: %w", err)
 	}
@@ -53,10 +54,10 @@ func (h *handshake) exchange(conn net.Conn) (domain.EventHandshake, *encrypter.C
 		return domain.EventHandshake{}, nil, fmt.Errorf("receive greeting: %w", err)
 	}
 
-	ctxLog := ctxlog.Op(h.logger, "handshake.exchangeGreetings")
+	ctxLog := ctxlog.Op(h.logger, "exchange")
 	ctxLog.Trace().
 		Str("node", from.Payload.MetaData.String()).
-		Str("addr", conn.RemoteAddr().String()).
+		Str("addr", addr.String()).
 		Msg("received greeting")
 
 	if metadata.IsMajorDifference(h.my.Payload.Version, from.Payload.Version) {

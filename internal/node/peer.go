@@ -7,20 +7,25 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/netip"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/encrypter"
+	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
 )
 
 type PeerOption func(*Peer)
 
-func WithConn(conn net.Conn) PeerOption {
+func WithStream(conn *quic.Stream) PeerOption {
 	return func(p *Peer) {
 		p.conn = conn
-		p.addr = conn.RemoteAddr().(*net.TCPAddr).AddrPort()
+	}
+}
+
+func WithAddr(addr net.Addr) PeerOption {
+	return func(p *Peer) {
+		p.addr = addr
 	}
 }
 
@@ -51,8 +56,8 @@ func NewPeer(opts ...PeerOption) *Peer {
 }
 
 type Peer struct {
-	conn       net.Conn
-	addr       netip.AddrPort
+	conn       *quic.Stream
+	addr       net.Addr
 	metaData   domain.Device
 	channel    *Channel
 	cipher     *encrypter.Cipher
@@ -60,11 +65,9 @@ type Peer struct {
 	logger     zerolog.Logger
 }
 
-func (p *Peer) Addr() netip.AddrPort { return p.addr }
-
 func (p *Peer) MetaData() domain.Device { return p.metaData }
 
-func (p *Peer) Conn() net.Conn { return p.conn }
+func (p *Peer) Stream() *quic.Stream { return p.conn }
 
 func (p *Peer) Signer() crypto.Signer { return p.cipher }
 
@@ -97,7 +100,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 
 	go func() {
 		for {
-			msg, err := ReceiveMessage(p.Conn(), p.cipher, p.MetaData())
+			msg, err := ReceiveMessage(p.Stream(), p.cipher, p.MetaData())
 			resultChan <- readResult{msg: msg, err: err}
 		}
 	}()
