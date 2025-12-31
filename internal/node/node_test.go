@@ -100,7 +100,6 @@ func testNodes(t testing.TB) (func(ctx context.Context), *null.Clipboard, *null.
 			Arch: "amd64",
 			ID:   id.New(),
 		}),
-		node.WithClipboardScanDelay(100*time.Millisecond),
 	)
 
 	clip2 := null.NewNull()
