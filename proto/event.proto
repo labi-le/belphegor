@@ -13,7 +13,7 @@ message Event {
 
   oneof Payload {
     HeartbeatPayload Heartbeat = 2;
-    EncryptedMessage Message = 3;
+    Message Message = 3;
     Handshake Handshake = 4;
   }
 }

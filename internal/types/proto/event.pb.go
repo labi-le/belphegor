@@ -7,13 +7,12 @@
 package proto
 
 import (
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
@@ -138,7 +137,7 @@ func (x *Event) GetHeartbeat() *HeartbeatPayload {
 	return nil
 }
 
-func (x *Event) GetMessage() *EncryptedMessage {
+func (x *Event) GetMessage() *Message {
 	if x != nil {
 		if x, ok := x.Payload.(*Event_Message); ok {
 			return x.Message
@@ -165,7 +164,7 @@ type Event_Heartbeat struct {
 }
 
 type Event_Message struct {
-	Message *EncryptedMessage `protobuf:"bytes,3,opt,name=Message,proto3,oneof"`
+	Message *Message `protobuf:"bytes,3,opt,name=Message,proto3,oneof"`
 }
 
 type Event_Handshake struct {
@@ -218,11 +217,11 @@ var File_event_proto protoreflect.FileDescriptor
 
 const file_event_proto_rawDesc = "" +
 	"\n" +
-	"\vevent.proto\x12\tbelphegor\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0fhandshake.proto\x1a\rmessage.proto\"\xf4\x01\n" +
+	"\vevent.proto\x12\tbelphegor\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0fhandshake.proto\x1a\rmessage.proto\"\xeb\x01\n" +
 	"\x05Event\x124\n" +
 	"\aCreated\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\aCreated\x12;\n" +
-	"\tHeartbeat\x18\x02 \x01(\v2\x1b.belphegor.HeartbeatPayloadH\x00R\tHeartbeat\x127\n" +
-	"\aMessage\x18\x03 \x01(\v2\x1b.belphegor.EncryptedMessageH\x00R\aMessage\x124\n" +
+	"\tHeartbeat\x18\x02 \x01(\v2\x1b.belphegor.HeartbeatPayloadH\x00R\tHeartbeat\x12.\n" +
+	"\aMessage\x18\x03 \x01(\v2\x12.belphegor.MessageH\x00R\aMessage\x124\n" +
 	"\tHandshake\x18\x04 \x01(\v2\x14.belphegor.HandshakeH\x00R\tHandshakeB\t\n" +
 	"\aPayload\"\x12\n" +
 	"\x10HeartbeatPayload*0\n" +
@@ -251,13 +250,13 @@ var file_event_proto_goTypes = []any{
 	(*Event)(nil),                 // 1: belphegor.Event
 	(*HeartbeatPayload)(nil),      // 2: belphegor.HeartbeatPayload
 	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
-	(*EncryptedMessage)(nil),      // 4: belphegor.EncryptedMessage
+	(*Message)(nil),               // 4: belphegor.Message
 	(*Handshake)(nil),             // 5: belphegor.Handshake
 }
 var file_event_proto_depIdxs = []int32{
 	3, // 0: belphegor.Event.Created:type_name -> google.protobuf.Timestamp
 	2, // 1: belphegor.Event.Heartbeat:type_name -> belphegor.HeartbeatPayload
-	4, // 2: belphegor.Event.Message:type_name -> belphegor.EncryptedMessage
+	4, // 2: belphegor.Event.Message:type_name -> belphegor.Message
 	5, // 3: belphegor.Event.Handshake:type_name -> belphegor.Handshake
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type

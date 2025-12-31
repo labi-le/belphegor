@@ -23,6 +23,12 @@ func WithStream(conn *quic.Stream) PeerOption {
 	}
 }
 
+func WithPeerLogger(logger zerolog.Logger) PeerOption {
+	return func(p *Peer) {
+		p.logger = logger
+	}
+}
+
 func WithAddr(addr net.Addr) PeerOption {
 	return func(p *Peer) {
 		p.addr = addr
@@ -122,11 +128,10 @@ func (p *Peer) Receive(ctx context.Context) error {
 
 			p.channel.Send(res.msg)
 
-			ctxLog.Trace().Msgf(
-				"received %d from %s",
-				res.msg.Payload.ID,
-				p.String(),
-			)
+			ctxLog.Trace().Int(
+				"msg_id",
+				int(res.msg.Payload.ID),
+			).Str("from", p.String()).Msg("received")
 		}
 	}
 }

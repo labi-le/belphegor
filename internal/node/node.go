@@ -11,7 +11,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"net"
 	"strings"
@@ -25,8 +24,6 @@ import (
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/quic-go/quic-go"
-	pb "google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
@@ -95,6 +92,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, strea
 		WithMetaData(metadata),
 		WithChannel(n.channel),
 		WithCipher(cipher),
+		WithPeerLogger(n.opts.Logger),
 	)
 
 	n.peers.Add(
@@ -146,6 +144,11 @@ func (n *Node) Start(ctx context.Context) error {
 				if errors.Is(netErr, net.ErrClosed) {
 					break
 				}
+
+				if errors.Is(netErr, context.Canceled) {
+					continue
+				}
+
 				ctxLog.
 					Fatal().
 					Err(netErr).
@@ -252,16 +255,17 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 		}
 		defer peer.Stream().SetWriteDeadline(time.Time{})
 
-		_, encErr := WriteEncryptedMessage(msg, peer.Signer(), peer.Stream())
-		if encErr != nil {
-			if errors.Is(encErr, net.ErrClosed) ||
-				strings.Contains(encErr.Error(), "bad file descriptor") ||
-				strings.Contains(encErr.Error(), "use of closed network connection") {
+		//_, encErr := WriteEncryptedMessage(msg, peer.Signer(), peer.Stream())
+		_, encodeErr := protoutil.EncodeWriter(msg.Proto(), peer.conn)
+		if encodeErr != nil {
+			if errors.Is(encodeErr, net.ErrClosed) ||
+				strings.Contains(encodeErr.Error(), "bad file descriptor") ||
+				strings.Contains(encodeErr.Error(), "use of closed network connection") {
 
 				ctx.Trace().Msg("connection closed during broadcast, removing peer")
 			} else {
 				ctx.Trace().
-					AnErr("WriteEncrypted", encErr).
+					AnErr("protoutil.EncodeWriter", encodeErr).
 					Msg("failed to write encrypted message")
 			}
 
@@ -343,24 +347,8 @@ func ReceiveMessage(conn *quic.Stream, decrypter crypto.Decrypter, data domain.D
 		return domain.EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, event.Payload)
 	}
 
-	return domain.MessageFromEncrypted(&event, data, func(encrypted []byte) ([]byte, error) {
-		return decrypter.Decrypt(rand.Reader, payload.Message.Content, nil)
-	})
+	return domain.FromProto(data.ID, &event, payload), nil
 
-}
-
-func WriteEncryptedMessage(msg domain.EventMessage, signer crypto.Signer, writer io.Writer) (int, error) {
-	dat, _ := pb.Marshal(msg.Payload.Proto())
-	encrypted, err := signer.Sign(rand.Reader, dat, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	encEv := &proto.Event{
-		Created: timestamppb.New(msg.Created),
-		Payload: &proto.Event_Message{Message: &proto.EncryptedMessage{ID: msg.Payload.ID, Content: encrypted}},
-	}
-	return protoutil.EncodeWriter(encEv, writer)
 }
 
 func generateTLSConfig() (*tls.Config, error) {

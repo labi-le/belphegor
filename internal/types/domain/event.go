@@ -9,18 +9,13 @@ import (
 )
 
 type payloadConstraint interface {
-	Heartbeat | EncryptedMessage | Handshake | Message // Message is internal
-
+	Heartbeat | Handshake | Message
 }
 
 type Event[T payloadConstraint] struct {
 	From    id.Unique
 	Created time.Time
 	Payload T
-}
-
-func (e Event[T]) Equal(ev Event[T]) bool {
-	return e.From == ev.From
 }
 
 func (e Event[T]) Proto() *proto.Event {
@@ -39,7 +34,8 @@ func payloadProto[T payloadConstraint](e Event[T], ev *proto.Event) {
 		ev.Payload = &proto.Event_Heartbeat{
 			Heartbeat: p.Proto(),
 		}
-	case EncryptedMessage:
+
+	case Message:
 		ev.Payload = &proto.Event_Message{
 			Message: p.Proto(),
 		}

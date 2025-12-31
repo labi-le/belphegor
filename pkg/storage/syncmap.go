@@ -44,7 +44,6 @@ func (s *SyncMap[key, val]) Exist(k key) bool {
 }
 
 func (s *SyncMap[key, val]) Tap(fn func(key, val) bool) {
-	var wg sync.WaitGroup
 	s.m.Range(func(k, v any) bool {
 		typedKey, okKey := k.(key)
 		if !okKey {
@@ -57,8 +56,6 @@ func (s *SyncMap[key, val]) Tap(fn func(key, val) bool) {
 
 		return fn(typedKey, typedVal)
 	})
-
-	wg.Wait()
 }
 
 func (s *SyncMap[key, val]) Len() int {

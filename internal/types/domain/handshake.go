@@ -35,7 +35,6 @@ func GreetFromProto(m *proto.Event) EventHandshake {
 	hs := m.Payload.(*proto.Event_Handshake).Handshake
 
 	return EventHandshake{
-		From:    hs.Device.ID,
 		Created: m.Created.AsTime(),
 		Payload: Handshake{
 			Version:   hs.Version,

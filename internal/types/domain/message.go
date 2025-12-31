@@ -2,7 +2,6 @@ package domain
 
 import (
 	"bytes"
-	"fmt"
 	"time"
 
 	"github.com/labi-le/belphegor/internal/types/proto"
@@ -11,16 +10,13 @@ import (
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/rs/zerolog/log"
-	pb "google.golang.org/protobuf/proto"
 )
 
 var (
-	_ protoutil.Proto[*proto.Message]          = Message{}
-	_ protoutil.Proto[*proto.EncryptedMessage] = EncryptedMessage{}
+	_ protoutil.Proto[*proto.Message] = Message{}
 )
 
 type EventMessage = Event[Message]
-type EventEncryptedMessage = Event[EncryptedMessage]
 
 type Data []byte
 
@@ -35,18 +31,6 @@ func (m Message) Event(owner id.Unique) EventMessage {
 		From:    owner,
 		Created: time.Now(),
 		Payload: m,
-	}
-}
-
-type EncryptedMessage struct {
-	ID      id.Unique
-	Content []byte
-}
-
-func (e EncryptedMessage) Proto() *proto.EncryptedMessage {
-	return &proto.EncryptedMessage{
-		ID:      e.ID,
-		Content: e.Content,
 	}
 }
 
@@ -95,36 +79,8 @@ func (m Message) Proto() *proto.Message {
 	return &proto.Message{
 		Data:     m.Data,
 		MimeType: proto.Mime(m.Mime),
+		ID:       id.New(),
 	}
-}
-
-type DecryptFn func(encrypted []byte) ([]byte, error)
-
-func MessageFromEncrypted(ev *proto.Event, data Device, fn DecryptFn) (EventMessage, error) {
-	payload, ok := ev.Payload.(*proto.Event_Message)
-	if ok == false {
-		return EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, ev.Payload)
-	}
-
-	decrypted, err := fn(payload.Message.Content)
-	if err != nil {
-		return EventMessage{}, err
-	}
-
-	var msg proto.Message
-	if err := pb.Unmarshal(decrypted, &msg); err != nil {
-		return EventMessage{}, fmt.Errorf("MessageFromEncrypted: %w", err)
-	}
-
-	return EventMessage{
-		From:    data.ID,
-		Created: ev.Created.AsTime(),
-		Payload: Message{
-			ID:   payload.Message.ID,
-			Data: msg.Data,
-			Mime: mime.Type(msg.MimeType),
-		},
-	}, nil
 }
 
 func FromUpdate(update eventful.Update) Message {
@@ -132,5 +88,17 @@ func FromUpdate(update eventful.Update) Message {
 		ID:   id.New(),
 		Data: update.Data,
 		Mime: update.MimeType,
+	}
+}
+
+func FromProto(from id.Unique, proto *proto.Event, payload *proto.Event_Message) EventMessage {
+	return EventMessage{
+		From:    from,
+		Created: proto.Created.AsTime(),
+		Payload: Message{
+			ID:   payload.Message.ID,
+			Data: payload.Message.Data,
+			Mime: mime.Type(payload.Message.MimeType),
+		},
 	}
 }

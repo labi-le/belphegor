@@ -1,3 +1,5 @@
+// FILE: pkg/clipboard/wlr/clipboard.go
+
 //go:build unix
 
 package wlr
@@ -7,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"sync/atomic"
 
 	wl "deedles.dev/wl/client"
@@ -27,6 +30,7 @@ type Clipboard struct {
 	logger   zerolog.Logger
 	dataChan chan ClipboardData
 	closed   atomic.Bool
+	mu       sync.Mutex
 }
 
 func Must(log zerolog.Logger) *Clipboard {
@@ -86,6 +90,9 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 }
 
 func (w *Clipboard) Write(data []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	log := w.logger.With().Str("op", "wlr.Write").Logger()
 
 	if w.closed.Load() {
@@ -123,7 +130,9 @@ func (w *Clipboard) Run(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
+			w.mu.Lock()
 			err := ev()
+			w.mu.Unlock()
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -141,6 +150,9 @@ func (w *Clipboard) Close() error {
 		Msg("closing wlr clipboard")
 
 	w.closed.Store(true)
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
 	if err := w.writer.Close(); err != nil {
 		log.Error().
