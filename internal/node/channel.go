@@ -13,15 +13,16 @@ type Channel struct {
 }
 
 func (c *Channel) Send(msg domain.EventMessage) {
-	msgRef := &msg
+	metadataMsg := msg
+	metadataMsg.Payload.Data = nil
 
 	for {
 		old := c.old.Load()
-		if old != nil && old.Payload.Duplicate(msgRef.Payload) {
+		if old != nil && old.Payload.Duplicate(msg.Payload) {
 			return
 		}
 
-		if c.old.CompareAndSwap(old, msgRef) {
+		if c.old.CompareAndSwap(old, &metadataMsg) {
 			c.new <- msg
 			return
 		}

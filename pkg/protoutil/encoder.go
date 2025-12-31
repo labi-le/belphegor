@@ -13,6 +13,31 @@ const (
 	DefaultBufferSize = 2048
 )
 
+func EncodeBytes(src proto.Message) ([]byte, error) {
+	buf := byteslice.Get(DefaultBufferSize)
+
+	target := buf[:Length]
+
+	options := proto.MarshalOptions{
+		UseCachedSize: true,
+	}
+
+	target, err := options.MarshalAppend(target, src)
+	if err != nil {
+		byteslice.Put(buf)
+		return nil, err
+	}
+
+	if cap(target) > cap(buf) {
+		byteslice.Put(buf)
+	}
+
+	msgLen := len(target) - Length
+	binary.BigEndian.PutUint32(target[:Length], uint32(msgLen))
+
+	return target, nil
+}
+
 func EncodeWriter(src proto.Message, w io.Writer) (int, error) {
 	buf := byteslice.Get(DefaultBufferSize)
 	defer byteslice.Put(buf)

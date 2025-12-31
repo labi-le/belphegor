@@ -11,7 +11,6 @@ message Handshake {
   string Version = 1;
   Device Device = 2;
   uint32 Port = 3;
-  bytes PublicKey = 4;
   Clipboard Provider = 5;
 }
 

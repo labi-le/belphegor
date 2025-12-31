@@ -11,7 +11,6 @@ import (
 	"github.com/labi-le/belphegor/internal/metadata"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
@@ -35,7 +34,6 @@ func newHandshake(bitSize int, meta domain.Device, port int, logger zerolog.Logg
 
 	return &handshake{
 		my: domain.NewGreet(
-			domain.WithPublicKey(encrypter.PublicKey2Bytes(privateKey.Public())),
 			domain.WithMetadata(meta),
 			domain.WithPort(uint16(port)),
 		),
@@ -44,14 +42,14 @@ func newHandshake(bitSize int, meta domain.Device, port int, logger zerolog.Logg
 	}, nil
 }
 
-func (h *handshake) exchange(conn *quic.Stream, addr net.Addr) (domain.EventHandshake, *encrypter.Cipher, error) {
+func (h *handshake) exchange(conn *quic.Stream, addr net.Addr) (domain.EventHandshake, error) {
 	if _, err := protoutil.EncodeWriter(h.my.Proto(), conn); err != nil {
-		return domain.EventHandshake{}, nil, fmt.Errorf("send greeting: %w", err)
+		return domain.EventHandshake{}, fmt.Errorf("send greeting: %w", err)
 	}
 
 	from, err := domain.NewGreetFromReader(conn)
 	if err != nil {
-		return domain.EventHandshake{}, nil, fmt.Errorf("receive greeting: %w", err)
+		return domain.EventHandshake{}, fmt.Errorf("receive greeting: %w", err)
 	}
 
 	ctxLog := ctxlog.Op(h.logger, "exchange")
@@ -65,8 +63,8 @@ func (h *handshake) exchange(conn *quic.Stream, addr net.Addr) (domain.EventHand
 			Str("local", h.my.Payload.Version).
 			Str("remote", from.Payload.Version).
 			Msg("version mismatch")
-		return domain.EventHandshake{}, nil, ErrVersionMismatch
+		return domain.EventHandshake{}, ErrVersionMismatch
 	}
 
-	return from, encrypter.NewCipher(h.private, encrypter.Bytes2PublicKey(from.Payload.PublicKey)), nil
+	return from, nil
 }

@@ -88,7 +88,6 @@ type Handshake struct {
 	Version       string                 `protobuf:"bytes,1,opt,name=Version,proto3" json:"Version,omitempty"`
 	Device        *Device                `protobuf:"bytes,2,opt,name=Device,proto3" json:"Device,omitempty"`
 	Port          uint32                 `protobuf:"varint,3,opt,name=Port,proto3" json:"Port,omitempty"`
-	PublicKey     []byte                 `protobuf:"bytes,4,opt,name=PublicKey,proto3" json:"PublicKey,omitempty"`
 	Provider      Clipboard              `protobuf:"varint,5,opt,name=Provider,proto3,enum=belphegor.Clipboard" json:"Provider,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -145,13 +144,6 @@ func (x *Handshake) GetPort() uint32 {
 	return 0
 }
 
-func (x *Handshake) GetPublicKey() []byte {
-	if x != nil {
-		return x.PublicKey
-	}
-	return nil
-}
-
 func (x *Handshake) GetProvider() Clipboard {
 	if x != nil {
 		return x.Provider
@@ -163,12 +155,11 @@ var File_handshake_proto protoreflect.FileDescriptor
 
 const file_handshake_proto_rawDesc = "" +
 	"\n" +
-	"\x0fhandshake.proto\x12\tbelphegor\x1a\fdevice.proto\"\xb4\x01\n" +
+	"\x0fhandshake.proto\x12\tbelphegor\x1a\fdevice.proto\"\x96\x01\n" +
 	"\tHandshake\x12\x18\n" +
 	"\aVersion\x18\x01 \x01(\tR\aVersion\x12)\n" +
 	"\x06Device\x18\x02 \x01(\v2\x11.belphegor.DeviceR\x06Device\x12\x12\n" +
-	"\x04Port\x18\x03 \x01(\rR\x04Port\x12\x1c\n" +
-	"\tPublicKey\x18\x04 \x01(\fR\tPublicKey\x120\n" +
+	"\x04Port\x18\x03 \x01(\rR\x04Port\x120\n" +
 	"\bProvider\x18\x05 \x01(\x0e2\x14.belphegor.ClipboardR\bProvider*\\\n" +
 	"\tClipboard\x12\b\n" +
 	"\x04NULL\x10\x00\x12\t\n" +

@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"crypto"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
 )
@@ -47,12 +45,6 @@ func WithChannel(updates *Channel) PeerOption {
 	}
 }
 
-func WithCipher(cipher *encrypter.Cipher) PeerOption {
-	return func(p *Peer) {
-		p.cipher = cipher
-	}
-}
-
 func NewPeer(opts ...PeerOption) *Peer {
 	p := new(Peer)
 	for _, opt := range opts {
@@ -66,7 +58,6 @@ type Peer struct {
 	addr       net.Addr
 	metaData   domain.Device
 	channel    *Channel
-	cipher     *encrypter.Cipher
 	stringRepr string
 	logger     zerolog.Logger
 }
@@ -75,9 +66,7 @@ func (p *Peer) MetaData() domain.Device { return p.metaData }
 
 func (p *Peer) Stream() *quic.Stream { return p.conn }
 
-func (p *Peer) Signer() crypto.Signer { return p.cipher }
-
-func (p *Peer) Close() error { return p.conn.Close() }
+func (p *Peer) Close() error { return p.Stream().Close() }
 
 func (p *Peer) String() string {
 	if p.stringRepr == "" {
@@ -106,7 +95,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 
 	go func() {
 		for {
-			msg, err := ReceiveMessage(p.Stream(), p.cipher, p.MetaData())
+			msg, err := ReceiveMessage(p.Stream(), p.MetaData())
 			resultChan <- readResult{msg: msg, err: err}
 		}
 	}()

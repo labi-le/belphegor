@@ -79,6 +79,10 @@ func (w *writer) Write(p []byte) (n int, err error) {
 		return 0, errors.New("data control manager not initialized")
 	}
 
+	if w.activeSource != nil {
+		w.activeSource.Destroy()
+	}
+
 	source := w.deviceManager.CreateDataSource()
 
 	dataCopy := make([]byte, len(p))

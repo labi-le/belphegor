@@ -3,13 +3,13 @@
 package pipe
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"syscall"
 	"time"
 
-	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"golang.org/x/sys/unix"
 )
 
@@ -64,15 +64,15 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 	}
 
 	const (
-		initialCap  = 64 * 1024
-		readTimeout = 100 * time.Millisecond
-		dataDelay   = 10 * time.Millisecond
+		readChunkSize = 64 * 1024
+		readTimeout   = 100 * time.Millisecond
+		dataDelay     = 10 * time.Millisecond
 	)
 
-	buffer := byteslice.Get(initialCap)
-	defer byteslice.Put(buffer)
+	var dest bytes.Buffer
 
-	total := 0
+	readBuf := make([]byte, readChunkSize)
+
 	lastRead := time.Now()
 	hasData := false
 
@@ -86,14 +86,7 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 			break
 		}
 
-		if total == cap(buffer) {
-			newBuf := byteslice.Get(cap(buffer) * 2)
-			copy(newBuf, buffer[:total])
-			byteslice.Put(buffer)
-			buffer = newBuf
-		}
-
-		n, err := syscall.Read(int(pipe), buffer[total:cap(buffer)])
+		n, err := syscall.Read(int(pipe), readBuf)
 		if err != nil && !needWait(err) {
 			return nil, err
 		}
@@ -102,14 +95,15 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 			break
 		}
 
-		total += n
+		if n > 0 {
+			dest.Write(readBuf[:n])
+		}
+
 		lastRead = time.Now()
 		hasData = true
 	}
 
-	result := make([]byte, total)
-	copy(result, buffer[:total])
-	return result, nil
+	return dest.Bytes(), nil
 }
 
 func needWait(err error) bool {

@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -20,7 +19,6 @@ import (
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/encrypter"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/quic-go/quic-go"
@@ -77,7 +75,7 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	return nil
 }
 
-func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, stream *quic.Stream, addr net.Addr) (*Peer, error) {
+func (n *Node) addPeer(hisHand domain.Handshake, stream *quic.Stream, addr net.Addr) (*Peer, error) {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.addPeer")
 
 	metadata := hisHand.MetaData
@@ -91,7 +89,6 @@ func (n *Node) addPeer(hisHand domain.Handshake, cipher *encrypter.Cipher, strea
 		WithAddr(addr),
 		WithMetaData(metadata),
 		WithChannel(n.channel),
-		WithCipher(cipher),
 		WithPeerLogger(n.opts.Logger),
 	)
 
@@ -187,7 +184,7 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 		return fmt.Errorf("openOrAcceptStream error: %w", err)
 	}
 
-	hisHand, cipher, greetErr := hs.exchange(stream, conn.RemoteAddr())
+	hisHand, greetErr := hs.exchange(stream, conn.RemoteAddr())
 	if greetErr != nil {
 		if errors.Is(greetErr, ErrVersionMismatch) {
 			return nil
@@ -196,12 +193,7 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 		return greetErr
 	}
 
-	peer, addErr := n.addPeer(
-		hisHand.Payload,
-		cipher,
-		stream,
-		conn.RemoteAddr(),
-	)
+	peer, addErr := n.addPeer(hisHand.Payload, stream, conn.RemoteAddr())
 	if addErr != nil {
 		if errors.Is(addErr, ErrAlreadyConnected) {
 			return nil
@@ -211,10 +203,12 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 			Msg("failed to add")
 		return addErr
 	}
-	defer n.peers.Delete(peer.MetaData().UniqueID())
+	defer func() {
+		n.peers.Delete(peer.MetaData().UniqueID())
+		n.Notify("Node disconnected %s", peer.MetaData().Name)
+	}()
 
 	n.Notify("connected to %s", peer.MetaData().Name)
-	defer n.Notify("Node disconnected %s", peer.MetaData().Name)
 
 	ctxLog.Info().Msg("connected")
 
@@ -234,6 +228,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 		Int64("msg_id", msg.Payload.ID).
 		Logger()
 
+	dst, _ := protoutil.EncodeBytes(msg.Proto())
 	n.peers.Tap(func(id id.Unique, peer *Peer) bool {
 		ctx := ctxLog.
 			With().
@@ -255,8 +250,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 		}
 		defer peer.Stream().SetWriteDeadline(time.Time{})
 
-		//_, encErr := WriteEncryptedMessage(msg, peer.Signer(), peer.Stream())
-		_, encodeErr := protoutil.EncodeWriter(msg.Proto(), peer.conn)
+		_, encodeErr := peer.Stream().Write(dst)
 		if encodeErr != nil {
 			if errors.Is(encodeErr, net.ErrClosed) ||
 				strings.Contains(encodeErr.Error(), "bad file descriptor") ||
@@ -266,7 +260,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 			} else {
 				ctx.Trace().
 					AnErr("protoutil.EncodeWriter", encodeErr).
-					Msg("failed to write encrypted message")
+					Msg("failed to write message")
 			}
 
 			n.peers.Delete(peer.MetaData().UniqueID())
@@ -336,7 +330,7 @@ func (n *Node) Metadata() domain.Device {
 	return n.opts.Metadata
 }
 
-func ReceiveMessage(conn *quic.Stream, decrypter crypto.Decrypter, data domain.Device) (domain.EventMessage, error) {
+func ReceiveMessage(conn *quic.Stream, data domain.Device) (domain.EventMessage, error) {
 	var event proto.Event
 	if decodeEnc := protoutil.DecodeReader(conn, &event); decodeEnc != nil {
 		return domain.EventMessage{}, decodeEnc
