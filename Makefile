@@ -29,7 +29,7 @@ PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
 .PHONY: run
 run:
-	WAYLAND_DEBUG=0 go run -tags release $(MAIN_PATH) --node_discover=true --debug
+	WAYLAND_DEBUG=0 go run -tags debug $(MAIN_PATH) --node_discover --verbose
 
 .PHONY: build
 build: clean

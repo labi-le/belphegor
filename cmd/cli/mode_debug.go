@@ -1,15 +1,19 @@
+//go:build debug
+
 package main
 
 import (
 	"net/http"
 	_ "net/http/pprof"
-
-	"github.com/rs/zerolog/log"
 )
 
 func init() {
-	addr := "127.0.0.1:6060"
-	log.Logger.Debug().Msgf("pprof started on %s", addr)
-
-	go http.ListenAndServe(addr, nil)
+	go func() {
+		addr := "127.0.0.1:6060"
+		logger.Debug().Msgf("starting pprof server on %s", addr)
+		if err := http.ListenAndServe(addr, nil); err != nil {
+			logger.Debug().Msgf("pprof server failed: %v", err)
+		}
+	}()
+	//options = append(options, node.WithPublicPort(7777))
 }

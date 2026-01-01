@@ -25,8 +25,13 @@ import (
 )
 
 var (
+	options []node.Option
+	logger  zerolog.Logger
+)
+
+var (
 	addressIP   string
-	debug       bool
+	verbose     bool
 	showVersion bool
 	showHelp    bool
 	notify      bool
@@ -50,35 +55,23 @@ func init() {
 	flag.DurationVar(&writeTimeout, "write_timeout", time.Minute, "Write timeout")
 	flag.DurationVar(&readTimeout, "read_timeout", time.Minute, "Write timeout")
 	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of discovered peers")
-	flag.BoolVarP(&debug, "debug", "d", false, "Show debug logs")
+	flag.BoolVarP(&verbose, "verbose", "", false, "Verbose logs")
 	flag.BoolVar(&notify, "notify", true, "Enable notifications")
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
 	flag.BoolVar(&hidden, "hidden", false, "Hide console window (for windows user)")
 
 	flag.Parse()
+
+	logger = initLogger(verbose)
 }
 
 func main() {
-	logger := initLogger(debug)
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	if debug {
-		port = 7777
-		logger.Info().Msg("debug mode enabled")
-	}
-
-	if showVersion {
-		_, _ = fmt.Fprintf(
-			os.Stderr,
-			"version %s | commit %s | build time %s",
-			metadata.Version,
-			metadata.CommitHash,
-			metadata.BuildTime,
-		)
-		return
+	if verbose {
+		logger.Info().Msg("verbose mode enabled")
 	}
 
 	if showHelp {
@@ -86,14 +79,22 @@ func main() {
 		return
 	}
 
+	if showVersion {
+		_, _ = fmt.Fprintf(
+			os.Stderr,
+			"version: %s\ncommit: %s\nbuild time: %s\n",
+			metadata.Version,
+			metadata.CommitHash,
+			metadata.BuildTime,
+		)
+		return
+	}
+
 	if hidden {
 		console.HideConsoleWindow()
 	}
 
-	nd := node.New(
-		clipboard.New(logger),
-		storage.NewSyncMapStorage[id.Unique, *peer.Peer](),
-		channel.NewChannel(),
+	options = append([]node.Option{
 		node.WithLogger(logger),
 		node.WithPublicPort(port),
 		node.WithKeepAlive(keepAlive),
@@ -107,6 +108,13 @@ func main() {
 			Delay:    discoverDelay,
 			MaxPeers: maxPeers,
 		}),
+	}, options...)
+
+	nd := node.New(
+		clipboard.New(logger),
+		storage.NewSyncMapStorage[id.Unique, *peer.Peer](),
+		channel.NewChannel(),
+		options...,
 	)
 
 	unlock := lock.Must(logger)
