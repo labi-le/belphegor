@@ -17,6 +17,8 @@ func NewNull() *Clipboard {
 }
 
 func (n *Clipboard) Watch(_ context.Context, up chan<- eventful.Update) error {
+	defer close(up)
+
 	for data := range n.data {
 		up <- eventful.Update{Data: data}
 		n.RootUpdate <- data

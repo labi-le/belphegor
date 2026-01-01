@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"strings"
@@ -28,11 +29,30 @@ var (
 	ErrAlreadyConnected = errors.New("already connected")
 )
 
+type cleanup func()
+
 type Node struct {
 	clipboard eventful.Eventful
 	peers     *Storage
 	channel   *Channel
 	opts      Options
+}
+
+func (n *Node) Close() error {
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.Close")
+
+	n.peers.Tap(func(id id.Unique, p *Peer) bool {
+		if closeErr := p.Close(); closeErr != nil {
+			ctxLog.Warn().Err(closeErr).Str("peer", p.String()).Msg("failed to close peer")
+		}
+		return true
+	})
+	if closeErr := n.channel.Close(); closeErr != nil {
+		ctxLog.Error().Err(closeErr).Msg("failed to close channel")
+		return closeErr
+	}
+
+	return nil
 }
 
 // New creates a new instance of Node with the specified settings
@@ -75,17 +95,17 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	return nil
 }
 
-func (n *Node) addPeer(hisHand domain.Handshake, stream *quic.Stream, addr net.Addr) (*Peer, error) {
+func (n *Node) addPeer(hisHand domain.Handshake, stream *quic.Conn, addr net.Addr) (*Peer, cleanup, error) {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.addPeer")
 
 	metadata := hisHand.MetaData
 	if n.peers.Exist(metadata.UniqueID()) {
 		ctxLog.Trace().Msgf("%s already connected, ignoring", metadata.String())
-		return nil, ErrAlreadyConnected
+		return nil, nil, ErrAlreadyConnected
 	}
 
 	peer := NewPeer(
-		WithStream(stream),
+		WithConn(stream),
 		WithAddr(addr),
 		WithMetaData(metadata),
 		WithChannel(n.channel),
@@ -96,12 +116,19 @@ func (n *Node) addPeer(hisHand domain.Handshake, stream *quic.Stream, addr net.A
 		metadata.UniqueID(),
 		peer,
 	)
-	return peer, nil
+
+	cleanup := func() {
+		n.peers.Delete(metadata.UniqueID())
+		n.Notify("Node disconnected %s", metadata.Name)
+		_ = peer.Close()
+	}
+
+	return peer, cleanup, nil
 }
 
 // Start starts the node by listening for incoming connections on the specified public port
 func (n *Node) Start(ctx context.Context) error {
-	defer n.channel.Close()
+	defer n.Close()
 
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
 
@@ -114,12 +141,6 @@ func (n *Node) Start(ctx context.Context) error {
 		ctxLog.Err(err).Msg("failed to listen")
 		return fmt.Errorf("node.Start: %w", err)
 	}
-	defer l.Close()
-
-	go func() {
-		<-ctx.Done()
-		l.Close()
-	}()
 
 	addr := l.Addr().String()
 	n.Notify("started on %s", addr)
@@ -179,12 +200,7 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 		return cipherErr
 	}
 
-	stream, err := openOrAcceptStream(ctx, conn, accept)
-	if err != nil {
-		return fmt.Errorf("openOrAcceptStream error: %w", err)
-	}
-
-	hisHand, greetErr := hs.exchange(stream, conn.RemoteAddr())
+	hisHand, greetErr := hs.exchange(ctx, conn, accept)
 	if greetErr != nil {
 		if errors.Is(greetErr, ErrVersionMismatch) {
 			return nil
@@ -193,7 +209,7 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 		return greetErr
 	}
 
-	peer, addErr := n.addPeer(hisHand.Payload, stream, conn.RemoteAddr())
+	peer, cleanup, addErr := n.addPeer(hisHand.Payload, conn, conn.RemoteAddr())
 	if addErr != nil {
 		if errors.Is(addErr, ErrAlreadyConnected) {
 			return nil
@@ -203,10 +219,7 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 			Msg("failed to add")
 		return addErr
 	}
-	defer func() {
-		n.peers.Delete(peer.MetaData().UniqueID())
-		n.Notify("Node disconnected %s", peer.MetaData().Name)
-	}()
+	defer cleanup()
 
 	n.Notify("connected to %s", peer.MetaData().Name)
 
@@ -239,18 +252,7 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 			return true
 		}
 
-		ctx.Trace().Msg("sent")
-
-		err := peer.Stream().SetWriteDeadline(time.Now().Add(n.opts.WriteTimeout))
-		if err != nil {
-			ctx.Trace().
-				AnErr("SetWriteDeadline", err).
-				Msg("cannot set write deadline")
-			return true
-		}
-		defer peer.Stream().SetWriteDeadline(time.Time{})
-
-		_, encodeErr := peer.Stream().Write(dst)
+		_, encodeErr := peer.Write(dst)
 		if encodeErr != nil {
 			if errors.Is(encodeErr, net.ErrClosed) ||
 				strings.Contains(encodeErr.Error(), "bad file descriptor") ||
@@ -259,12 +261,13 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 				ctx.Trace().Msg("connection closed during broadcast, removing peer")
 			} else {
 				ctx.Trace().
-					AnErr("protoutil.EncodeWriter", encodeErr).
+					AnErr("peer.Write", encodeErr).
 					Msg("failed to write message")
 			}
 
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
+		ctx.Trace().Msg("sent")
 
 		return true
 	})
@@ -276,6 +279,8 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 
 	updates, watchErr := make(chan eventful.Update), make(chan error, 1)
 	go func() {
+		defer close(watchErr)
+
 		if err := n.clipboard.Watch(ctx, updates); err != nil {
 			watchErr <- err
 		}
@@ -308,7 +313,10 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 				return fmt.Errorf("node.MonitorBuffer: %w", err)
 			}
 			return nil
-		case msg := <-n.channel.Listen():
+		case msg, ok := <-n.channel.Listen():
+			if !ok {
+				return nil
+			}
 			if msg.From != n.opts.Metadata.UniqueID() {
 				ctxLog.Trace().Int64("msg_id", msg.Payload.ID).Msg("set clipboard data")
 
@@ -330,9 +338,9 @@ func (n *Node) Metadata() domain.Device {
 	return n.opts.Metadata
 }
 
-func ReceiveMessage(conn *quic.Stream, data domain.Device) (domain.EventMessage, error) {
+func ReceiveMessage(reader io.Reader, data domain.Device) (domain.EventMessage, error) {
 	var event proto.Event
-	if decodeEnc := protoutil.DecodeReader(conn, &event); decodeEnc != nil {
+	if decodeEnc := protoutil.DecodeReader(reader, &event); decodeEnc != nil {
 		return domain.EventMessage{}, decodeEnc
 	}
 

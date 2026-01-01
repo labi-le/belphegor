@@ -44,7 +44,7 @@ func Must(log zerolog.Logger) *Clipboard {
 func New(client *wl.Client, log zerolog.Logger) *Clipboard {
 	preset := newPreset(client, log)
 
-	dataChan := make(chan ClipboardData, 10)
+	dataChan := make(chan ClipboardData, 1)
 
 	wlr := &Clipboard{
 		preset:   preset,
@@ -59,6 +59,7 @@ func New(client *wl.Client, log zerolog.Logger) *Clipboard {
 }
 
 func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
+	defer close(update)
 	log := w.logger.With().Str("op", "wlr.Watch").Logger()
 
 	errCh := make(chan error, 1)

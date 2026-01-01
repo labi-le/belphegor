@@ -9,7 +9,6 @@ import (
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/labi-le/belphegor/pkg/protoutil"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -60,17 +59,17 @@ func (m Message) Duplicate(new Message) bool {
 		return true
 	}
 
-	if m.Mime.IsImage() {
-		identical, err := mime.EqualMSE(
-			bytes.NewReader(m.Data),
-			bytes.NewReader(new.Data),
-		)
-		if err != nil {
-			log.Error().AnErr("image.EqualMSE", err).Msg("failed to compare images")
-		}
-
-		return identical
-	}
+	//if m.Mime.IsImage() {
+	//	identical, err := mime.EqualMSE(
+	//		bytes.NewReader(m.Data),
+	//		bytes.NewReader(new.Data),
+	//	)
+	//	if err != nil {
+	//		log.Error().AnErr("image.EqualMSE", err).Msg("failed to compare images")
+	//	}
+	//
+	//	return identical
+	//}
 
 	return false
 }

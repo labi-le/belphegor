@@ -79,11 +79,6 @@ func (r *reader) Selection(offer *controlOffer) {
 		return
 	}
 
-	r.logger.Trace().
-		Uint32("offer_id", offer.ID()).
-		Strs("available_mimes", r.mimeTypes).
-		Msg("selection received")
-
 	selectedMime := r.selectBestMimeType()
 	if selectedMime == "" {
 		r.logger.Debug().

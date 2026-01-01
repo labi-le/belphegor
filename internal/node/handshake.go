@@ -1,12 +1,12 @@
 package node
 
 import (
+	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"net"
 
 	"github.com/labi-le/belphegor/internal/metadata"
 	"github.com/labi-le/belphegor/internal/types/domain"
@@ -42,12 +42,18 @@ func newHandshake(bitSize int, meta domain.Device, port int, logger zerolog.Logg
 	}, nil
 }
 
-func (h *handshake) exchange(conn *quic.Stream, addr net.Addr) (domain.EventHandshake, error) {
-	if _, err := protoutil.EncodeWriter(h.my.Proto(), conn); err != nil {
+func (h *handshake) exchange(ctx context.Context, conn *quic.Conn, incoming bool) (domain.EventHandshake, error) {
+	stream, err := openOrAcceptStream(ctx, conn, incoming)
+	if err != nil {
+		return domain.EventHandshake{}, fmt.Errorf("openOrAcceptStream error: %w", err)
+	}
+	defer stream.Close()
+
+	if _, err := protoutil.EncodeWriter(h.my.Proto(), stream); err != nil {
 		return domain.EventHandshake{}, fmt.Errorf("send greeting: %w", err)
 	}
 
-	from, err := domain.NewGreetFromReader(conn)
+	from, err := domain.NewGreetFromReader(stream)
 	if err != nil {
 		return domain.EventHandshake{}, fmt.Errorf("receive greeting: %w", err)
 	}
@@ -55,7 +61,7 @@ func (h *handshake) exchange(conn *quic.Stream, addr net.Addr) (domain.EventHand
 	ctxLog := ctxlog.Op(h.logger, "exchange")
 	ctxLog.Trace().
 		Str("node", from.Payload.MetaData.String()).
-		Str("addr", addr.String()).
+		Str("addr", conn.RemoteAddr().String()).
 		Msg("received greeting")
 
 	if metadata.IsMajorDifference(h.my.Payload.Version, from.Payload.Version) {

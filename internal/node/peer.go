@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
@@ -15,7 +16,7 @@ import (
 
 type PeerOption func(*Peer)
 
-func WithStream(conn *quic.Stream) PeerOption {
+func WithConn(conn *quic.Conn) PeerOption {
 	return func(p *Peer) {
 		p.conn = conn
 	}
@@ -54,7 +55,7 @@ func NewPeer(opts ...PeerOption) *Peer {
 }
 
 type Peer struct {
-	conn       *quic.Stream
+	conn       *quic.Conn
 	addr       net.Addr
 	metaData   domain.Device
 	channel    *Channel
@@ -64,9 +65,11 @@ type Peer struct {
 
 func (p *Peer) MetaData() domain.Device { return p.metaData }
 
-func (p *Peer) Stream() *quic.Stream { return p.conn }
+func (p *Peer) Conn() *quic.Conn { return p.conn }
 
-func (p *Peer) Close() error { return p.Stream().Close() }
+func (p *Peer) Close() error {
+	return p.conn.CloseWithError(quic.ApplicationErrorCode(0), "closed conn")
+}
 
 func (p *Peer) String() string {
 	if p.stringRepr == "" {
@@ -95,8 +98,16 @@ func (p *Peer) Receive(ctx context.Context) error {
 
 	go func() {
 		for {
-			msg, err := ReceiveMessage(p.Stream(), p.MetaData())
+			stream, err := p.Conn().AcceptStream(ctx)
+			if err != nil {
+				close(resultChan)
+				return
+			}
+			msg, err := ReceiveMessage(stream, p.MetaData())
 			resultChan <- readResult{msg: msg, err: err}
+			if err := stream.Close(); err != nil {
+				return
+			}
 		}
 	}()
 
@@ -104,7 +115,10 @@ func (p *Peer) Receive(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return p.Close()
-		case res := <-resultChan:
+		case res, ok := <-resultChan:
+			if !ok {
+				return nil
+			}
 			if res.err != nil {
 				var opErr *net.OpError
 				if errors.As(res.err, &opErr) || errors.Is(res.err, io.EOF) {
@@ -123,4 +137,31 @@ func (p *Peer) Receive(ctx context.Context) error {
 			).Str("from", p.String()).Msg("received")
 		}
 	}
+}
+
+func (p *Peer) Write(data []byte) (int, error) {
+	timeout := 5 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	stream, err := p.conn.OpenStreamSync(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("open stream: %w", err)
+	}
+	defer stream.Close()
+
+	if err := stream.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
+		return 0, fmt.Errorf("set write deadline: %w", err)
+	}
+	defer stream.SetWriteDeadline(time.Time{})
+
+	if _, err := stream.Write(data); err != nil {
+		return 0, fmt.Errorf("write: %w", err)
+	}
+
+	if err := stream.Close(); err != nil {
+		return 0, fmt.Errorf("close stream: %w", err)
+	}
+
+	return 0, nil
 }
