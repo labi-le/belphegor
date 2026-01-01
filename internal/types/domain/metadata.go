@@ -47,9 +47,9 @@ func (meta Device) String() string {
 
 func MetaDataFromProto(device *proto.Device) Device {
 	return Device{
-		Name: device.Name,
-		Arch: device.Arch,
-		ID:   device.ID,
+		Name: device.GetName(),
+		Arch: device.GetArch(),
+		ID:   device.GetID(),
 	}
 }
 

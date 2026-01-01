@@ -43,10 +43,10 @@ func (ws *preset) Global(name uint32, inter string, version uint32) {
 	switch inter {
 	case wl.SeatInterface:
 		ws.seat = wl.BindSeat(ws.client, ws.registry, name, version)
-		ws.logger.Trace().Type("bound seat", ws.seat)
+		ws.logger.Trace().Type("bound seat", ws.seat).Send()
 	case managerInterface:
 		ws.deviceManager = binder(ws.client, ws.registry, name, version)
-		ws.logger.Trace().Type("bound data device manager", ws.deviceManager)
+		ws.logger.Trace().Type("bound data device manager", ws.deviceManager).Send()
 	}
 }
 

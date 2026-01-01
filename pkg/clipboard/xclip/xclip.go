@@ -8,7 +8,7 @@ import (
 
 type Clipboard struct{}
 
-func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
+func (m *Clipboard) Watch(context.Context, chan<- eventful.Update) error {
 	//TODO implement me
 	panic("implement me")
 }

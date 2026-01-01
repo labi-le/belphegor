@@ -41,7 +41,7 @@ type Node struct {
 func (n *Node) Close() error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Close")
 
-	n.peers.Tap(func(id id.Unique, p *peer.Peer) bool {
+	n.peers.Tap(func(_ id.Unique, p *peer.Peer) bool {
 		if closeErr := p.Close(); closeErr != nil {
 			ctxLog.Warn().Err(closeErr).Str("peer", p.String()).Msg("failed to close peer")
 		}
@@ -199,11 +199,7 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 		Str("node", n.Metadata().String()).
 		Logger()
 
-	hs, cipherErr := newHandshake(n.Metadata(), n.opts.PublicPort, n.opts.Logger)
-	if cipherErr != nil {
-		return cipherErr
-	}
-
+	hs := newHandshake(n.Metadata(), n.opts.PublicPort, n.opts.Logger)
 	hisHand, greetErr := hs.exchange(ctx, conn, accept)
 	if greetErr != nil {
 		if errors.Is(greetErr, ErrVersionMismatch) {
@@ -342,6 +338,7 @@ func (n *Node) Metadata() domain.Device {
 	return n.opts.Metadata
 }
 
+//nolint:mnd,gosec //shut up
 func generateTLSConfig() (*tls.Config, error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

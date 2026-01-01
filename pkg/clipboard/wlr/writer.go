@@ -37,7 +37,7 @@ type sourceListener struct {
 	logger zerolog.Logger
 }
 
-func (s *sourceListener) Send(mime string, f *os.File) {
+func (s *sourceListener) Send(_ string, f *os.File) {
 	ctxLog := s.logger.With().Str("op", "Send").Logger()
 
 	total := 0

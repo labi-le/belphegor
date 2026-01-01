@@ -3,7 +3,6 @@ package byteslice
 import (
 	"math"
 	"math/bits"
-	"reflect"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -53,12 +52,10 @@ func (p *Pool) Get(size int) (buf []byte) {
 	if ptr == nil {
 		return make([]byte, 1<<idx)[:size]
 	}
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
-	sh.Data = uintptr(ptr)
-	sh.Len = size
-	sh.Cap = 1 << idx
+
+	buf = unsafe.Slice((*byte)(ptr), 1<<idx)[:size]
 	runtime.KeepAlive(ptr)
-	return
+	return buf
 }
 
 // Put returns the byte slice to the pool.

@@ -34,12 +34,12 @@ func GreetFromProto(m *proto.Event) EventHandshake {
 	hs := m.Payload.(*proto.Event_Handshake).Handshake
 
 	return EventHandshake{
-		Created: m.Created.AsTime(),
+		Created: m.GetCreated().AsTime(),
 		Payload: Handshake{
-			Version:  hs.Version,
-			MetaData: MetaDataFromProto(hs.Device),
-			Port:     hs.Port,
-			Provider: ClipboardProvider(hs.Provider),
+			Version:  hs.GetVersion(),
+			MetaData: MetaDataFromProto(hs.GetDevice()),
+			Port:     hs.GetPort(),
+			Provider: ClipboardProvider(hs.GetProvider()),
 		},
 	}
 }

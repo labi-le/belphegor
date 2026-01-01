@@ -12,6 +12,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	debounce = 200 * time.Millisecond
+)
+
 type ClipboardData struct {
 	Data     []byte
 	MimeType mime.Type
@@ -42,7 +46,7 @@ func (r *reader) IgnoreNextSelection() {
 	r.ignoreNextSelection = true
 	r.mu.Unlock()
 
-	time.AfterFunc(200*time.Millisecond, func() {
+	time.AfterFunc(debounce, func() {
 		r.mu.Lock()
 		r.ignoreNextSelection = false
 		r.mu.Unlock()
@@ -160,38 +164,36 @@ func (r *reader) readPipeData(mimeType string, p pipe.RWPipe) {
 		resultChan <- result{data: data, err: err, mime: mimeType}
 	}()
 
-	select {
-	case res := <-resultChan:
-		if res.err != nil {
-			errStr := res.err.Error()
-			if strings.Contains(errStr, "bad file descriptor") ||
-				strings.Contains(errStr, "poll error") {
-				r.logger.Trace().
-					Int("fd", int(readFd)).
-					Str("mime", mimeType).
-					Str("reason", errStr).
-					Msg("offer was cancelled")
-			} else {
-				r.logger.Error().
-					Int("fd", int(readFd)).
-					Str("mime", mimeType).
-					Err(res.err).
-					Msg("failed to read from pipe")
-			}
-			return
-		}
-
-		if len(res.data) > 0 {
+	res := <-resultChan
+	if res.err != nil {
+		errStr := res.err.Error()
+		if strings.Contains(errStr, "bad file descriptor") ||
+			strings.Contains(errStr, "poll error") {
 			r.logger.Trace().
 				Int("fd", int(readFd)).
-				Int("bytes_read", len(res.data)).
 				Str("mime", mimeType).
-				Msg("read data from pipe")
+				Str("reason", errStr).
+				Msg("offer was cancelled")
+		} else {
+			r.logger.Error().
+				Int("fd", int(readFd)).
+				Str("mime", mimeType).
+				Err(res.err).
+				Msg("failed to read from pipe")
+		}
+		return
+	}
 
-			r.dataChan <- ClipboardData{
-				Data:     res.data,
-				MimeType: mime.AsType(mimeType),
-			}
+	if len(res.data) > 0 {
+		r.logger.Trace().
+			Int("fd", int(readFd)).
+			Int("bytes_read", len(res.data)).
+			Str("mime", mimeType).
+			Msg("read data from pipe")
+
+		r.dataChan <- ClipboardData{
+			Data:     res.data,
+			MimeType: mime.AsType(mimeType),
 		}
 	}
 }

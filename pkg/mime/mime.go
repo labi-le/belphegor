@@ -2,10 +2,6 @@ package mime
 
 import (
 	"bytes"
-	"mime"
-	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -147,25 +143,4 @@ func fromBytesSniff(data []byte) string {
 
 func From(src []byte) Type {
 	return classifyMime(fromBytesSniff(src))
-}
-
-func mimeFromPath(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext != "" {
-		if mt := mime.TypeByExtension(ext); mt != "" {
-			return normalizeMime(mt)
-		}
-	}
-
-	f, err := os.Open(path)
-	if err == nil {
-		defer f.Close()
-		h := make([]byte, 512)
-		n, _ := f.Read(h)
-		if n > 0 {
-			return normalizeMime(http.DetectContentType(h[:n]))
-		}
-	}
-
-	return "application/octet-stream"
 }

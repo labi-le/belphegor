@@ -113,7 +113,7 @@ func main() {
 	nd := node.New(
 		clipboard.New(logger),
 		storage.NewSyncMapStorage[id.Unique, *peer.Peer](),
-		channel.NewChannel(),
+		channel.New(),
 		options...,
 	)
 

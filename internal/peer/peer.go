@@ -161,9 +161,9 @@ func (p *Peer) receiveMessage(ctx context.Context) (domain.EventMessage, error) 
 		return empty, decodeEnc
 	}
 
-	payload, ok := event.Payload.(*proto.Event_Message)
+	payload, ok := event.GetPayload().(*proto.Event_Message)
 	if ok == false {
-		return domain.EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, event.Payload)
+		return domain.EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, event.GetPayload())
 	}
 
 	return domain.FromProto(p.MetaData().ID, &event, payload), nil

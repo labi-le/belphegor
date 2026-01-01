@@ -22,14 +22,14 @@ type handshake struct {
 	logger zerolog.Logger
 }
 
-func newHandshake(meta domain.Device, port int, logger zerolog.Logger) (*handshake, error) {
+func newHandshake(meta domain.Device, port int, logger zerolog.Logger) *handshake {
 	return &handshake{
 		my: domain.NewGreet(
 			domain.WithMetadata(meta),
 			domain.WithPort(uint16(port)),
 		),
 		logger: logger,
-	}, nil
+	}
 }
 
 func (h *handshake) exchange(ctx context.Context, conn *quic.Conn, incoming bool) (domain.EventHandshake, error) {

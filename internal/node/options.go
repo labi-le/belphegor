@@ -29,6 +29,7 @@ type DiscoverOptions struct {
 // Option defines the method to configure Options
 type Option func(*Options)
 
+//nolint:mnd //shut up
 var defaultOptions = Options{
 	PublicPort: netstack.RandomPort(),
 	KeepAlive:  time.Minute,

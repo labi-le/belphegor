@@ -93,7 +93,7 @@ func testNodes(t testing.TB) (func(ctx context.Context), *null.Clipboard, *null.
 	node1 := node.New(
 		clip1,
 		new(node.Storage),
-		channel.NewChannel(),
+		channel.New(),
 		node.WithPublicPort(port1),
 		node.WithNotifier(notification.NullNotifier{}),
 		node.WithMetadata(domain.Device{
@@ -108,7 +108,7 @@ func testNodes(t testing.TB) (func(ctx context.Context), *null.Clipboard, *null.
 	node2 := node.New(
 		clip2,
 		new(node.Storage),
-		channel.NewChannel(),
+		channel.New(),
 		node.WithPublicPort(port2),
 		node.WithNotifier(notification.NullNotifier{}),
 		node.WithMetadata(domain.Device{

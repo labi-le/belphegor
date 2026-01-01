@@ -23,6 +23,7 @@ type Discover struct {
 	logger   zerolog.Logger
 }
 
+//nolint:mnd //shut up
 var defaultConfig = &Discover{
 	maxPeers: 10,
 	delay:    time.Minute * 5,

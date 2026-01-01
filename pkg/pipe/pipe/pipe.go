@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	ErrNilPipe      = fmt.Errorf("pipe: nil pipe provided")
-	ErrFailedCreate = fmt.Errorf("pipe: failed to create pipe")
+	ErrNilPipe      = errors.New("pipe: nil pipe provided")
+	ErrFailedCreate = errors.New("pipe: failed to create pipe")
 )
 
 type RWPipe interface {
@@ -129,7 +129,7 @@ func waitForData(fd uintptr, lastRead time.Time, hasData bool, readTimeout, data
 	for {
 		n, err := unix.Poll(fds, timeout)
 		if err != nil {
-			if err == syscall.EINTR {
+			if errors.Is(err, syscall.EINTR) {
 				continue
 			}
 			return false, fmt.Errorf("poll error: %w", err)

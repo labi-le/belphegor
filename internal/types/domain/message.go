@@ -46,16 +46,16 @@ func MessageNew(data []byte, owner id.Unique) EventMessage {
 	}
 }
 
-func (m Message) Duplicate(new Message) bool {
-	if m.ID == new.ID {
+func (m Message) Duplicate(msg Message) bool {
+	if m.ID == msg.ID {
 		return true
 	}
 
-	if m.Mime != new.Mime {
+	if m.Mime != msg.Mime {
 		return false
 	}
 
-	if bytes.Equal(m.Data, new.Data) {
+	if bytes.Equal(m.Data, msg.Data) {
 		return true
 	}
 
@@ -93,11 +93,11 @@ func FromUpdate(update eventful.Update) Message {
 func FromProto(from id.Unique, proto *proto.Event, payload *proto.Event_Message) EventMessage {
 	return EventMessage{
 		From:    from,
-		Created: proto.Created.AsTime(),
+		Created: proto.GetCreated().AsTime(),
 		Payload: Message{
-			ID:   payload.Message.ID,
-			Data: payload.Message.Data,
-			Mime: mime.Type(payload.Message.MimeType),
+			ID:   payload.Message.GetID(),
+			Data: payload.Message.GetData(),
+			Mime: mime.Type(payload.Message.GetMimeType()),
 		},
 	}
 }

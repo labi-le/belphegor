@@ -38,7 +38,7 @@ func (c *Channel) Close() error {
 	return nil
 }
 
-func NewChannel() *Channel {
+func New() *Channel {
 	return &Channel{
 		new: make(chan domain.EventMessage),
 	}
