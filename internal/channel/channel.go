@@ -1,4 +1,4 @@
-package node
+package channel
 
 import (
 	"sync/atomic"

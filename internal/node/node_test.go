@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
@@ -92,7 +93,7 @@ func testNodes(t testing.TB) (func(ctx context.Context), *null.Clipboard, *null.
 	node1 := node.New(
 		clip1,
 		new(node.Storage),
-		node.NewChannel(),
+		channel.NewChannel(),
 		node.WithPublicPort(port1),
 		node.WithNotifier(notification.NullNotifier{}),
 		node.WithMetadata(domain.Device{
@@ -107,7 +108,7 @@ func testNodes(t testing.TB) (func(ctx context.Context), *null.Clipboard, *null.
 	node2 := node.New(
 		clip2,
 		new(node.Storage),
-		node.NewChannel(),
+		channel.NewChannel(),
 		node.WithPublicPort(port2),
 		node.WithNotifier(notification.NullNotifier{}),
 		node.WithMetadata(domain.Device{

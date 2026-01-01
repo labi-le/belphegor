@@ -2,28 +2,27 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"time"
 
+	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/discovering"
+	"github.com/labi-le/belphegor/internal/lock"
 	"github.com/labi-le/belphegor/internal/metadata"
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
+	"github.com/labi-le/belphegor/internal/peer"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/console"
 	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/labi-le/belphegor/pkg/storage"
-	"github.com/nightlyone/lockfile"
 	"github.com/rs/zerolog"
 	flag "github.com/spf13/pflag"
 )
-
-const LockFile = "belphegor.lck"
 
 var (
 	addressIP   string
@@ -38,14 +37,8 @@ var (
 	discoverDelay  time.Duration
 	keepAlive      time.Duration
 	writeTimeout   time.Duration
+	readTimeout    time.Duration
 	maxPeers       int
-	bitSize        int
-)
-
-var (
-	ErrCannotLock     = errors.New("cannot get locked process: %s")
-	ErrCannotUnlock   = errors.New("cannot unlock process: %s")
-	ErrAlreadyRunning = errors.New("belphegor is already running. pid %d")
 )
 
 func init() {
@@ -54,9 +47,9 @@ func init() {
 	flag.BoolVar(&discoverEnable, "node_discover", true, "Find local nodes on the network and connect to them")
 	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
 	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
-	flag.DurationVar(&writeTimeout, "write_timeout", 5*time.Second, "Write timeout")
-	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of peers to connect to")
-	flag.IntVar(&bitSize, "bit_size", 2048, "RSA key bit size")
+	flag.DurationVar(&writeTimeout, "write_timeout", time.Minute, "Write timeout")
+	flag.DurationVar(&readTimeout, "read_timeout", time.Minute, "Write timeout")
+	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of discovered peers")
 	flag.BoolVarP(&debug, "debug", "d", false, "Show debug logs")
 	flag.BoolVar(&notify, "notify", true, "Enable notifications")
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
@@ -99,14 +92,16 @@ func main() {
 
 	nd := node.New(
 		clipboard.New(logger),
-		storage.NewSyncMapStorage[id.Unique, *node.Peer](),
-		node.NewChannel(),
+		storage.NewSyncMapStorage[id.Unique, *peer.Peer](),
+		channel.NewChannel(),
 		node.WithLogger(logger),
 		node.WithPublicPort(port),
-		node.WithBitSize(bitSize),
 		node.WithKeepAlive(keepAlive),
-		node.WithWriteTimeout(writeTimeout),
-		node.WithNotifier(notificationProvider(notify)),
+		node.WithDeadline(network.Deadline{
+			Read:  readTimeout,
+			Write: writeTimeout,
+		}),
+		node.WithNotifier(notification.New(notify)),
 		node.WithDiscovering(node.DiscoverOptions{
 			Enable:   discoverEnable,
 			Delay:    discoverDelay,
@@ -114,8 +109,8 @@ func main() {
 		}),
 	)
 
-	lock := MustLock(logger)
-	defer Unlock(lock, logger)
+	unlock := lock.Must(logger)
+	defer unlock()
 
 	if addressIP != "" {
 		go func() {
@@ -137,16 +132,6 @@ func main() {
 	if err := nd.Start(ctx); err != nil {
 		logger.Fatal().Err(err).Msg("failed to start node")
 	}
-}
-
-func notificationProvider(enable bool) notification.Notifier {
-	if enable {
-		return notification.BeepDecorator{
-			Title: "Belphegor",
-		}
-	}
-
-	return new(notification.NullNotifier)
 }
 
 func initLogger(debug bool) zerolog.Logger {
@@ -177,24 +162,4 @@ func initLogger(debug bool) zerolog.Logger {
 		With().
 		Timestamp().
 		Logger()
-}
-
-func MustLock(l zerolog.Logger) lockfile.Lockfile {
-	lock, _ := lockfile.New(filepath.Join(os.TempDir(), LockFile))
-
-	if lockErr := lock.TryLock(); lockErr != nil {
-		owner, err := lock.GetOwner()
-		if err != nil {
-			l.Fatal().Msgf(ErrCannotLock.Error(), err)
-		}
-		l.Fatal().Msgf(ErrAlreadyRunning.Error(), owner.Pid)
-	}
-
-	return lock
-}
-
-func Unlock(lock lockfile.Lockfile, l zerolog.Logger) {
-	if err := lock.Unlock(); err != nil {
-		l.Fatal().Msgf(ErrCannotUnlock.Error(), err)
-	}
 }

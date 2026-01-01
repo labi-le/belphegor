@@ -10,7 +10,7 @@ import (
 	"github.com/labi-le/belphegor/internal/types/domain"
 	proto2 "github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/ip"
+	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/rs/zerolog"
 	"github.com/schollz/peerdiscovery"
 	"google.golang.org/protobuf/proto"
@@ -86,7 +86,7 @@ func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 			Notify: func(d peerdiscovery.Discovered) {
 				peerIP := net.ParseIP(d.Address)
 				// For some reason the library calls Notify ignoring AllowSelf:false
-				if ip.IsLocalIP(peerIP) {
+				if network.IsLocalIP(peerIP) {
 					return
 				}
 
@@ -103,7 +103,7 @@ func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 					Uint32("port", greet.Payload.Port).
 					Msg("discovered")
 
-				go n.ConnectTo(ctx, createConnDsn(peerIP, greet))
+				go func() { _ = n.ConnectTo(ctx, createConnDsn(peerIP, greet)) }()
 			},
 		},
 	)

@@ -6,18 +6,18 @@ import (
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/rs/zerolog"
 )
 
 type Options struct {
-	PublicPort   int
-	BitSize      int
-	KeepAlive    time.Duration
-	WriteTimeout time.Duration
-	Notifier     notification.Notifier
-	Discovering  DiscoverOptions
-	Metadata     domain.Device
-	Logger       zerolog.Logger
+	PublicPort  int
+	KeepAlive   time.Duration
+	Deadline    network.Deadline
+	Notifier    notification.Notifier
+	Discovering DiscoverOptions
+	Metadata    domain.Device
+	Logger      zerolog.Logger
 }
 
 type DiscoverOptions struct {
@@ -30,11 +30,10 @@ type DiscoverOptions struct {
 type Option func(*Options)
 
 var defaultOptions = Options{
-	PublicPort:   netstack.RandomPort(),
-	BitSize:      2048,
-	KeepAlive:    time.Minute,
-	WriteTimeout: 5 * time.Second,
-	Notifier:     new(notification.BeepDecorator),
+	PublicPort: netstack.RandomPort(),
+	KeepAlive:  time.Minute,
+	Deadline:   network.Deadline{},
+	Notifier:   new(notification.BeepDecorator),
 	Discovering: DiscoverOptions{
 		Enable:   true,
 		Delay:    5 * time.Minute,
@@ -60,21 +59,15 @@ func WithPublicPort(port int) Option {
 	}
 }
 
-func WithBitSize(size int) Option {
-	return func(o *Options) {
-		o.BitSize = size
-	}
-}
-
 func WithKeepAlive(duration time.Duration) Option {
 	return func(o *Options) {
 		o.KeepAlive = duration
 	}
 }
 
-func WithWriteTimeout(timeout time.Duration) Option {
+func WithDeadline(dd network.Deadline) Option {
 	return func(o *Options) {
-		o.WriteTimeout = timeout
+		o.Deadline = dd
 	}
 }
 

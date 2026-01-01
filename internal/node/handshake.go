@@ -2,9 +2,6 @@ package node
 
 import (
 	"context"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
 	"errors"
 	"fmt"
 
@@ -21,41 +18,35 @@ var (
 )
 
 type handshake struct {
-	my      domain.EventHandshake
-	private crypto.Decrypter
-	logger  zerolog.Logger
+	my     domain.EventHandshake
+	logger zerolog.Logger
 }
 
-func newHandshake(bitSize int, meta domain.Device, port int, logger zerolog.Logger) (*handshake, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, bitSize)
-	if err != nil {
-		return nil, fmt.Errorf("generate key error: %w", err)
-	}
-
+func newHandshake(meta domain.Device, port int, logger zerolog.Logger) (*handshake, error) {
 	return &handshake{
 		my: domain.NewGreet(
 			domain.WithMetadata(meta),
 			domain.WithPort(uint16(port)),
 		),
-		private: privateKey,
-		logger:  logger,
+		logger: logger,
 	}, nil
 }
 
 func (h *handshake) exchange(ctx context.Context, conn *quic.Conn, incoming bool) (domain.EventHandshake, error) {
+	var empty domain.EventHandshake
 	stream, err := openOrAcceptStream(ctx, conn, incoming)
 	if err != nil {
-		return domain.EventHandshake{}, fmt.Errorf("openOrAcceptStream error: %w", err)
+		return empty, fmt.Errorf("openOrAcceptStream error: %w", err)
 	}
-	defer stream.Close()
+	defer func(stream *quic.Stream) { _ = stream.Close() }(stream)
 
 	if _, err := protoutil.EncodeWriter(h.my.Proto(), stream); err != nil {
-		return domain.EventHandshake{}, fmt.Errorf("send greeting: %w", err)
+		return empty, fmt.Errorf("send greeting: %w", err)
 	}
 
 	from, err := domain.NewGreetFromReader(stream)
 	if err != nil {
-		return domain.EventHandshake{}, fmt.Errorf("receive greeting: %w", err)
+		return empty, fmt.Errorf("receive greeting: %w", err)
 	}
 
 	ctxLog := ctxlog.Op(h.logger, "exchange")
@@ -69,7 +60,7 @@ func (h *handshake) exchange(ctx context.Context, conn *quic.Conn, incoming bool
 			Str("local", h.my.Payload.Version).
 			Str("remote", from.Payload.Version).
 			Msg("version mismatch")
-		return domain.EventHandshake{}, ErrVersionMismatch
+		return empty, ErrVersionMismatch
 	}
 
 	return from, nil

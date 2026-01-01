@@ -10,14 +10,14 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"net"
 	"strings"
 	"time"
 
+	"github.com/labi-le/belphegor/internal/channel"
+	"github.com/labi-le/belphegor/internal/peer"
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/id"
@@ -34,14 +34,14 @@ type cleanup func()
 type Node struct {
 	clipboard eventful.Eventful
 	peers     *Storage
-	channel   *Channel
+	channel   *channel.Channel
 	opts      Options
 }
 
 func (n *Node) Close() error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Close")
 
-	n.peers.Tap(func(id id.Unique, p *Peer) bool {
+	n.peers.Tap(func(id id.Unique, p *peer.Peer) bool {
 		if closeErr := p.Close(); closeErr != nil {
 			ctxLog.Warn().Err(closeErr).Str("peer", p.String()).Msg("failed to close peer")
 		}
@@ -59,7 +59,7 @@ func (n *Node) Close() error {
 func New(
 	clipboard eventful.Eventful,
 	peers *Storage,
-	channel *Channel,
+	channel *channel.Channel,
 	opts ...Option,
 ) *Node {
 	options := NewOptions(opts...)
@@ -95,7 +95,7 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	return nil
 }
 
-func (n *Node) addPeer(hisHand domain.Handshake, stream *quic.Conn, addr net.Addr) (*Peer, cleanup, error) {
+func (n *Node) addPeer(hisHand domain.Handshake, conn *quic.Conn) (*peer.Peer, cleanup, error) {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.addPeer")
 
 	metadata := hisHand.MetaData
@@ -104,31 +104,31 @@ func (n *Node) addPeer(hisHand domain.Handshake, stream *quic.Conn, addr net.Add
 		return nil, nil, ErrAlreadyConnected
 	}
 
-	peer := NewPeer(
-		WithConn(stream),
-		WithAddr(addr),
-		WithMetaData(metadata),
-		WithChannel(n.channel),
-		WithPeerLogger(n.opts.Logger),
+	pr := peer.New(
+		conn,
+		metadata,
+		n.channel,
+		n.opts.Logger,
+		n.opts.Deadline,
 	)
 
 	n.peers.Add(
 		metadata.UniqueID(),
-		peer,
+		pr,
 	)
 
 	cleanup := func() {
 		n.peers.Delete(metadata.UniqueID())
 		n.Notify("Node disconnected %s", metadata.Name)
-		_ = peer.Close()
+		_ = pr.Close()
 	}
 
-	return peer, cleanup, nil
+	return pr, cleanup, nil
 }
 
 // Start starts the node by listening for incoming connections on the specified public port
 func (n *Node) Start(ctx context.Context) error {
-	defer n.Close()
+	defer func(n *Node) { _ = n.Close() }(n)
 
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
 
@@ -136,7 +136,11 @@ func (n *Node) Start(ctx context.Context) error {
 	if err2 != nil {
 		return fmt.Errorf("generateTLSConfig: %w", err2)
 	}
-	l, err := quic.ListenAddr(fmt.Sprintf(":%d", n.opts.PublicPort), config, generateQuicConfig(n.opts.KeepAlive))
+	l, err := quic.ListenAddr(
+		fmt.Sprintf(":%d", n.opts.PublicPort),
+		config,
+		generateQuicConfig(n.opts.KeepAlive),
+	)
 	if err != nil {
 		ctxLog.Err(err).Msg("failed to listen")
 		return fmt.Errorf("node.Start: %w", err)
@@ -195,7 +199,7 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 		Str("node", n.Metadata().String()).
 		Logger()
 
-	hs, cipherErr := newHandshake(n.opts.BitSize, n.Metadata(), n.opts.PublicPort, n.opts.Logger)
+	hs, cipherErr := newHandshake(n.Metadata(), n.opts.PublicPort, n.opts.Logger)
 	if cipherErr != nil {
 		return cipherErr
 	}
@@ -209,7 +213,7 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 		return greetErr
 	}
 
-	peer, cleanup, addErr := n.addPeer(hisHand.Payload, conn, conn.RemoteAddr())
+	pr, cleanup, addErr := n.addPeer(hisHand.Payload, conn)
 	if addErr != nil {
 		if errors.Is(addErr, ErrAlreadyConnected) {
 			return nil
@@ -221,11 +225,11 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 	}
 	defer cleanup()
 
-	n.Notify("connected to %s", peer.MetaData().Name)
+	n.Notify("connected to %s", pr.MetaData().Name)
 
 	ctxLog.Info().Msg("connected")
 
-	return peer.Receive(ctx)
+	return pr.Receive(ctx)
 }
 
 func openOrAcceptStream(ctx context.Context, conn *quic.Conn, accept bool) (*quic.Stream, error) {
@@ -235,15 +239,15 @@ func openOrAcceptStream(ctx context.Context, conn *quic.Conn, accept bool) (*qui
 	return conn.AcceptStream(ctx)
 }
 
-func (n *Node) Broadcast(msg domain.EventMessage) {
+func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Broadcast").
 		With().
 		Int64("msg_id", msg.Payload.ID).
 		Logger()
 
 	dst, _ := protoutil.EncodeBytes(msg.Proto())
-	n.peers.Tap(func(id id.Unique, peer *Peer) bool {
-		ctx := ctxLog.
+	n.peers.Tap(func(id id.Unique, peer *peer.Peer) bool {
+		ctxLog := ctxLog.
 			With().
 			Str("node", peer.String()).
 			Logger()
@@ -252,22 +256,22 @@ func (n *Node) Broadcast(msg domain.EventMessage) {
 			return true
 		}
 
-		_, encodeErr := peer.Write(dst)
+		_, encodeErr := peer.WriteContext(ctx, dst)
 		if encodeErr != nil {
 			if errors.Is(encodeErr, net.ErrClosed) ||
 				strings.Contains(encodeErr.Error(), "bad file descriptor") ||
 				strings.Contains(encodeErr.Error(), "use of closed network connection") {
 
-				ctx.Trace().Msg("connection closed during broadcast, removing peer")
+				ctxLog.Trace().Msg("connection closed during broadcast, removing peer")
 			} else {
-				ctx.Trace().
+				ctxLog.Trace().
 					AnErr("peer.Write", encodeErr).
 					Msg("failed to write message")
 			}
 
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
-		ctx.Trace().Msg("sent")
+		ctxLog.Trace().Msg("sent")
 
 		return true
 	})
@@ -325,7 +329,7 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 				}
 			}
 
-			go n.Broadcast(msg)
+			go n.Broadcast(ctx, msg)
 		}
 	}
 }
@@ -336,21 +340,6 @@ func (n *Node) Notify(message string, v ...any) {
 
 func (n *Node) Metadata() domain.Device {
 	return n.opts.Metadata
-}
-
-func ReceiveMessage(reader io.Reader, data domain.Device) (domain.EventMessage, error) {
-	var event proto.Event
-	if decodeEnc := protoutil.DecodeReader(reader, &event); decodeEnc != nil {
-		return domain.EventMessage{}, decodeEnc
-	}
-
-	payload, ok := event.Payload.(*proto.Event_Message)
-	if ok == false {
-		return domain.EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, event.Payload)
-	}
-
-	return domain.FromProto(data.ID, &event, payload), nil
-
 }
 
 func generateTLSConfig() (*tls.Config, error) {

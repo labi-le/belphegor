@@ -21,6 +21,16 @@ func (b BeepDecorator) Notify(message string, v ...any) {
 	}
 }
 
+func New(enable bool) Notifier {
+	if enable {
+		return BeepDecorator{
+			Title: "Belphegor",
+		}
+	}
+
+	return new(NullNotifier)
+}
+
 type NullNotifier struct{}
 
 func (n NullNotifier) Notify(string, ...any) {}
