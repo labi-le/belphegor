@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/types/domain"
@@ -74,6 +75,21 @@ func (p *Peer) Receive(ctx context.Context) error {
 		Info().
 		Str("node", p.String()).
 		Msg("disconnected")
+
+	go func() {
+		for range time.After(30 * time.Second) {
+			stats := p.conn.ConnectionStats()
+			ctxLog.Info().
+				Int("packets_sent", int(stats.PacketsSent)).
+				Int("packet_lost", int(stats.PacketsLost)).
+				Int("packet_received", int(stats.PacketsReceived)).
+				Int("bytes_lost", int(stats.BytesLost)).
+				Int("bytes_sent", int(stats.BytesSent)).
+				Dur("min_rtt", stats.MinRTT).
+				Dur("latest_rtt", stats.LatestRTT).
+				Send()
+		}
+	}()
 
 	for {
 		select {

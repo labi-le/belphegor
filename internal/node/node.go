@@ -471,10 +471,5 @@ func (n *Node) genKey() (crypto.PrivateKey, crypto.PublicKey, error) {
 func generateQuicConfig(keepAlive time.Duration) *quic.Config {
 	return &quic.Config{
 		KeepAlivePeriod: keepAlive,
-		MaxIdleTimeout:  30 * time.Second,
-
-		EnableDatagrams: true,
-
-		DisablePathMTUDiscovery: true,
 	}
 }
