@@ -7,7 +7,7 @@ option go_package = "internal/types/proto";
 // Message represents clipboard data and its associated metadata
 message Message {
   int64 ID = 1;
-  bytes Data = 2;
+  int64 ContentLength = 2;
   Mime MimeType = 3;
 }
 

@@ -76,9 +76,9 @@ func (m Message) Duplicate(msg Message) bool {
 
 func (m Message) Proto() *proto.Message {
 	return &proto.Message{
-		Data:     m.Data,
-		MimeType: proto.Mime(m.Mime),
-		ID:       id.New(),
+		MimeType:      proto.Mime(m.Mime),
+		ID:            id.New(),
+		ContentLength: int64(len(m.Data)),
 	}
 }
 
@@ -90,13 +90,13 @@ func FromUpdate(update eventful.Update) Message {
 	}
 }
 
-func FromProto(from id.Unique, proto *proto.Event, payload *proto.Event_Message) EventMessage {
+func FromProto(from id.Unique, proto *proto.Event, payload *proto.Event_Message, src []byte) EventMessage {
 	return EventMessage{
 		From:    from,
 		Created: proto.GetCreated().AsTime(),
 		Payload: Message{
 			ID:   payload.Message.GetID(),
-			Data: payload.Message.GetData(),
+			Data: src,
 			Mime: mime.Type(payload.Message.GetMimeType()),
 		},
 	}

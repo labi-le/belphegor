@@ -252,7 +252,7 @@ func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
 			return true
 		}
 
-		_, encodeErr := peer.WriteContext(ctx, dst)
+		encodeErr := peer.WriteContext(ctx, dst, msg.Payload.Data)
 		if encodeErr != nil {
 			if errors.Is(encodeErr, net.ErrClosed) ||
 				strings.Contains(encodeErr.Error(), "bad file descriptor") ||

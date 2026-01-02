@@ -108,26 +108,7 @@ sri-hash:
 
 .PHONY: dump
 dump:
-	@{ \
-		echo "=== START PROJECT CODE DUMP ==="; \
-		echo ""; \
-		echo "=== PROJECT TREE ==="; \
-		nix run nixpkgs#tree -- . || echo "(tree failed)"; \
-		echo ""; \
-		find internal -type f \( \
-			-name "*.go" -o \
-			-name "*.yml" -o \
-			-name "*.yaml" -o \
-			-name "*.proto" -o \
-			-name "*.sum" -o \
-			-name "*.nix" -o \
-			-name "Makefile" \
-		\) | sort | while read file; do \
-			echo "=== FILE: $$file ==="; \
-			cat "$$file"; \
-			echo ""; \
-		done; \
-	} | wl-copy
+	./generate_context.sh internal pkg/protoutil/ -e internal/types/proto | wl-copy
 
 .PHONY: dist
 dist:

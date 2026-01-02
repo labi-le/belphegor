@@ -120,26 +120,30 @@ func (p *Peer) Receive(ctx context.Context) error {
 	}
 }
 
-func (p *Peer) WriteContext(ctx context.Context, data []byte) (int, error) {
+func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
 	stream, err := p.conn.OpenStreamSync(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("open stream: %w", err)
+		return fmt.Errorf("open stream: %w", err)
 	}
 	defer func(stream *quic.Stream) { _ = stream.Close() }(stream)
 
 	if err := network.SetDeadline(stream, p.deadline); err != nil {
-		return 0, err
+		return err
 	}
 
-	if _, err := stream.Write(data); err != nil {
-		return 0, fmt.Errorf("write: %w", err)
+	if _, err := stream.Write(meta); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	if _, err := stream.Write(raw); err != nil {
+		return fmt.Errorf("write: %w", err)
 	}
 
 	if err := stream.Close(); err != nil {
-		return 0, fmt.Errorf("close stream: %w", err)
+		return fmt.Errorf("close stream: %w", err)
 	}
 
-	return 0, nil
+	return nil
 }
 
 func (p *Peer) receiveMessage(ctx context.Context) (domain.EventMessage, error) {
@@ -166,5 +170,10 @@ func (p *Peer) receiveMessage(ctx context.Context) (domain.EventMessage, error) 
 		return domain.EventMessage{}, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, event.GetPayload())
 	}
 
-	return domain.FromProto(p.MetaData().ID, &event, payload), nil
+	data := make([]byte, payload.Message.GetContentLength())
+	if _, err := io.ReadFull(stream, data); err != nil {
+		return empty, fmt.Errorf("read payload: %w", err)
+	}
+
+	return domain.FromProto(p.MetaData().ID, &event, payload, data), nil
 }
