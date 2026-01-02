@@ -122,6 +122,11 @@ func isConnClosed(err error) bool {
 		return true
 	}
 
+	var err3 *quic.IdleTimeoutError
+	if errors.As(err, &err3) {
+		return true
+	}
+
 	var opErr *net.OpError
 	return errors.As(err, &opErr) || errors.Is(err, io.EOF)
 }

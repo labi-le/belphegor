@@ -51,16 +51,14 @@ func (s *sourceListener) Send(_ string, f *os.File) {
 					Int("total", len(s.data)).
 					Msg("reader closed pipe early (normal)")
 			} else {
-				ctxLog.Error().Err(err).Int("written", total).Msg("failed to write clipboard data")
+				ctxLog.Trace().Err(err).Int("written", total).Msg("failed to write clipboard data")
 			}
 			break
 		}
 		total += n
 	}
 
-	if err := f.Close(); err != nil {
-		ctxLog.Error().Err(err).Msg("failed to close file")
-	}
+	_ = f.Close()
 }
 
 func (s *sourceListener) Cancelled() {}
