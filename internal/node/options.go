@@ -18,6 +18,7 @@ type Options struct {
 	Discovering DiscoverOptions
 	Metadata    domain.Device
 	Logger      zerolog.Logger
+	Secret      string
 }
 
 type DiscoverOptions struct {
@@ -92,5 +93,11 @@ func WithMetadata(opt domain.Device) Option {
 func WithLogger(logger zerolog.Logger) Option {
 	return func(o *Options) {
 		o.Logger = logger
+	}
+}
+
+func WithSecret(secret string) Option {
+	return func(options *Options) {
+		options.Secret = secret
 	}
 }

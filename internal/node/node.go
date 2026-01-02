@@ -1,10 +1,14 @@
 package node
 
 import (
+	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -27,6 +31,10 @@ import (
 
 var (
 	ErrAlreadyConnected = errors.New("already connected")
+
+	ErrLocalSecretMissing = errors.New("local node has no secret configured")
+	ErrPeerSecretMissing  = errors.New("peer has no secret configured")
+	ErrSecretMismatch     = errors.New("different secrets configured")
 )
 
 type cleanup func()
@@ -74,16 +82,29 @@ func New(
 
 // ConnectTo establishes a TCP connection to a remote clipboard at the specified address
 func (n *Node) ConnectTo(ctx context.Context, addr string) error {
-	ctxLog := ctxlog.Op(n.opts.Logger, "node.ConnectTo")
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.ConnectTo").
+		With().
+		Str("addr", addr).
+		Logger()
 
-	config, err2 := generateTLSConfig()
+	config, err2 := n.generateTLSConfig()
 	if err2 != nil {
 		return fmt.Errorf("generateTLSConfig: %w", err2)
 	}
 
 	conn, err := quic.DialAddr(ctx, addr, config, generateQuicConfig(n.opts.KeepAlive))
 	if err != nil {
-		ctxLog.Error().AnErr("net.Dial", err).Msg("failed to handle connection")
+		switch {
+		case errors.Is(err, ErrLocalSecretMissing):
+			ctxLog.Warn().Msg("i have no secrets to accept connection")
+			return nil
+		case errors.Is(err, ErrPeerSecretMissing):
+			ctxLog.Trace().Msg("node that connects to us has no secrets")
+			return nil
+		case errors.Is(err, ErrSecretMismatch):
+			ctxLog.Warn().Msg("we have different secrets")
+			return nil
+		}
 		return err
 	}
 
@@ -132,7 +153,7 @@ func (n *Node) Start(ctx context.Context) error {
 
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
 
-	config, err2 := generateTLSConfig()
+	config, err2 := n.generateTLSConfig()
 	if err2 != nil {
 		return fmt.Errorf("generateTLSConfig: %w", err2)
 	}
@@ -339,23 +360,16 @@ func (n *Node) Metadata() domain.Device {
 }
 
 //nolint:mnd,gosec //shut up
-func generateTLSConfig() (*tls.Config, error) {
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, fmt.Errorf("ecdsa.GenerateKey: %w", err)
-	}
-
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+func (n *Node) generateTLSConfig() (*tls.Config, error) {
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
 		return nil, fmt.Errorf("rand.Int: %w", err)
-
 	}
 
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(24 * time.Hour),
+		NotAfter:     time.Now().Add(24 * time.Hour * 365 * 10),
 		IPAddresses: []net.IP{
 			net.ParseIP("127.0.0.1"), // localhost
 			net.ParseIP("0.0.0.0"),   // any
@@ -365,32 +379,86 @@ func generateTLSConfig() (*tls.Config, error) {
 		},
 	}
 
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		return nil, fmt.Errorf("509.CreateCertificate: %w", err)
+	privateKey, publicKey, err2 := n.genKey()
+	if err2 != nil {
+		return nil, err2
+	}
 
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, publicKey, privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("x509.CreateCertificate: %w", err)
 	}
 
 	privBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("x509.MarshalPKCS8PrivateKey: %w", err)
-
 	}
+
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 
 	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("tls.X509KeyPair: %w", err)
-
 	}
 
-	return &tls.Config{
+	conf := &tls.Config{
 		Certificates:       []tls.Certificate{tlsCert},
 		NextProtos:         []string{"belphegor"},
 		InsecureSkipVerify: true,
 		MinVersion:         tls.VersionTLS13,
-	}, nil
+	}
+
+	conf.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+		if len(rawCerts) == 0 {
+			return ErrPeerSecretMissing
+		}
+
+		peerCert, pErr := x509.ParseCertificate(rawCerts[0])
+		if pErr != nil {
+			return fmt.Errorf("failed to parse peer cert: %w", pErr)
+		}
+
+		myCert, mErr := x509.ParseCertificate(certDER)
+		if mErr != nil {
+			return fmt.Errorf("failed to parse my cert: %w", mErr)
+		}
+
+		myPub, myOk := myCert.PublicKey.(ed25519.PublicKey)
+		peerPub, peerOk := peerCert.PublicKey.(ed25519.PublicKey)
+
+		if myOk != peerOk {
+			if myOk {
+				return ErrPeerSecretMissing
+			}
+			return ErrLocalSecretMissing
+		}
+
+		if !myOk && !peerOk {
+			return nil
+		}
+
+		if !bytes.Equal(myPub, peerPub) {
+			return ErrSecretMismatch
+		}
+
+		return nil
+	}
+
+	return conf, nil
+}
+func (n *Node) genKey() (crypto.PrivateKey, crypto.PublicKey, error) {
+	if n.opts.Secret != "" {
+		seed := sha256.Sum256([]byte(n.opts.Secret))
+		pk := ed25519.NewKeyFromSeed(seed[:])
+		return pk, pk.Public(), nil
+	}
+
+	ecdsaPriv, eErr := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if eErr != nil {
+		return nil, nil, fmt.Errorf("ecdsa.GenerateKey: %w", eErr)
+	}
+	return ecdsaPriv, ecdsaPriv.Public(), nil
 }
 
 func generateQuicConfig(keepAlive time.Duration) *quic.Config {

@@ -31,6 +31,7 @@ var (
 
 var (
 	addressIP   string
+	secret      string
 	verbose     bool
 	showVersion bool
 	showHelp    bool
@@ -60,6 +61,7 @@ func init() {
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
 	flag.BoolVar(&hidden, "hidden", false, "Hide console window (for windows user)")
+	flag.StringVarP(&secret, "secret", "s", "", "Key to connect between node (empty=all may connect)")
 
 	flag.Parse()
 
@@ -108,6 +110,7 @@ func main() {
 			Delay:    discoverDelay,
 			MaxPeers: maxPeers,
 		}),
+		node.WithSecret(secret),
 	}, options...)
 
 	nd := node.New(
