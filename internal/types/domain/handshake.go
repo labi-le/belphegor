@@ -31,15 +31,18 @@ func NewGreet(opts ...GreetOption) EventHandshake {
 }
 
 func GreetFromProto(m *proto.Event) EventHandshake {
-	hs := m.Payload.(*proto.Event_Handshake).Handshake
+	ev, ok := m.GetPayload().(*proto.Event_Handshake)
+	if !ok {
+		return EventHandshake{}
+	}
 
 	return EventHandshake{
 		Created: m.GetCreated().AsTime(),
 		Payload: Handshake{
-			Version:  hs.GetVersion(),
-			MetaData: MetaDataFromProto(hs.GetDevice()),
-			Port:     hs.GetPort(),
-			Provider: ClipboardProvider(hs.GetProvider()),
+			Version:  ev.Handshake.GetVersion(),
+			MetaData: MetaDataFromProto(ev.Handshake.GetDevice()),
+			Port:     ev.Handshake.GetPort(),
+			Provider: ClipboardProvider(ev.Handshake.GetProvider()),
 		},
 	}
 }

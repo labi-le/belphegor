@@ -251,9 +251,10 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 
 func openOrAcceptStream(ctx context.Context, conn *quic.Conn, accept bool) (*quic.Stream, error) {
 	if accept {
-		return conn.OpenStreamSync(ctx)
+		return conn.AcceptStream(ctx)
 	}
-	return conn.AcceptStream(ctx)
+
+	return conn.OpenStreamSync(ctx)
 }
 
 func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
@@ -470,5 +471,10 @@ func (n *Node) genKey() (crypto.PrivateKey, crypto.PublicKey, error) {
 func generateQuicConfig(keepAlive time.Duration) *quic.Config {
 	return &quic.Config{
 		KeepAlivePeriod: keepAlive,
+		MaxIdleTimeout:  30 * time.Second,
+
+		EnableDatagrams: true,
+
+		DisablePathMTUDiscovery: true,
 	}
 }

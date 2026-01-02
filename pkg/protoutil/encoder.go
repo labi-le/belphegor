@@ -15,6 +15,7 @@ const (
 
 func EncodeBytes(src proto.Message) ([]byte, error) {
 	buf := byteslice.Get(DefaultBufferSize)
+	defer byteslice.Put(buf)
 
 	target := buf[:Length]
 
@@ -26,10 +27,6 @@ func EncodeBytes(src proto.Message) ([]byte, error) {
 	if err != nil {
 		byteslice.Put(buf)
 		return nil, err
-	}
-
-	if cap(target) > cap(buf) {
-		byteslice.Put(buf)
 	}
 
 	msgLen := len(target) - Length
