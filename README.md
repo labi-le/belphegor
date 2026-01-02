@@ -1,13 +1,13 @@
 # belphegor
 
-Belphegor is a clipboard manager that allows you to share your clipboard with other devices on the network.\
+Belphegor is a clipboard manager that allows you to share your clipboard with other devices on the network\
 <img src="logo.png" width="500">
 ___
 
 ### Features
 
-- Hybrid encryption (RSA-2048*, AES-256-GCM) (bit size configurable)
-- Peer to peer
+- Encryption
+- P2P
 - Discovering local nodes
 - Image sharing (`wayland` <—> `wayland`, `wayland` <—> `windows`)
 
@@ -16,11 +16,17 @@ ___
 ### Dependencies
 
 - linux:
-    * wl-clipboard (wayland) | xclip or xsel (x11)  
+  - wayland
+    * composer implements `ext_data_control_v1`
+    * wl-clipboard
+  - x11
+    * xclip
+    * xsel
+
 - macos:
-    * pbpaste
+  * pbpaste (i have no mac for testing)
 - windows:
-    * nothing
+  * nothing (untested windows < 10)
 
 ### Installation
 
@@ -58,7 +64,7 @@ ___
 
 #### Build from source
 
-- Go 1.22
+- Go 1.25.5
 - git
 - makefile
 
@@ -72,20 +78,20 @@ sudo make install
 
 ```
 Usage of belphegor:
-      --bit_size int              RSA key bit size (default 2048)
   -c, --connect string            Address in ip:port format to connect to the node
-  -d, --debug                     Show debug logs
       --discover_delay duration   Delay between node discovery (default 5m0s)
   -h, --help                      Show help
       --hidden                    Hide console window (for windows user)
       --keep_alive duration       Interval for checking connections between nodes (default 1m0s)
-      --max_peers int             Maximum number of peers to connect to (default 5)
+      --max_peers int             Maximum number of discovered peers (default 5)
       --node_discover             Find local nodes on the network and connect to them (default true)
       --notify                    Enable notifications (default true)
   -p, --port int                  Port to use. Default: random
-      --scan_delay duration       Delay between scan local clipboard (default 2s)
+      --read_timeout duration     Write timeout (default 1m0s)
+  -s, --secret string             Key to connect between node (empty=all may connect)
+      --verbose                   Verbose logs
   -v, --version                   Show version
-      --write_timeout duration    Write timeout (default 5s)
+      --write_timeout duration    Write timeout (default 1m0s)
 ```
 
 
@@ -103,9 +109,4 @@ Usage of belphegor:
 
 [x] Add flake
 
-[ ] Debug image sharing for xclip, xsel, pbpaste
-
-[ ] Use wayland/x11 ipc clients instead of using utilities to monitor the clipboard
-
-[ ] Add disable cipher option (maybe)
-
+[] Use x11 ipc client instead of using utilities to monitor the clipboard
