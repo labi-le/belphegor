@@ -121,15 +121,14 @@ func (p *Peer) Receive(ctx context.Context) error {
 }
 
 func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
+	ctx, cancel := context.WithTimeout(ctx, p.deadline.Write)
+	defer cancel()
+
 	stream, err := p.conn.OpenStreamSync(ctx)
 	if err != nil {
 		return fmt.Errorf("open stream: %w", err)
 	}
 	defer func(stream *quic.Stream) { _ = stream.Close() }(stream)
-
-	if err := network.SetDeadline(stream, p.deadline); err != nil {
-		return err
-	}
 
 	if _, err := stream.Write(meta); err != nil {
 		return fmt.Errorf("write: %w", err)
@@ -147,6 +146,9 @@ func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
 }
 
 func (p *Peer) receiveMessage(ctx context.Context) (domain.EventMessage, error) {
+	ctx, cancel := context.WithTimeout(ctx, p.deadline.Read)
+	defer cancel()
+
 	var empty domain.EventMessage
 
 	stream, err := p.Conn().AcceptStream(ctx)
@@ -155,10 +157,6 @@ func (p *Peer) receiveMessage(ctx context.Context) (domain.EventMessage, error) 
 	}
 
 	defer func(stream *quic.Stream) { _ = stream.Close() }(stream)
-
-	if err := network.SetDeadline(stream, p.deadline); err != nil {
-		return domain.EventMessage{}, err
-	}
 
 	var event proto.Event
 	if decodeEnc := protoutil.DecodeReader(stream, &event); decodeEnc != nil {

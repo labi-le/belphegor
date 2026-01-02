@@ -34,8 +34,11 @@ type Option func(*Options)
 var defaultOptions = Options{
 	PublicPort: netstack.RandomPort(),
 	KeepAlive:  time.Minute,
-	Deadline:   network.Deadline{},
-	Notifier:   new(notification.BeepDecorator),
+	Deadline: network.Deadline{
+		Read:  5 * time.Second,
+		Write: 5 * time.Second,
+	},
+	Notifier: new(notification.BeepDecorator),
 	Discovering: DiscoverOptions{
 		Enable:   true,
 		Delay:    5 * time.Minute,
