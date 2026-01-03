@@ -4,7 +4,7 @@ package wlr
 
 import (
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/labi-le/belphegor/pkg/mime"
@@ -29,8 +29,8 @@ type reader struct {
 	mimeTypes    []string
 	dataChan     chan<- ClipboardData
 
-	mu                  sync.Mutex
-	ignoreNextSelection bool
+	ignoreNextSelection atomic.Bool
+	currentPipe         atomic.Pointer[pipe.Pipe]
 }
 
 func newReader(preset *preset, dataChan chan<- ClipboardData, log zerolog.Logger) *reader {
@@ -41,15 +41,28 @@ func newReader(preset *preset, dataChan chan<- ClipboardData, log zerolog.Logger
 	}
 }
 
-func (r *reader) IgnoreNextSelection() {
-	r.mu.Lock()
-	r.ignoreNextSelection = true
-	r.mu.Unlock()
+func (r *reader) reset() {
+	if old := r.currentPipe.Swap(nil); old != nil {
+		_ = old.Close()
+	}
+}
 
+func (r *reader) commit(p *pipe.Pipe) {
+	r.currentPipe.Store(p)
+}
+
+func (r *reader) valid(p *pipe.Pipe) bool {
+	return r.currentPipe.Load() == p
+}
+
+func (r *reader) release(p *pipe.Pipe) {
+	r.currentPipe.CompareAndSwap(p, nil)
+}
+
+func (r *reader) IgnoreNextSelection() {
+	r.ignoreNextSelection.Store(true)
 	time.AfterFunc(debounce, func() {
-		r.mu.Lock()
-		r.ignoreNextSelection = false
-		r.mu.Unlock()
+		r.ignoreNextSelection.Store(false)
 	})
 }
 
@@ -57,29 +70,23 @@ func (r *reader) DataOffer(id *controlOffer) {
 	if id == nil {
 		return
 	}
-
 	if r.currentOffer != nil {
 		r.currentOffer.Destroy()
 	}
-
 	r.currentOffer = id
 	r.mimeTypes = nil
 	id.Listener = r
 }
 
 func (r *reader) Selection(offer *controlOffer) {
+	r.reset()
+
 	if offer == nil {
-		r.logger.Trace().
-			Bool("offer_nil", true).
-			Msg("selection cleared (nil offer)")
+		r.logger.Trace().Msg("selection cleared (nil offer)")
 		return
 	}
 
-	r.mu.Lock()
-	shouldIgnore := r.ignoreNextSelection
-	r.mu.Unlock()
-
-	if shouldIgnore {
+	if r.ignoreNextSelection.Load() {
 		return
 	}
 
@@ -88,7 +95,7 @@ func (r *reader) Selection(offer *controlOffer) {
 		r.logger.Debug().
 			Uint32("offer_id", offer.ID()).
 			Strs("available_mimes", r.mimeTypes).
-			Msg("no supported MIME type available")
+			Msg("no supported MIME type")
 		return
 	}
 
@@ -99,11 +106,7 @@ func (r *reader) Selection(offer *controlOffer) {
 
 	p, err := pipe.New()
 	if err != nil {
-		r.logger.Error().
-			Uint32("offer_id", offer.ID()).
-			Str("mime", selectedMime).
-			Err(err).
-			Msg("failed to create pipe")
+		r.logger.Error().Err(err).Msg("failed to create pipe")
 		return
 	}
 
@@ -111,13 +114,12 @@ func (r *reader) Selection(offer *controlOffer) {
 	_ = p.Fd().Close()
 
 	if err := r.client.RoundTrip(); err != nil {
-		r.logger.Error().
-			Uint32("offer_id", offer.ID()).
-			Str("mime", selectedMime).
-			Err(err).
-			Msg("round trip failed")
+		r.logger.Error().Err(err).Msg("round trip failed")
+		_ = p.Close()
+		return
 	}
 
+	r.commit(p)
 	go r.readPipeData(selectedMime, p)
 }
 
@@ -126,76 +128,51 @@ func (r *reader) selectBestMimeType() string {
 		if mime.IsSupported(availMime) {
 			return availMime
 		}
-
 		if idx := strings.Index(availMime, ";"); idx != -1 {
-			base := availMime[:idx]
-			if mime.IsSupported(base) {
+			if mime.IsSupported(availMime[:idx]) {
 				return availMime
 			}
 		}
 	}
-
 	return ""
 }
 
-func (r *reader) readPipeData(mimeType string, p pipe.RWPipe) {
+func (r *reader) readPipeData(mimeType string, p *pipe.Pipe) {
 	defer func() {
-		if p != nil {
-			_ = p.Close()
-		}
+		r.release(p)
+		_ = p.Close()
 	}()
 
-	readFd := p.ReadFd().Fd()
-	r.logger.Trace().
-		Int("fd", int(readFd)).
-		Str("mime", mimeType).
-		Msg("starting to read from pipe")
+	r.logger.Trace().Msg("starting to read from pipe")
 
-	type result struct {
-		data []byte
-		err  error
-		mime string
-	}
-
-	resultChan := make(chan result, 1)
-
-	go func() {
-		data, err := pipe.FromPipe(readFd)
-		resultChan <- result{data: data, err: err, mime: mimeType}
-	}()
-
-	res := <-resultChan
-	if res.err != nil {
-		errStr := res.err.Error()
-		if strings.Contains(errStr, "bad file descriptor") ||
-			strings.Contains(errStr, "poll error") {
-			r.logger.Trace().
-				Int("fd", int(readFd)).
-				Str("mime", mimeType).
-				Str("reason", errStr).
-				Msg("offer was cancelled")
+	data, err := pipe.FromPipe(p.ReadFd().Fd())
+	if err != nil {
+		if isExpectedError(err) {
+			r.logger.Trace().Msg("read cancelled (pipe closed)")
 		} else {
-			r.logger.Error().
-				Int("fd", int(readFd)).
-				Str("mime", mimeType).
-				Err(res.err).
-				Msg("failed to read from pipe")
+			r.logger.Error().Err(err).Msg("failed to read")
 		}
 		return
 	}
 
-	if len(res.data) > 0 {
-		r.logger.Trace().
-			Int("fd", int(readFd)).
-			Int("bytes_read", len(res.data)).
-			Str("mime", mimeType).
-			Msg("read data from pipe")
-
-		r.dataChan <- ClipboardData{
-			Data:     res.data,
-			MimeType: mime.AsType(mimeType),
-		}
+	if !r.valid(p) {
+		r.logger.Trace().Msg("dropping stale data")
+		return
 	}
+
+	r.logger.Trace().Int("bytes", len(data)).Msg("read data")
+	r.dataChan <- ClipboardData{
+		Data:     data,
+		MimeType: mime.AsType(mimeType),
+	}
+}
+
+func isExpectedError(err error) bool {
+	s := err.Error()
+	return strings.Contains(s, "bad file descriptor") ||
+		strings.Contains(s, "poll error") ||
+		strings.Contains(s, "file already closed") ||
+		strings.Contains(s, "use of closed network connection")
 }
 
 func (r *reader) Finished() {}
@@ -207,9 +184,9 @@ func (r *reader) Offer(mimeType string) {
 }
 
 func (r *reader) Close() error {
+	r.reset()
 	if r.currentOffer != nil {
 		r.currentOffer.Destroy()
 	}
-
 	return nil
 }

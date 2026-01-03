@@ -274,6 +274,8 @@ func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
 			return true
 		}
 
+		ctxLog.Trace().Msg("sent")
+
 		encodeErr := peer.WriteContext(ctx, dst, msg.Payload.Data)
 		if encodeErr != nil {
 			if errors.Is(encodeErr, net.ErrClosed) ||
@@ -289,7 +291,6 @@ func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
 
 			n.peers.Delete(peer.MetaData().UniqueID())
 		}
-		ctxLog.Trace().Msg("sent")
 
 		return true
 	})
@@ -347,7 +348,7 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 				}
 			}
 
-			go n.Broadcast(ctx, msg)
+			n.Broadcast(ctx, msg)
 		}
 	}
 }

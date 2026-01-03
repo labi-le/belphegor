@@ -28,8 +28,9 @@ MINOR := $(shell echo $(CURRENT_VERSION) | cut -d. -f2)
 PATCH := $(shell echo $(CURRENT_VERSION) | cut -d. -f3)
 
 .PHONY: run
+#QUIC_GO_LOG_LEVEL=DEBUG
 run:
-	QUIC_GO_LOG_LEVEL=DEBUG WAYLAND_DEBUG=0 go run -tags debug $(MAIN_PATH) --node_discover --verbose -p 7777
+	WAYLAND_DEBUG=0 go run -tags debug $(MAIN_PATH) --node_discover --verbose -p 7777
 
 .PHONY: build
 build: clean

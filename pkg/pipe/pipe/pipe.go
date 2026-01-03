@@ -27,49 +27,54 @@ type RWPipe interface {
 	Close() error
 }
 
-// Reusable represents a pipe for reading clipboard data from Wayland
-type Reusable struct {
+// Pipe represents a pipe for reading clipboard data from Wayland
+type Pipe struct {
 	rfd *os.File
 	wfd *os.File
 }
 
-func New() (*Reusable, error) {
+func New() (*Pipe, error) {
 	r, w, err := os.Pipe()
 	if err != nil {
 		return nil, errors.Join(ErrFailedCreate, err)
 	}
 
-	return &Reusable{
+	return &Pipe{
 		rfd: r,
 		wfd: w,
 	}, nil
 }
 
-// Close closes only the read end. Write end is managed by Wayland compositor
-func (p *Reusable) Close() error {
-	return p.rfd.Close()
+func (p *Pipe) Close() error {
+	_ = p.wfd.Close()
+	if err := p.rfd.Close(); err != nil {
+		return fmt.Errorf("pipe close: %w", err)
+	}
+
+	return nil
 }
 
-func (p *Reusable) Fd() *os.File {
+func (p *Pipe) Fd() *os.File {
 	return p.wfd
 }
 
-func (p *Reusable) ReadFd() *os.File {
+func (p *Pipe) ReadFd() *os.File {
 	return p.rfd
 }
+
+const (
+	readChunkSize = 64 * 1024
+	readTimeout   = 200 * time.Millisecond
+	dataDelay     = 10 * time.Millisecond
+)
 
 func FromPipe(pipe uintptr) ([]byte, error) {
 	if pipe == 0 {
 		return nil, ErrNilPipe
 	}
 
-	const (
-		readChunkSize = 64 * 1024
-		readTimeout   = 100 * time.Millisecond
-		dataDelay     = 10 * time.Millisecond
-	)
-
 	var dest bytes.Buffer
+	dest.Grow(readChunkSize)
 
 	readBuf := make([]byte, readChunkSize)
 

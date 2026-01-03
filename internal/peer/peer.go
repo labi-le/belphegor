@@ -79,7 +79,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 	go func() {
 		for range time.After(30 * time.Second) {
 			stats := p.conn.ConnectionStats()
-			ctxLog.Info().
+			ctxLog.Trace().
 				Int("packets_sent", int(stats.PacketsSent)).
 				Int("packet_lost", int(stats.PacketsLost)).
 				Int("packet_received", int(stats.PacketsReceived)).

@@ -38,6 +38,7 @@ get_syntax() {
         *Makefile) echo "makefile" ;;
         *.php) echo "php" ;;
         *.c|*.h) echo "c" ;;
+        *.rs) echo "rs" ;;
         *.sum) echo "text" ;;
         *) echo "text" ;;
     esac
@@ -97,6 +98,7 @@ print_files() {
         -name "*.php" -o \
         -name "*.c" -o \
         -name "*.h" -o \
+        -name "*.rs" -o \
         -name "*.yaml" -o \
         -name "*.proto" -o \
         -name "*.sum" -o \
