@@ -3,7 +3,6 @@ package null
 import (
 	"context"
 
-	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 )
 
@@ -40,8 +39,4 @@ func (n *Clipboard) Write(p []byte) (int, error) {
 	n.data <- p
 
 	return len(n.data), nil
-}
-
-func (n *Clipboard) Name() string {
-	return clipboard.NullClipboard
 }

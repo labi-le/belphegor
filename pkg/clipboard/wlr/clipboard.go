@@ -1,5 +1,3 @@
-// FILE: pkg/clipboard/wlr/clipboard.go
-
 //go:build unix
 
 package wlr

@@ -77,7 +77,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 		Msg("disconnected")
 
 	go func() {
-		for range time.Tick(1 * time.Minute) {
+		for range time.Tick(3 * time.Minute) {
 			stats := p.conn.ConnectionStats()
 			ctxLog.Trace().
 				Int("packets_sent", int(stats.PacketsSent)).

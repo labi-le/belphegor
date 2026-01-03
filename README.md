@@ -106,4 +106,4 @@ Usage of belphegor:
 
 [x] Add flake
 
-[] Use x11 ipc client instead of using utilities to monitor the clipboard
+[] Add x11 support

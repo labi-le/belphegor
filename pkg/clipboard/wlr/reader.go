@@ -113,12 +113,6 @@ func (r *reader) Selection(offer *controlOffer) {
 	offer.Receive(selectedMime, p.Fd())
 	_ = p.Fd().Close()
 
-	//if err := r.client.RoundTrip(); err != nil {
-	//	r.logger.Error().Err(err).Msg("round trip failed")
-	//	_ = p.Close()
-	//	return
-	//}
-
 	r.commit(p)
 	go r.readPipeData(selectedMime, p)
 }
