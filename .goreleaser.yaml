@@ -3,11 +3,15 @@ project_name: belphegor
 before:
   hooks:
     - go generate ./...
-archives:
-  - formats: [ binary ]
+
 builds:
-  - main: "./cmd/cli/"
+  - id: default
+    main: "./cmd/cli/"
+    binary: belphegor
     mod_timestamp: '{{ .CommitTimestamp }}'
+    ignore:
+      - goos: windows
+        goarch: arm
     goos:
       - windows
       - linux
@@ -15,6 +19,7 @@ builds:
     goarch:
       - amd64
       - arm
+      - arm64
     tags:
       - netgo
       - osusergo
@@ -28,10 +33,51 @@ builds:
       - -X {{ .ModulePath }}/internal/metadata.Version={{ .Version }}
       - -X {{ .ModulePath }}/internal/metadata.CommitHash={{ .Commit }}
       - -X {{ .ModulePath }}/internal/metadata.BuildTime={{ .CommitDate }}
+
+  - id: wl_clipboard
+    main: "./cmd/cli/"
+    binary: belphegor
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    tags:
+      - netgo
+      - osusergo
+      - nodbus
+      - wl_clipboard
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -extldflags '-static'
+      - -X {{ .ModulePath }}/internal/metadata.Version={{ .Version }}
+      - -X {{ .ModulePath }}/internal/metadata.CommitHash={{ .Commit }}
+      - -X {{ .ModulePath }}/internal/metadata.BuildTime={{ .CommitDate }}
+
+archives:
+  - id: default
+    ids:
+      - default
+    formats: [ binary ]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: wl_clipboard
+    ids:
+      - wl_clipboard
+    formats: [ binary ]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_wl_clipboard"
+
 checksum:
   name_template: 'checksums.txt'
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
+
 changelog:
   sort: asc
   filters:
@@ -44,22 +90,30 @@ release:
   make_latest: true
 
 nfpms:
-  - vendor: labi-le
+  - &base
+    id: default
+    package_name: belphegor
+    ids:
+      - default
+    vendor: labi-le
     homepage: https://github.com/labi-le/belphegor
     maintainer: labi-le <i@labile.cc>
-    description: |-
-      share clipboard on network
-
+    description: "Share clipboard on network (Native Wayland)"
     license: MIT
-
     formats:
       - deb
       - rpm
       - archlinux
 
-    recommends:
-      - wl-clipboard
-      - xclip
-      - xsel
+  - <<: *base
+    id: wl_clipboard
+    package_name: belphegor_wl-clipboard
+    ids:
+      - wl_clipboard
+    description: "Share clipboard on network (via wl-clipboard utility)"
 
-    version_metadata: git
+    recommends: [ ]
+    dependencies:
+      - wl-clipboard
+
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_wl_clipboard"

@@ -172,9 +172,14 @@ func (n *Node) Start(ctx context.Context) error {
 	ctxLog.Info().
 		Str("addr", addr).
 		Str("metadata", n.opts.Metadata.String()).
+		Type("provider", n.clipboard).
 		Msg("started")
 
-	go n.MonitorBuffer(ctx)
+	go func() {
+		if err := n.MonitorBuffer(ctx); err != nil {
+			ctxLog.Error().Err(err).Msg("MonitorBuffer")
+		}
+	}()
 
 	for {
 		select {
@@ -296,7 +301,6 @@ func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
 	})
 }
 
-// MonitorBuffer starts monitoring the clipboard and subsequently sending data to other nodes
 func (n *Node) MonitorBuffer(ctx context.Context) error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.MonitorBuffer")
 

@@ -34,7 +34,7 @@ jobs:
           
           # Get hashes and convert them
           amd64_hash=$(grep "belphegor_${version}_linux_amd64$" checksums.txt | cut -d ' ' -f1)
-          arm_hash=$(grep "belphegor_${version}_linux_armv6$" checksums.txt | cut -d ' ' -f1)
+          arm_hash=$(grep "belphegor_${version}_linux_arm64$" checksums.txt | cut -d ' ' -f1)
           
           amd64_sri=$(nix hash convert --to sri "sha256:$amd64_hash")
           arm_sri=$(nix hash convert --to sri "sha256:$arm_hash")
