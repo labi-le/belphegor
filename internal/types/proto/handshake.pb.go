@@ -21,66 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// ClipboardProvider represents the clipboard provider
-// Used to identify the clipboard provider
-type Clipboard int32
-
-const (
-	Clipboard_NULL          Clipboard = 0
-	Clipboard_XCLIP         Clipboard = 1
-	Clipboard_XSEL          Clipboard = 2
-	Clipboard_WL_CLIPBOARD  Clipboard = 3
-	Clipboard_PBPASTE       Clipboard = 4
-	Clipboard_WINDOWS_NT_10 Clipboard = 5
-)
-
-// Enum value maps for Clipboard.
-var (
-	Clipboard_name = map[int32]string{
-		0: "NULL",
-		1: "XCLIP",
-		2: "XSEL",
-		3: "WL_CLIPBOARD",
-		4: "PBPASTE",
-		5: "WINDOWS_NT_10",
-	}
-	Clipboard_value = map[string]int32{
-		"NULL":          0,
-		"XCLIP":         1,
-		"XSEL":          2,
-		"WL_CLIPBOARD":  3,
-		"PBPASTE":       4,
-		"WINDOWS_NT_10": 5,
-	}
-)
-
-func (x Clipboard) Enum() *Clipboard {
-	p := new(Clipboard)
-	*p = x
-	return p
-}
-
-func (x Clipboard) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (Clipboard) Descriptor() protoreflect.EnumDescriptor {
-	return file_handshake_proto_enumTypes[0].Descriptor()
-}
-
-func (Clipboard) Type() protoreflect.EnumType {
-	return &file_handshake_proto_enumTypes[0]
-}
-
-func (x Clipboard) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use Clipboard.Descriptor instead.
-func (Clipboard) EnumDescriptor() ([]byte, []int) {
-	return file_handshake_proto_rawDescGZIP(), []int{0}
-}
-
 // Handshake represents the greeting message
 // Used to shake hands with other nodes
 type Handshake struct {
@@ -88,7 +28,6 @@ type Handshake struct {
 	Version       string                 `protobuf:"bytes,1,opt,name=Version,proto3" json:"Version,omitempty"`
 	Device        *Device                `protobuf:"bytes,2,opt,name=Device,proto3" json:"Device,omitempty"`
 	Port          uint32                 `protobuf:"varint,3,opt,name=Port,proto3" json:"Port,omitempty"`
-	Provider      Clipboard              `protobuf:"varint,5,opt,name=Provider,proto3,enum=belphegor.Clipboard" json:"Provider,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -144,30 +83,15 @@ func (x *Handshake) GetPort() uint32 {
 	return 0
 }
 
-func (x *Handshake) GetProvider() Clipboard {
-	if x != nil {
-		return x.Provider
-	}
-	return Clipboard_NULL
-}
-
 var File_handshake_proto protoreflect.FileDescriptor
 
 const file_handshake_proto_rawDesc = "" +
 	"\n" +
-	"\x0fhandshake.proto\x12\tbelphegor\x1a\fdevice.proto\"\x96\x01\n" +
+	"\x0fhandshake.proto\x12\tbelphegor\x1a\fdevice.proto\"d\n" +
 	"\tHandshake\x12\x18\n" +
 	"\aVersion\x18\x01 \x01(\tR\aVersion\x12)\n" +
 	"\x06Device\x18\x02 \x01(\v2\x11.belphegor.DeviceR\x06Device\x12\x12\n" +
-	"\x04Port\x18\x03 \x01(\rR\x04Port\x120\n" +
-	"\bProvider\x18\x05 \x01(\x0e2\x14.belphegor.ClipboardR\bProvider*\\\n" +
-	"\tClipboard\x12\b\n" +
-	"\x04NULL\x10\x00\x12\t\n" +
-	"\x05XCLIP\x10\x01\x12\b\n" +
-	"\x04XSEL\x10\x02\x12\x10\n" +
-	"\fWL_CLIPBOARD\x10\x03\x12\v\n" +
-	"\aPBPASTE\x10\x04\x12\x11\n" +
-	"\rWINDOWS_NT_10\x10\x05B\x16Z\x14internal/types/protob\x06proto3"
+	"\x04Port\x18\x03 \x01(\rR\x04PortB\x16Z\x14internal/types/protob\x06proto3"
 
 var (
 	file_handshake_proto_rawDescOnce sync.Once
@@ -181,21 +105,18 @@ func file_handshake_proto_rawDescGZIP() []byte {
 	return file_handshake_proto_rawDescData
 }
 
-var file_handshake_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_handshake_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_handshake_proto_goTypes = []any{
-	(Clipboard)(0),    // 0: belphegor.Clipboard
-	(*Handshake)(nil), // 1: belphegor.Handshake
-	(*Device)(nil),    // 2: belphegor.Device
+	(*Handshake)(nil), // 0: belphegor.Handshake
+	(*Device)(nil),    // 1: belphegor.Device
 }
 var file_handshake_proto_depIdxs = []int32{
-	2, // 0: belphegor.Handshake.Device:type_name -> belphegor.Device
-	0, // 1: belphegor.Handshake.Provider:type_name -> belphegor.Clipboard
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1, // 0: belphegor.Handshake.Device:type_name -> belphegor.Device
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_handshake_proto_init() }
@@ -209,14 +130,13 @@ func file_handshake_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_handshake_proto_rawDesc), len(file_handshake_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      0,
 			NumMessages:   1,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_handshake_proto_goTypes,
 		DependencyIndexes: file_handshake_proto_depIdxs,
-		EnumInfos:         file_handshake_proto_enumTypes,
 		MessageInfos:      file_handshake_proto_msgTypes,
 	}.Build()
 	File_handshake_proto = out.File

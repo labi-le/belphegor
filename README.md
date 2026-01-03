@@ -19,9 +19,6 @@ ___
   - wayland
     * composer implements `ext_data_control_v1`
     * wl-clipboard
-  - x11
-    * xclip
-    * xsel
 
 - macos:
   * pbpaste (i have no mac for testing)

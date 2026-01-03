@@ -14,13 +14,11 @@ type Handshake struct {
 	Version  string
 	MetaData Device
 	Port     uint32
-	Provider ClipboardProvider
 }
 
 func NewGreet(opts ...GreetOption) EventHandshake {
 	greet := &Handshake{
-		Version:  metadata.Version,
-		Provider: CurrentClipboardProvider,
+		Version: metadata.Version,
 	}
 
 	for _, opt := range opts {
@@ -42,7 +40,6 @@ func GreetFromProto(m *proto.Event) EventHandshake {
 			Version:  ev.Handshake.GetVersion(),
 			MetaData: MetaDataFromProto(ev.Handshake.GetDevice()),
 			Port:     ev.Handshake.GetPort(),
-			Provider: ClipboardProvider(ev.Handshake.GetProvider()),
 		},
 	}
 }
@@ -58,10 +55,9 @@ func NewGreetFromReader(reader io.Reader) (EventHandshake, error) {
 
 func (g Handshake) Proto() *proto.Handshake {
 	return &proto.Handshake{
-		Version:  g.Version,
-		Device:   g.MetaData.Proto(),
-		Port:     g.Port,
-		Provider: proto.Clipboard(g.Provider),
+		Version: g.Version,
+		Device:  g.MetaData.Proto(),
+		Port:    g.Port,
 	}
 }
 
