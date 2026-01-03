@@ -170,7 +170,7 @@ func (n *Node) Start(ctx context.Context) error {
 	addr := l.Addr().String()
 	n.Notify("started on %s", addr)
 	ctxLog.Info().
-		Str("address", addr).
+		Str("addr", addr).
 		Str("metadata", n.opts.Metadata.String()).
 		Msg("started")
 

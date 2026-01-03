@@ -100,7 +100,7 @@ func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 
 				ctxLog.Trace().
 					Str("peer", greet.Payload.MetaData.String()).
-					Str("address", peerIP.String()).
+					Str("addr", peerIP.String()).
 					Uint32("port", greet.Payload.Port).
 					Msg("discovered")
 

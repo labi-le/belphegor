@@ -44,7 +44,7 @@ func New(
 		addr:     conn.RemoteAddr(),
 		metaData: metadata,
 		channel:  channel,
-		logger:   logger,
+		logger:   logger.With().Stringer("node", conn.RemoteAddr()).Int("id", int(metadata.ID)).Logger(),
 		deadline: dd,
 	}
 }
@@ -77,7 +77,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 		Msg("disconnected")
 
 	go func() {
-		for range time.After(30 * time.Second) {
+		for range time.Tick(1 * time.Minute) {
 			stats := p.conn.ConnectionStats()
 			ctxLog.Trace().
 				Int("packets_sent", int(stats.PacketsSent)).
