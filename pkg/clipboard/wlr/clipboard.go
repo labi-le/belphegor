@@ -117,7 +117,6 @@ func (w *Clipboard) Run(ctx context.Context) error {
 	w.preset.device.Listener = w.reader
 
 	w.preset.device.OnDelete = func() {
-		_ = w.preset.client.RoundTrip()
 		log.Trace().
 			Uint32("device_id", w.preset.device.ID()).
 			Msg("device deleted")

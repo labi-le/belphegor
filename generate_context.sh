@@ -37,6 +37,7 @@ get_syntax() {
         *.nix) echo "nix" ;;
         *Makefile) echo "makefile" ;;
         *.php) echo "php" ;;
+        *.xml) echo "xml" ;;
         *.c|*.h) echo "c" ;;
         *.rs) echo "rs" ;;
         *.sum) echo "text" ;;
@@ -98,6 +99,7 @@ print_files() {
         -name "*.php" -o \
         -name "*.c" -o \
         -name "*.h" -o \
+        -name "*.xml" -o \
         -name "*.rs" -o \
         -name "*.yaml" -o \
         -name "*.proto" -o \

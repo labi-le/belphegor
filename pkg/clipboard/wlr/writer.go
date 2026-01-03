@@ -1,5 +1,3 @@
-//go:build unix
-
 package wlr
 
 import (
@@ -38,30 +36,49 @@ type sourceListener struct {
 }
 
 func (s *sourceListener) Send(_ string, f *os.File) {
-	ctxLog := s.logger.With().Str("op", "Send").Logger()
+	go func() {
+		defer f.Close()
 
-	total := 0
-	fd := int(f.Fd())
-	for total < len(s.data) {
-		n, err := syscall.Write(fd, s.data[total:])
-		if err != nil {
-			if errors.Is(err, syscall.EPIPE) {
-				ctxLog.Debug().
-					Int("written", total).
-					Int("total", len(s.data)).
-					Msg("reader closed pipe early (normal)")
-			} else {
-				ctxLog.Trace().Err(err).Int("written", total).Msg("failed to write clipboard data")
+		ctxLog := s.logger.With().Str("op", "Send").Logger()
+
+		total := 0
+		for total < len(s.data) {
+			n, err := f.Write(s.data[total:])
+			if err != nil {
+				if isExpectedSocketError(err) {
+					ctxLog.Debug().
+						Int("written", total).
+						Int("total", len(s.data)).
+						Msg("reader closed pipe early")
+				} else {
+					ctxLog.Trace().Err(err).Int("written", total).Msg("failed to write clipboard data")
+				}
+				break
 			}
-			break
+			total += n
 		}
-		total += n
-	}
-
-	_ = f.Close()
+	}()
 }
 
-func (s *sourceListener) Cancelled() {}
+func isExpectedSocketError(err error) bool {
+	if errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	if errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	if errors.Is(err, syscall.EDESTADDRREQ) {
+		return true
+	}
+	return false
+}
+
+func (s *sourceListener) Cancelled() {
+	if s.source != nil {
+		s.source.Destroy()
+		s.logger.Trace().Msg("source destroyed via cancelled event")
+	}
+}
 
 func (w *writer) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
@@ -75,10 +92,6 @@ func (w *writer) Write(p []byte) (n int, err error) {
 	if w.deviceManager == nil {
 		w.logger.Error().Msg("data control manager not initialized")
 		return 0, errors.New("data control manager not initialized")
-	}
-
-	if w.activeSource != nil {
-		w.activeSource.Destroy()
 	}
 
 	source := w.deviceManager.CreateDataSource()
@@ -120,7 +133,8 @@ func (w *writer) Close() error {
 	w.logger.Debug().Msg("Closing writer")
 	w.closed = true
 
-	w.device.SetSelection(new(controlSource))
+	//goland:noinspection GoMaybeNil
+	w.device.SetSelection(nil)
 	w.activeSource = nil
 
 	return nil
