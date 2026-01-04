@@ -26,6 +26,7 @@ type Mime int32
 const (
 	Mime_TEXT  Mime = 0
 	Mime_IMAGE Mime = 1
+	Mime_PATH  Mime = 2
 )
 
 // Enum value maps for Mime.
@@ -33,10 +34,12 @@ var (
 	Mime_name = map[int32]string{
 		0: "TEXT",
 		1: "IMAGE",
+		2: "PATH",
 	}
 	Mime_value = map[string]int32{
 		"TEXT":  0,
 		"IMAGE": 1,
+		"PATH":  2,
 	}
 )
 
@@ -136,10 +139,11 @@ const file_message_proto_rawDesc = "" +
 	"\aMessage\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12$\n" +
 	"\rContentLength\x18\x02 \x01(\x03R\rContentLength\x12+\n" +
-	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType*\x1b\n" +
+	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType*%\n" +
 	"\x04Mime\x12\b\n" +
 	"\x04TEXT\x10\x00\x12\t\n" +
-	"\x05IMAGE\x10\x01B\x16Z\x14internal/types/protob\x06proto3"
+	"\x05IMAGE\x10\x01\x12\b\n" +
+	"\x04PATH\x10\x02B\x16Z\x14internal/types/protob\x06proto3"
 
 var (
 	file_message_proto_rawDescOnce sync.Once
