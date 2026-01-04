@@ -426,11 +426,7 @@ func (n *Node) generateTLSConfig() (*tls.Config, error) {
 		MinVersion:         tls.VersionTLS13,
 	}
 
-	//keyLogFile, err := os.OpenFile("/tmp/quic-keys.log",
-	//	os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
-	//if err == nil {
-	//	conf.KeyLogWriter = keyLogFile
-	//}
+	populateKeyLog(n.opts.Logger, conf)
 
 	conf.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		if len(rawCerts) == 0 {
