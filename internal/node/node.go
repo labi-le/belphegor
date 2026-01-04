@@ -109,6 +109,10 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	}
 
 	if connErr := n.handleConnection(ctx, conn, false); connErr != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil
+		}
+
 		ctxLog.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
 		return connErr
 	}
@@ -171,14 +175,16 @@ func (n *Node) Start(ctx context.Context) error {
 	n.Notify("started on %s", addr)
 	ctxLog.Info().
 		Str("addr", addr).
-		Str("metadata", n.opts.Metadata.String()).
+		Int64("my_node_id", n.opts.Metadata.ID).
 		Type("provider", n.clipboard).
 		Msg("started")
 
 	go func() {
-		if err := n.MonitorBuffer(ctx); err != nil {
-			ctxLog.Error().Err(err).Msg("MonitorBuffer")
+		if err := n.monitor(ctx); err != nil {
+			ctxLog.Error().Err(err).Msg("monitor")
 		}
+
+		ctxLog.Trace().Msg("exit monitor")
 	}()
 
 	for {
@@ -263,16 +269,13 @@ func openOrAcceptStream(ctx context.Context, conn *quic.Conn, accept bool) (*qui
 }
 
 func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
-	ctxLog := ctxlog.Op(n.opts.Logger, "node.Broadcast").
-		With().
-		Int64("msg_id", msg.Payload.ID).
-		Logger()
+	ctxLog := domain.MsgLogger(ctxlog.Op(n.opts.Logger, "node.Broadcast"), msg.Payload)
 
 	dst, _ := protoutil.EncodeBytes(msg.Proto())
 	n.peers.Tap(func(id id.Unique, peer *peer.Peer) bool {
 		ctxLog := ctxLog.
 			With().
-			Str("node", peer.String()).
+			Int64("node_id", peer.MetaData().ID).
 			Logger()
 
 		if id == msg.From {
@@ -301,8 +304,8 @@ func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
 	})
 }
 
-func (n *Node) MonitorBuffer(ctx context.Context) error {
-	ctxLog := ctxlog.Op(n.opts.Logger, "node.MonitorBuffer")
+func (n *Node) monitor(ctx context.Context) error {
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.monitor").With().Logger()
 
 	updates, watchErr := make(chan eventful.Update), make(chan error, 1)
 	go func() {
@@ -319,15 +322,22 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 		)
 		for update := range updates {
 			msg := domain.FromUpdate(update)
-			if !msg.Duplicate(current) {
-				ctxLog.
-					Trace().
-					Int64("msg_id", msg.ID).
-					Msg("clipboard changed")
-
+			msgLog := domain.MsgLogger(ctxLog, msg)
+			if current.Zero() {
+				// first start
 				current = msg
-				n.channel.Send(current.Event(n.Metadata().UniqueID()))
+				continue
 			}
+
+			msgLog.Trace().Msg("new update")
+			if msg.Duplicate(current) {
+				msgLog.Trace().Msg("detected duplicate")
+				continue
+			}
+			current = msg
+
+			ev := msg.Event()
+			n.channel.Send(ev)
 		}
 	}()
 
@@ -337,7 +347,7 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 			return nil
 		case err := <-watchErr:
 			if err != nil {
-				return fmt.Errorf("node.MonitorBuffer: %w", err)
+				return fmt.Errorf("node.monitor: %w", err)
 			}
 			return nil
 		case msg, ok := <-n.channel.Listen():
@@ -345,10 +355,11 @@ func (n *Node) MonitorBuffer(ctx context.Context) error {
 				return nil
 			}
 			if msg.From != n.opts.Metadata.UniqueID() {
-				ctxLog.Trace().Int64("msg_id", msg.Payload.ID).Msg("set clipboard data")
+				msgLog := domain.MsgLogger(ctxLog, msg.Payload)
+				msgLog.Trace().Msg("set clipboard data")
 
 				if _, err := n.clipboard.Write(msg.Payload.Data); err != nil {
-					ctxLog.Error().Err(err).Send()
+					msgLog.Error().Err(err).Send()
 				}
 			}
 

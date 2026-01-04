@@ -29,7 +29,7 @@ func initDefaultMetadata() Device {
 	return Device{
 		Name: name,
 		Arch: runtime.GOARCH,
-		ID:   id.New(),
+		ID:   id.MyID,
 	}
 }
 

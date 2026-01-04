@@ -12,6 +12,7 @@ import (
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
+	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/quic-go/quic-go"
@@ -44,8 +45,14 @@ func New(
 		addr:     conn.RemoteAddr(),
 		metaData: metadata,
 		channel:  channel,
-		logger:   logger.With().Stringer("node", conn.RemoteAddr()).Int("id", int(metadata.ID)).Logger(),
+		logger:   logger.Hook(addNodeHook(id.MyID)),
 		deadline: dd,
+	}
+}
+
+func addNodeHook(nodeID id.Unique) zerolog.HookFunc {
+	return func(e *zerolog.Event, level zerolog.Level, msg string) {
+		e.Int64("node_id", nodeID)
 	}
 }
 
@@ -96,7 +103,6 @@ func (p *Peer) Receive(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		default:
-			ctxLog.Trace().Msg("waiting message")
 			msg, err := p.receiveMessage(ctx)
 			if err != nil {
 				if isConnClosed(err) {
@@ -108,10 +114,8 @@ func (p *Peer) Receive(ctx context.Context) error {
 
 			p.channel.Send(msg)
 
-			ctxLog.Trace().Int(
-				"msg_id",
-				int(msg.Payload.ID),
-			).Str("from", p.String()).Msg("received")
+			logger := domain.MsgLogger(ctxLog, msg.Payload)
+			logger.Trace().Msg("received")
 		}
 	}
 }
@@ -137,12 +141,9 @@ func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
 		return fmt.Errorf("open stream: %w", err)
 	}
 	defer func(stream *quic.SendStream) {
-		p.logger.Trace().Msg("close writer stream")
-
 		if err := stream.Close(); err != nil {
 			p.logger.Trace().Err(err).Msg("failed to close writer stream")
 		}
-
 	}(stream)
 
 	if err := network.SetWriteDeadline(stream, p.deadline); err != nil {
@@ -187,5 +188,5 @@ func (p *Peer) receiveMessage(ctx context.Context) (domain.EventMessage, error) 
 		return empty, fmt.Errorf("read payload: %w", err)
 	}
 
-	return domain.FromProto(p.MetaData().ID, &event, payload, data), nil
+	return domain.FromProto(&event, payload, data), nil
 }

@@ -5,9 +5,7 @@ package wlr
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"sync"
 	"sync/atomic"
 
 	wl "deedles.dev/wl/client"
@@ -22,13 +20,11 @@ var Supported = (func() bool {
 })()
 
 type Clipboard struct {
-	reader   *reader
-	writer   *writer
-	preset   *preset
-	logger   zerolog.Logger
-	dataChan chan ClipboardData
-	closed   atomic.Bool
-	mu       sync.Mutex
+	reader *reader
+	writer *writer
+	preset *preset
+	logger zerolog.Logger
+	closed atomic.Bool
 }
 
 func Must(log zerolog.Logger) *Clipboard {
@@ -42,16 +38,10 @@ func Must(log zerolog.Logger) *Clipboard {
 func New(client *wl.Client, log zerolog.Logger) *Clipboard {
 	preset := newPreset(client, log)
 
-	dataChan := make(chan ClipboardData, 1)
-
 	wlr := &Clipboard{
-		preset:   preset,
-		logger:   log.With().Str("component", "wlr").Logger(),
-		dataChan: dataChan,
+		preset: preset,
+		logger: log.With().Str("component", "wlr").Logger(),
 	}
-
-	wlr.reader = newReader(preset, dataChan, log)
-	wlr.writer = newWriter(preset, wlr.reader, log)
 
 	return wlr
 }
@@ -60,38 +50,13 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	defer close(update)
 	log := w.logger.With().Str("op", "wlr.Watch").Logger()
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- w.Run(ctx)
-	}()
+	w.reader = newReader(w.preset, update, log)
+	w.writer = newWriter(w.preset, w.reader, log)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-
-		case runErr := <-errCh:
-			if runErr != nil {
-				return fmt.Errorf("wlr.Watch: %w", runErr)
-			}
-			return nil
-
-		case clipData, ok := <-w.dataChan:
-			if !ok {
-				log.Trace().Msg("*wlr.dataChan closed")
-				return nil
-			}
-			if len(clipData.Data) > 0 {
-				update <- eventful.Update{Data: clipData.Data, MimeType: clipData.MimeType}
-			}
-		}
-	}
+	return w.run(ctx)
 }
 
 func (w *Clipboard) Write(data []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	log := w.logger.With().Str("op", "wlr.Write").Logger()
 
 	if w.closed.Load() {
@@ -104,8 +69,8 @@ func (w *Clipboard) Write(data []byte) (int, error) {
 	return w.writer.Write(data)
 }
 
-func (w *Clipboard) Run(ctx context.Context) error {
-	log := w.logger.With().Str("op", "wlr.Run").Logger()
+func (w *Clipboard) run(ctx context.Context) error {
+	log := w.logger.With().Str("op", "wlr.run").Logger()
 
 	err := w.preset.Setup()
 	if err != nil {
@@ -123,14 +88,12 @@ func (w *Clipboard) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return w.preset.client.Close()
 		case ev, ok := <-w.preset.client.Events():
 			if !ok {
 				return nil
 			}
-			w.mu.Lock()
 			err := ev()
-			w.mu.Unlock()
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -148,9 +111,6 @@ func (w *Clipboard) Close() error {
 		Msg("closing wlr clipboard")
 
 	w.closed.Store(true)
-
-	w.mu.Lock()
-	defer w.mu.Unlock()
 
 	if err := w.writer.Close(); err != nil {
 		log.Error().
@@ -173,8 +133,6 @@ func (w *Clipboard) Close() error {
 			Msg("failed to close client")
 		return err
 	}
-
-	close(w.dataChan)
 
 	return nil
 }

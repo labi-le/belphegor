@@ -5,6 +5,7 @@ go 1.25.5
 require (
 	deedles.dev/wl v0.0.0-20250103021037-596c362c83fe
 	github.com/bwmarrin/snowflake v0.3.0
+	github.com/cespare/xxhash v1.1.0
 	github.com/gen2brain/beeep v0.11.2
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/quic-go/quic-go v0.58.0
@@ -33,3 +34,5 @@ require (
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 )
+
+replace deedles.dev/wl => github.com/labi-le/wl v0.0.0-20260104111109-5c8a6adaecf4

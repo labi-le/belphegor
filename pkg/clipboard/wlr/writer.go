@@ -6,9 +6,14 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 	"unicode/utf8"
 
 	"github.com/rs/zerolog"
+)
+
+const (
+	writeTimeout = 5 * time.Second
 )
 
 type writer struct {
@@ -36,28 +41,33 @@ type sourceListener struct {
 }
 
 func (s *sourceListener) Send(_ string, f *os.File) {
-	go func() {
+	go func(f *os.File) {
 		defer f.Close()
 
 		ctxLog := s.logger.With().Str("op", "Send").Logger()
 
-		total := 0
+		timer := time.AfterFunc(writeTimeout, func() { f.Close() })
+		defer timer.Stop()
+
+		var total int
+		var writeErr error
+
 		for total < len(s.data) {
 			n, err := f.Write(s.data[total:])
+			if n > 0 {
+				total += n
+			}
 			if err != nil {
-				if isExpectedSocketError(err) {
-					ctxLog.Debug().
-						Int("written", total).
-						Int("total", len(s.data)).
-						Msg("reader closed pipe early")
-				} else {
-					ctxLog.Trace().Err(err).Int("written", total).Msg("failed to write clipboard data")
-				}
+				writeErr = err
 				break
 			}
-			total += n
 		}
-	}()
+
+		if writeErr != nil && !isExpectedSocketError(writeErr) {
+			ctxLog.Trace().Err(writeErr).Int("written", total).Msg("write failed")
+			return
+		}
+	}(f)
 }
 
 func isExpectedSocketError(err error) bool {
@@ -70,13 +80,18 @@ func isExpectedSocketError(err error) bool {
 	if errors.Is(err, syscall.EDESTADDRREQ) {
 		return true
 	}
+	if errors.Is(err, syscall.EBADF) {
+		return true
+	}
+	if errors.Is(err, os.ErrClosed) {
+		return true
+	}
 	return false
 }
 
 func (s *sourceListener) Cancelled() {
 	if s.source != nil {
 		s.source.Destroy()
-		s.logger.Trace().Msg("source destroyed via cancelled event")
 	}
 }
 
@@ -117,7 +132,7 @@ func (w *writer) Write(p []byte) (n int, err error) {
 	}
 
 	if w.reader != nil {
-		w.reader.IgnoreNextSelection()
+		w.reader.Suppress()
 	}
 
 	w.device.SetSelection(source)

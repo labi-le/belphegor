@@ -9,6 +9,7 @@ message Message {
   int64 ID = 1;
   int64 ContentLength = 2;
   Mime MimeType = 3;
+  uint64 ContentHash = 4;
 }
 
 enum Mime {

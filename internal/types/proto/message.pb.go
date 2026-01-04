@@ -76,6 +76,7 @@ type Message struct {
 	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	ContentLength int64                  `protobuf:"varint,2,opt,name=ContentLength,proto3" json:"ContentLength,omitempty"`
 	MimeType      Mime                   `protobuf:"varint,3,opt,name=MimeType,proto3,enum=belphegor.Mime" json:"MimeType,omitempty"`
+	ContentHash   uint64                 `protobuf:"varint,4,opt,name=ContentHash,proto3" json:"ContentHash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -131,15 +132,23 @@ func (x *Message) GetMimeType() Mime {
 	return Mime_TEXT
 }
 
+func (x *Message) GetContentHash() uint64 {
+	if x != nil {
+		return x.ContentHash
+	}
+	return 0
+}
+
 var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
 	"\n" +
-	"\rmessage.proto\x12\tbelphegor\"l\n" +
+	"\rmessage.proto\x12\tbelphegor\"\x8e\x01\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12$\n" +
 	"\rContentLength\x18\x02 \x01(\x03R\rContentLength\x12+\n" +
-	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType*%\n" +
+	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType\x12 \n" +
+	"\vContentHash\x18\x04 \x01(\x04R\vContentHash*%\n" +
 	"\x04Mime\x12\b\n" +
 	"\x04TEXT\x10\x00\x12\t\n" +
 	"\x05IMAGE\x10\x01\x12\b\n" +

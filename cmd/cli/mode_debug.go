@@ -9,7 +9,7 @@ import (
 
 func init() {
 	go func() {
-		addr := "127.0.0.1:6060"
+		addr := "0.0.0.0:6060"
 		logger.Debug().Msgf("starting pprof server on %s", addr)
 		if err := http.ListenAndServe(addr, nil); err != nil {
 			logger.Debug().Msgf("pprof server failed: %v", err)

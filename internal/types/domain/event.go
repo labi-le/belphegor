@@ -12,8 +12,10 @@ type payloadConstraint interface {
 	Heartbeat | Handshake | Message
 }
 
+type OwnerID = id.Unique
+
 type Event[T payloadConstraint] struct {
-	From    id.Unique
+	From    OwnerID
 	Created time.Time
 	Payload T
 }

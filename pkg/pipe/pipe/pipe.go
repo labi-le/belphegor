@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"syscall"
 	"time"
@@ -23,11 +24,10 @@ type RWPipe interface {
 	Fd() *os.File
 	// ReadFd returns read file descriptor
 	ReadFd() *os.File
-	// Close closes only the read end
+	// Close all
 	Close() error
 }
 
-// Pipe represents a pipe for reading clipboard data from Wayland
 type Pipe struct {
 	rfd *os.File
 	wfd *os.File
@@ -109,6 +109,14 @@ func FromPipe(pipe uintptr) ([]byte, error) {
 	}
 
 	return dest.Bytes(), nil
+}
+
+func FromPipe2(reader io.Reader) ([]byte, error) {
+	if reader == nil {
+		return nil, ErrNilPipe
+	}
+
+	return io.ReadAll(reader)
 }
 
 func needWait(err error) bool {
