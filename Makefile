@@ -36,6 +36,10 @@ run:
 build: clean
 	go build $(TAGS) $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)
 
+.PHONY: build-win
+build-win: clean
+	go build $(TAGS) $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE).exe $(MAIN_PATH)
+
 .PHONY: build-debug
 build-debug:
 	go build -gcflags="-m=2" $(LDFLAGS) -v -o $(BUILD_PATH)$(PACKAGE) $(MAIN_PATH)

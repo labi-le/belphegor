@@ -100,6 +100,19 @@ Usage of belphegor:
   ```
   </details>
 
+  <details> <summary>windows</summary>
+
+  ```sh
+  schtasks /Create /TN "belphegor" /SC ONLOGON /IT /F /TR "C:\path\belphegor.exe"
+  ```
+  ```sh
+  schtasks /Run /TN "belphegor"
+  ```
+  ```sh
+  schtasks /Delete /TN "belphegor" /F
+  ```
+  </details>
+
 ### Todo
 
 [x] Create github actions for build binary and running tests
