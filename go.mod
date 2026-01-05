@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	deedles.dev/wl v0.0.0-20250103021037-596c362c83fe
+	fyne.io/systray v1.12.0
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cespare/xxhash v1.1.0
 	github.com/gen2brain/beeep v0.11.2

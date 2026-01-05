@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/labi-le/belphegor/internal/channel"
+	"github.com/labi-le/belphegor/internal/console"
 	"github.com/labi-le/belphegor/internal/discovering"
 	"github.com/labi-le/belphegor/internal/lock"
 	"github.com/labi-le/belphegor/internal/metadata"
@@ -16,7 +17,6 @@ import (
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/peer"
 	"github.com/labi-le/belphegor/pkg/clipboard"
-	"github.com/labi-le/belphegor/pkg/console"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/labi-le/belphegor/pkg/storage"
@@ -60,7 +60,7 @@ func init() {
 	flag.BoolVar(&notify, "notify", true, "Enable notifications")
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
-	flag.BoolVar(&hidden, "hidden", false, "Hide console window (for windows user)")
+	flag.BoolVar(&hidden, "hidden", true, "Hide console window (for windows user)")
 	flag.StringVarP(&secret, "secret", "s", "", "Key to connect between node (empty=all may connect)")
 
 	flag.Parse()
@@ -93,7 +93,8 @@ func main() {
 	}
 
 	if hidden {
-		console.HideConsoleWindow()
+		logger.Trace().Msg("starting as hidden")
+		go console.HideConsoleWindow(cancel)
 	}
 
 	options = append([]node.Option{

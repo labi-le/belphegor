@@ -153,7 +153,10 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn *quic.Conn) (*peer.Peer, c
 
 // Start starts the node by listening for incoming connections on the specified public port
 func (n *Node) Start(ctx context.Context) error {
-	defer func(n *Node) { _ = n.Close() }(n)
+	defer func(n *Node) {
+		_ = n.Close()
+		n.Notify("Bye")
+	}(n)
 
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
 

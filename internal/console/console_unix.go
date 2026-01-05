@@ -2,6 +2,10 @@
 
 package console
 
-func HideConsoleWindow() {
+import (
+	"context"
+)
+
+func HideConsoleWindow(context.CancelFunc) {
 	// unix-like users don't need it
 }
