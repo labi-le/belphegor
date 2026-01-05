@@ -45,12 +45,12 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 			if wparam == timerID {
 				killTimer.Call(uintptr(hwnd), timerID)
 
-				data, det := ReadDetected(FmtFile)
-				if data == nil {
-					data, det = ReadDetected(FmtImage)
-				}
+				data, det := ReadDetected(FmtImage)
 				if data == nil {
 					data, det = ReadDetected(FmtText)
+				}
+				if data == nil {
+					data, det = ReadDetected(FmtFile)
 				}
 
 				if len(data) > 0 {
