@@ -323,21 +323,16 @@ func (n *Node) monitor(ctx context.Context) error {
 		for update := range updates {
 			msg := domain.FromUpdate(update)
 			msgLog := domain.MsgLogger(ctxLog, msg)
-			if current.Zero() {
-				// first start
-				current = msg
+
+			if msg.Duplicate(current) && !current.Zero() {
+				msgLog.Trace().Msg("detected duplicate")
 				continue
 			}
 
 			msgLog.Trace().Msg("new update")
-			if msg.Duplicate(current) {
-				msgLog.Trace().Msg("detected duplicate")
-				continue
-			}
-			current = msg
 
-			ev := msg.Event()
-			n.channel.Send(ev)
+			current = msg
+			n.channel.Send(msg.Event())
 		}
 	}()
 
