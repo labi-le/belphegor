@@ -38,6 +38,7 @@ get_syntax() {
         *Makefile) echo "makefile" ;;
         *.php) echo "php" ;;
         *.xml) echo "xml" ;;
+        *.ps1) echo "powershell" ;;
         *.c|*.h) echo "c" ;;
         *.rs) echo "rs" ;;
         *.sum) echo "text" ;;
@@ -100,6 +101,7 @@ print_files() {
         -name "*.c" -o \
         -name "*.h" -o \
         -name "*.xml" -o \
+        -name "*.ps1" -o \
         -name "*.rs" -o \
         -name "*.yaml" -o \
         -name "*.proto" -o \

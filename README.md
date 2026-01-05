@@ -58,8 +58,14 @@ ___
   }
   ```
   </details>
+- <details> <summary>windows</summary>
 
-#### Build from source
+  ```powershell
+  irm https://raw.githubusercontent.com/labi-le/belphegor/refs/heads/main/install.ps1 | iex
+  ```
+  </details>
+
+### Build from source
 
 - Go 1.25.5
 - git
