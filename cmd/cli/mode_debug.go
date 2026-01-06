@@ -17,5 +17,7 @@ func init() {
 	}()
 
 	verbose = true
+	port = 7777
+	notify = false
 	//options = append(options, node.WithPublicPort(7777))
 }

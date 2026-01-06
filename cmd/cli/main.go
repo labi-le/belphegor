@@ -146,10 +146,10 @@ func main() {
 	}
 }
 
-func initLogger(debug bool) zerolog.Logger {
+func initLogger(verbose bool) zerolog.Logger {
 	output := zerolog.ConsoleWriter{Out: os.Stderr}
 
-	if debug {
+	if verbose {
 		zerolog.CallerMarshalFunc = func(_ uintptr, file string, line int) string {
 			short := file
 			for i := len(file) - 1; i > 0; i-- {
