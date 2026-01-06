@@ -1,3 +1,6 @@
+deedles.dev/wl v0.0.0-20250103021037-596c362c83fe/go.mod h1:Vl9/s1M0J0F9wVLByLWz3Pt4x+Vrb03LR+9Sdhu9BlA=
+deedles.dev/wl v0.0.0-20260105203525-c30fdae16bdf h1:0r6NhGutSMUxBD74h8vB+vI4HSAL3JLG1dcZ5xcuyQU=
+deedles.dev/wl v0.0.0-20260105203525-c30fdae16bdf/go.mod h1:iXNNxLnI8yeOCXu5uC3c6bQmLeSXC2cYc2cqYWzMJew=
 deedles.dev/ximage v0.0.0-20250321223218-e433919886dd h1:idpMQR6xGdQEyl1QshL2TRF8dp9jBJ3ndcn5CdV/YhE=
 deedles.dev/ximage v0.0.0-20250321223218-e433919886dd/go.mod h1:YnxyYpjiUD7yhS14uOWihIJ+GaB6wZFeOk3RwR8p4SM=
 deedles.dev/xsync v0.0.0-20250321154350-4e8049be7ced h1:d8dju50/pJ0FrlI1kV2vb3KsHs7WopamQtzqyU7m2UU=
