@@ -8,9 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/color"
 	"image/png"
-	"reflect"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/image/bmp"
@@ -62,43 +61,49 @@ type bitmapHeader struct {
 }
 
 func readImage() ([]byte, error) {
-	hMem, _, err := getClipboardData.Call(cFmtDIBV5)
+	hMem, _, err := syscall.SyscallN(getClipboardData.Addr(), cFmtDIBV5)
 	if hMem == 0 {
 		return readImageDib()
 	}
-	p, _, err := gLock.Call(hMem)
+	p, _, err := syscall.SyscallN(gLock.Addr(), hMem)
 	if p == 0 {
-		return nil, err
+		if err != 0 {
+			return nil, err
+		}
+		return nil, fmt.Errorf("global lock failed")
 	}
-	defer gUnlock.Call(hMem)
+	defer noCheck(syscall.SyscallN(gUnlock.Addr(), hMem))
 
 	info := (*bitmapV5Header)(unsafe.Pointer(p))
 	if info.BitCount != 32 {
 		return nil, errUnsupported
 	}
 
-	var data []byte
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&data))
-	sh.Data = uintptr(p)
-	sh.Cap = int(info.Size + 4*uint32(info.Width)*uint32(info.Height))
-	sh.Len = int(info.Size + 4*uint32(info.Width)*uint32(info.Height))
-	img := image.NewRGBA(image.Rect(0, 0, int(info.Width), int(info.Height)))
-	offset := int(info.Size)
-	stride := int(info.Width)
-	for y := 0; y < int(info.Height); y++ {
-		for x := 0; x < int(info.Width); x++ {
-			idx := offset + 4*(y*stride+x)
-			xhat := (x + int(info.Width)) % int(info.Width)
-			yhat := int(info.Height) - 1 - y
-			r := data[idx+2]
-			g := data[idx+1]
-			b := data[idx+0]
-			a := data[idx+3]
-			img.SetRGBA(xhat, yhat, color.RGBA{R: r, G: g, B: b, A: a})
+	size := int(info.Size)
+	pixN := 4 * int(info.Width) * int(info.Height)
+
+	pix := unsafe.Slice((*byte)(unsafe.Pointer(p+uintptr(size))), pixN)
+
+	width := int(info.Width)
+	height := int(info.Height)
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	stride := width
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			idx := 4 * (y*stride + x)
+			yhat := height - 1 - y
+			pixOffset := yhat*img.Stride + x*4
+
+			img.Pix[pixOffset+0] = pix[idx+2]
+			img.Pix[pixOffset+1] = pix[idx+1]
+			img.Pix[pixOffset+2] = pix[idx+0]
+			img.Pix[pixOffset+3] = pix[idx+3]
 		}
 	}
 	var buf bytes.Buffer
-	png.Encode(&buf, img)
+	_ = png.Encode(&buf, img)
 	return buf.Bytes(), nil
 }
 
@@ -109,15 +114,21 @@ func readImageDib() ([]byte, error) {
 		cFmtDIB       = 8
 	)
 
-	hClipDat, _, err := getClipboardData.Call(cFmtDIB)
-	if err != nil {
-		return nil, errors.New("not dib format data: " + err.Error())
+	hClipDat, _, err := syscall.SyscallN(getClipboardData.Addr(), cFmtDIB)
+	if err != 0 {
+		if hClipDat == 0 {
+			return nil, errors.New("not dib format data: " + err.Error())
+		}
 	}
-	pMemBlk, _, err := gLock.Call(hClipDat)
+	if hClipDat == 0 {
+		return nil, errors.New("not dib format data")
+	}
+
+	pMemBlk, _, err := syscall.SyscallN(gLock.Addr(), hClipDat)
 	if pMemBlk == 0 {
 		return nil, errors.New("failed to call global lock: " + err.Error())
 	}
-	defer gUnlock.Call(hClipDat)
+	defer noCheck(syscall.SyscallN(gUnlock.Addr(), hClipDat))
 
 	bmpHeader := (*bitmapHeader)(unsafe.Pointer(pMemBlk))
 	dataSize := bmpHeader.SizeImage + fileHeaderLen + infoHeaderLen
@@ -127,14 +138,14 @@ func readImageDib() ([]byte, error) {
 		dataSize += iSizeImage
 	}
 	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.LittleEndian, uint16('B')|(uint16('M')<<8))
-	binary.Write(buf, binary.LittleEndian, uint32(dataSize))
-	binary.Write(buf, binary.LittleEndian, uint32(0))
-	const sizeof_colorbar = 0
-	binary.Write(buf, binary.LittleEndian, uint32(fileHeaderLen+infoHeaderLen+sizeof_colorbar))
+	_ = binary.Write(buf, binary.LittleEndian, uint16('B')|(uint16('M')<<8))
+	_ = binary.Write(buf, binary.LittleEndian, dataSize)
+	_ = binary.Write(buf, binary.LittleEndian, uint32(0))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(fileHeaderLen+infoHeaderLen))
+
 	j := 0
 	for i := fileHeaderLen; i < int(dataSize); i++ {
-		binary.Write(buf, binary.BigEndian, *(*byte)(unsafe.Pointer(pMemBlk + uintptr(j))))
+		_ = binary.Write(buf, binary.BigEndian, *(*byte)(unsafe.Pointer(pMemBlk + uintptr(j))))
 		j++
 	}
 	return bmpToPng(buf)
@@ -154,38 +165,51 @@ func bmpToPng(bmpBuf *bytes.Buffer) (buf []byte, err error) {
 }
 
 func writeImage(buf []byte) error {
-	r, _, err := emptyClipboard.Call()
+	r, _, err := syscall.SyscallN(emptyClipboard.Addr())
 	if r == 0 {
-		return fmt.Errorf("failed to clear clipboard: %w", err)
+		if err != 0 {
+			return fmt.Errorf("failed to clear clipboard: %w", err)
+		}
+		return fmt.Errorf("failed to clear clipboard")
 	}
+
 	if len(buf) == 0 {
 		return nil
 	}
 
-	img, err := png.Decode(bytes.NewReader(buf))
-	if err != nil {
+	img, decodeErr := png.Decode(bytes.NewReader(buf))
+	if decodeErr != nil {
 		return fmt.Errorf("input bytes is not PNG encoded: %w", err)
 	}
 
-	offset := unsafe.Sizeof(bitmapV5Header{})
+	headerSize := unsafe.Sizeof(bitmapV5Header{})
 	width := img.Bounds().Dx()
 	height := img.Bounds().Dy()
 	imageSize := 4 * width * height
+	totalSize := uintptr(int(headerSize) + imageSize)
 
-	data := make([]byte, int(offset)+imageSize)
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			idx := int(offset) + 4*(y*width+x)
-			r, g, b, a := img.At(x, height-1-y).RGBA()
-			data[idx+2] = uint8(r)
-			data[idx+1] = uint8(g)
-			data[idx+0] = uint8(b)
-			data[idx+3] = uint8(a)
+	hMem, _, err := syscall.SyscallN(gAlloc.Addr(), gmemMoveable, totalSize)
+	if hMem == 0 {
+		if err != 0 {
+			return fmt.Errorf("failed to alloc global memory: %w", err)
 		}
+		return fmt.Errorf("failed to alloc global memory")
 	}
 
+	p, _, err := syscall.SyscallN(gLock.Addr(), hMem)
+	if p == 0 {
+		noCheck(syscall.SyscallN(gFree.Addr(), hMem))
+		if err != 0 {
+			return fmt.Errorf("failed to lock global memory: %w", err)
+		}
+		return fmt.Errorf("failed to lock global memory")
+	}
+	defer noCheck(syscall.SyscallN(gUnlock.Addr(), hMem))
+
+	dst := unsafe.Slice((*byte)(unsafe.Pointer(p)), totalSize)
+
 	info := bitmapV5Header{}
-	info.Size = uint32(offset)
+	info.Size = uint32(headerSize)
 	info.Width = int32(width)
 	info.Height = int32(height)
 	info.Planes = 1
@@ -199,31 +223,29 @@ func writeImage(buf []byte) error {
 	info.CSType = 0x73524742
 	info.Intent = 4
 
-	infob := make([]byte, int(unsafe.Sizeof(info)))
-	for i, v := range *(*[unsafe.Sizeof(info)]byte)(unsafe.Pointer(&info)) {
-		infob[i] = v
+	headerBytes := unsafe.Slice((*byte)(unsafe.Pointer(&info)), headerSize)
+	copy(dst, headerBytes)
+
+	offset := int(headerSize)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			idx := offset + 4*(y*width+x)
+			r, g, b, a := img.At(x, height-1-y).RGBA()
+			// 0-0xffff
+			dst[idx+2] = uint8(r >> 8)
+			dst[idx+1] = uint8(g >> 8)
+			dst[idx+0] = uint8(b >> 8)
+			dst[idx+3] = uint8(a >> 8)
+		}
 	}
-	copy(data[:], infob[:])
 
-	hMem, _, err := gAlloc.Call(gmemMoveable,
-		uintptr(len(data)*int(unsafe.Sizeof(data[0]))))
-	if hMem == 0 {
-		return fmt.Errorf("failed to alloc global memory: %w", err)
-	}
-
-	p, _, err := gLock.Call(hMem)
-	if p == 0 {
-		return fmt.Errorf("failed to lock global memory: %w", err)
-	}
-	defer gUnlock.Call(hMem)
-
-	memMove.Call(p, uintptr(unsafe.Pointer(&data[0])),
-		uintptr(len(data)*int(unsafe.Sizeof(data[0]))))
-
-	v, _, err := setClipboardData.Call(cFmtDIBV5, hMem)
+	v, _, err := syscall.SyscallN(setClipboardData.Addr(), cFmtDIBV5, hMem)
 	if v == 0 {
-		gFree.Call(hMem)
-		return fmt.Errorf("failed to set text to clipboard: %w", err)
+		noCheck(syscall.SyscallN(gFree.Addr(), hMem))
+		if err != 0 {
+			return fmt.Errorf("failed to set text to clipboard: %w", err)
+		}
+		return fmt.Errorf("failed to set text to clipboard")
 	}
 
 	return nil

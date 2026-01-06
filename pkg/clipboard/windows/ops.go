@@ -6,34 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/labi-le/belphegor/pkg/mime"
 )
 
-type format int
-
-const (
-	fmtText format = iota
-	fmtImage
-	fmtFile
-)
-
-func readDetected(t format) ([]byte, mime.Type, error) {
+func readDetected(t uintptr) ([]byte, mime.Type, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-
-	var format uintptr
-	switch t {
-	case fmtImage:
-		format = cFmtDIBV5
-	case fmtFile:
-		format = cFmtHDrop
-	case fmtText:
-		fallthrough
-	default:
-		format = cFmtUnicodeText
-	}
 
 	closer, err := tryOpenClipboard()
 	defer closer()
@@ -41,7 +22,7 @@ func readDetected(t format) ([]byte, mime.Type, error) {
 		return nil, mime.TypeUnknown, fmt.Errorf("read detected: %w", err)
 	}
 
-	switch format {
+	switch t {
 	case cFmtDIBV5:
 		b, err := readImage()
 		if err != nil {
@@ -64,16 +45,16 @@ func readDetected(t format) ([]byte, mime.Type, error) {
 
 func tryOpenClipboard() (func(), error) {
 	for i := 0; i < 5; i++ {
-		r, _, _ := openClipboard.Call(0)
+		r, _, _ := syscall.SyscallN(openClipboard.Addr(), 0)
 		if r != 0 {
-			return func() { _, _, _ = closeClipboard.Call() }, nil
+			return func() { noCheck(syscall.SyscallN(closeClipboard.Addr())) }, nil
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	return func() {}, errors.New("failed to open clipboard")
 }
 
-func write(t format, buf []byte) error {
+func write(buf []byte, typ mime.Type) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -83,12 +64,12 @@ func write(t format, buf []byte) error {
 		return fmt.Errorf("write: %w", err)
 	}
 
-	switch t {
-	case fmtImage:
+	switch typ {
+	case mime.TypeText:
 		if err := writeImage(buf); err != nil {
 			return fmt.Errorf("failed to write image: %w", err)
 		}
-	case fmtText:
+	case mime.TypeImage:
 		fallthrough
 	default:
 		if err := writeText(buf); err != nil {
@@ -98,3 +79,5 @@ func write(t format, buf []byte) error {
 
 	return nil
 }
+
+func noCheck(_ uintptr, _ uintptr, _ syscall.Errno) {}

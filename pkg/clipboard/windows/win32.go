@@ -29,8 +29,10 @@ const (
 	cFmtUnicodeText = 13
 	cFmtDIBV5       = 17
 	cFmtHDrop       = 15
-	gmemMoveable    = 0x0002
-	wmTimer         = 0x0113
+)
+
+const (
+	gmemMoveable = 0x0002
 )
 
 // Win32 API
@@ -63,9 +65,6 @@ var (
 	gUnlock = kernel32.NewProc("GlobalUnlock")
 	gAlloc  = kernel32.NewProc("GlobalAlloc")
 	gFree   = kernel32.NewProc("GlobalFree")
-	memMove = kernel32.NewProc("RtlMoveMemory")
 
-	setTimer                   = user32.MustFindProc("SetTimer")
-	killTimer                  = user32.MustFindProc("KillTimer")
 	getPriorityClipboardFormat = user32.MustFindProc("GetPriorityClipboardFormat")
 )

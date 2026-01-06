@@ -6,12 +6,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"runtime"
+	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
 
+	"github.com/cespare/xxhash"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
+	"github.com/labi-le/belphegor/pkg/mime"
 )
 
 var _ eventful.Eventful = &Clipboard{}
@@ -22,8 +25,7 @@ var (
 )
 
 const (
-	debounceMs = 60
-	timerID    = 1
+	debounce = 200 * time.Millisecond
 )
 
 var priorityList = []uint32{cFmtUnicodeText, cFmtDIBV5, cFmtHDrop}
@@ -32,7 +34,38 @@ func New() *Clipboard {
 	return new(Clipboard)
 }
 
-type Clipboard struct{}
+type Clipboard struct {
+	barrier  atomic.Int64
+	lastHash atomic.Uint64
+}
+
+func (w *Clipboard) suppress() {
+	deadline := time.Now().Add(debounce).UnixNano()
+	w.barrier.Store(deadline)
+}
+
+func (w *Clipboard) allowed() bool {
+	now := time.Now().UnixNano()
+	deadline := w.barrier.Load()
+	newDeadline := now + int64(debounce)
+
+	if now < deadline {
+		w.barrier.Store(newDeadline)
+		return false
+	}
+
+	w.barrier.Store(newDeadline)
+	return true
+}
+
+func (w *Clipboard) dedup(data []byte) bool {
+	h := xxhash.Sum64(data)
+	if h == w.lastHash.Load() {
+		return false
+	}
+	w.lastHash.Store(h)
+	return true
+}
 
 func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
 	runtime.LockOSThread()
@@ -44,51 +77,33 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	wndProc := syscall.NewCallback(func(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
 		switch msg {
 		case wmClipboardUpdate:
-			_, _, _ = killTimer.Call(uintptr(hwnd), timerID)
-			_, _, _ = setTimer.Call(uintptr(hwnd), timerID, debounceMs, 0)
-			return 0
-
-		case wmTimer:
-			if wparam == timerID {
-				_, _, _ = killTimer.Call(uintptr(hwnd), timerID)
-
-				r, _, _ := getPriorityClipboardFormat.Call(
-					uintptr(unsafe.Pointer(&priorityList[0])),
-					uintptr(len(priorityList)),
-				)
-
-				if r == 0 {
-					return 0
-				}
-
-				var targetFmt format
-				switch uint32(r) {
-				case cFmtHDrop:
-					targetFmt = fmtFile
-				case cFmtDIBV5:
-					targetFmt = fmtImage
-				case cFmtUnicodeText:
-					targetFmt = fmtText
-				default:
-					return 0
-				}
-
-				data, mime, err := readDetected(targetFmt)
-				if err == nil {
-					update <- eventful.Update{Data: data, MimeType: mime}
-				}
-
+			if !w.allowed() {
 				return 0
+			}
+
+			r, _, _ := syscall.SyscallN(getPriorityClipboardFormat.Addr(),
+				uintptr(unsafe.Pointer(&priorityList[0])),
+				uintptr(len(priorityList)),
+			)
+
+			if r == 0 {
+				return 0
+			}
+
+			data, typ, err := readDetected(r)
+			if err == nil {
+				if w.dedup(data) {
+					update <- eventful.Update{Data: data, MimeType: typ}
+				}
 			}
 			return 0
 
 		case wmDestroy:
-			_, _, _ = killTimer.Call(uintptr(hwnd), timerID)
-			_, _, _ = postQuitMessage.Call(0)
+			noCheck(syscall.SyscallN(postQuitMessage.Addr(), 0))
 			return 0
 		}
 
-		ret, _, _ := defWindowProc.Call(uintptr(hwnd), uintptr(msg), wparam, lparam)
+		ret, _, _ := syscall.SyscallN(defWindowProc.Addr(), uintptr(hwnd), uintptr(msg), wparam, lparam)
 		return ret
 	})
 
@@ -99,14 +114,13 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 		ClassName: clsNamePtr,
 	}
 
-	_, _, _ = registerClassEx.Call(uintptr(unsafe.Pointer(&wc)))
+	noCheck(syscall.SyscallN(registerClassEx.Addr(), uintptr(unsafe.Pointer(&wc))))
 
-	hwnd, _, _ := createWindowEx.Call(
+	hwnd, _, _ := syscall.SyscallN(createWindowEx.Addr(),
 		0,
 		uintptr(unsafe.Pointer(clsNamePtr)),
 		uintptr(unsafe.Pointer(clsNamePtr)),
 		0, 0, 0, 0, 0,
-		0,
 		0, 0, 0,
 	)
 
@@ -114,9 +128,9 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 		return fmt.Errorf("failed to create window listener")
 	}
 
-	ret, _, _ := addClipboardFormatListener.Call(hwnd)
+	ret, _, _ := syscall.SyscallN(addClipboardFormatListener.Addr(), hwnd)
 	if ret == 0 {
-		_, _, _ = destroyWindow.Call(hwnd)
+		noCheck(syscall.SyscallN(destroyWindow.Addr(), hwnd))
 		return fmt.Errorf("failed to add clipboard format listener")
 	}
 
@@ -124,7 +138,7 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	go func() {
 		select {
 		case <-ctx.Done():
-			_, _, _ = postMessage.Call(hwnd, wmDestroy, 0, 0)
+			noCheck(syscall.SyscallN(postMessage.Addr(), hwnd, wmDestroy, 0, 0))
 		case <-done:
 		}
 	}()
@@ -139,27 +153,23 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	}
 
 	for {
-		r, _, _ := getMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+		r, _, _ := syscall.SyscallN(getMessage.Addr(), uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
 		if int32(r) <= 0 {
 			break
 		}
-		_, _, _ = translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
-		_, _, _ = dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		noCheck(syscall.SyscallN(translateMessage.Addr(), uintptr(unsafe.Pointer(&msg))))
+		noCheck(syscall.SyscallN(dispatchMessage.Addr(), uintptr(unsafe.Pointer(&msg))))
 	}
 
 	close(done)
-	_, _, _ = removeClipboardFormatListener.Call(hwnd)
+	noCheck(syscall.SyscallN(removeClipboardFormatListener.Addr(), hwnd))
 	return nil
 }
 
 func (w *Clipboard) Write(p []byte) (n int, err error) {
-	mimeType := http.DetectContentType(p)
-	fmtType := fmtText
-	if mimeType == "image/png" || mimeType == "image/jpeg" || mimeType == "image/gif" {
-		fmtType = fmtImage
-	}
+	w.suppress()
 
-	if err := write(fmtType, p); err != nil {
+	if err := write(p, mime.From(p)); err != nil {
 		return 0, err
 	}
 
