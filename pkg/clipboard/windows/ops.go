@@ -65,11 +65,11 @@ func write(buf []byte, typ mime.Type) error {
 	}
 
 	switch typ {
-	case mime.TypeText:
+	case mime.TypeImage:
 		if err := writeImage(buf); err != nil {
 			return fmt.Errorf("failed to write image: %w", err)
 		}
-	case mime.TypeImage:
+	case mime.TypeText:
 		fallthrough
 	default:
 		if err := writeText(buf); err != nil {
