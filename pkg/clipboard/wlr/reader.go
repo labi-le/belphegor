@@ -139,7 +139,11 @@ func (r *reader) readPipeData(mimeType string, p *pipe.Pipe) {
 		return
 	}
 
-	r.dataChan <- eventful.Update{Data: data, MimeType: mime.AsType(mimeType)}
+	r.dataChan <- eventful.Update{
+		Data:     data,
+		MimeType: mime.AsType(mimeType),
+		Hash:     r.lastHash.Load(),
+	}
 }
 
 func (r *reader) dedup(data []byte) bool {

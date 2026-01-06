@@ -14,4 +14,5 @@ type Eventful interface {
 type Update struct {
 	Data     []byte
 	MimeType mime.Type
+	Hash     uint64
 }

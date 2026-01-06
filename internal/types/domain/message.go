@@ -103,7 +103,7 @@ func FromUpdate(update eventful.Update) Message {
 		ID:          id.New(),
 		Data:        update.Data,
 		Mime:        update.MimeType,
-		ContentHash: hashMessage(update.MimeType, update.Data),
+		ContentHash: update.Hash,
 	}
 }
 

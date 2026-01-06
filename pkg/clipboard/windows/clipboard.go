@@ -92,8 +92,14 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 
 			data, typ, err := readDetected(r)
 			if err == nil {
-				if w.dedup(data) {
-					update <- eventful.Update{Data: data, MimeType: typ}
+				if !w.dedup(data) {
+					return 0
+				}
+
+				update <- eventful.Update{
+					Data:     data,
+					MimeType: typ,
+					Hash:     w.lastHash.Load(),
 				}
 			}
 			return 0
