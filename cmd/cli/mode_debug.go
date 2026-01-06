@@ -15,5 +15,7 @@ func init() {
 			logger.Debug().Msgf("pprof server failed: %v", err)
 		}
 	}()
+
+	verbose = true
 	//options = append(options, node.WithPublicPort(7777))
 }
