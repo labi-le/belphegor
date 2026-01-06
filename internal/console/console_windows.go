@@ -63,7 +63,7 @@ func (app *appState) onExit() {
 }
 
 func (app *appState) hideInitial() {
-	time.Sleep(time.Millisecond * 5)
+	time.Sleep(time.Millisecond * 50)
 
 	hwnd := getConsoleWindowHandle()
 	if hwnd == 0 {
