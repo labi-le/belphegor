@@ -105,6 +105,10 @@ func (p *Peer) Receive(ctx context.Context) error {
 }
 
 func isConnClosed(err error) bool {
+	if errors.Is(err, context.Canceled) {
+		return true
+	}
+
 	var err2 *quic.ApplicationError
 	if errors.As(err, &err2) && err2.ErrorCode == ErrConnClosed {
 		return true

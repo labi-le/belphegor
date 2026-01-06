@@ -109,10 +109,6 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	}
 
 	if connErr := n.handleConnection(ctx, conn, false); connErr != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return nil
-		}
-
 		ctxLog.Error().AnErr("node.handleConnection", connErr).Msg("failed to handle connection")
 		return connErr
 	}
