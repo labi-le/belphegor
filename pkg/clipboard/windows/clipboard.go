@@ -16,10 +16,17 @@ import (
 
 var _ eventful.Eventful = &Clipboard{}
 
+var (
+	errUnavailable = errors.New("clipboard unavailable")
+	errUnsupported = errors.New("unsupported format")
+)
+
 const (
 	debounceMs = 60
 	timerID    = 1
 )
+
+var priorityList = []uint32{cFmtUnicodeText, cFmtDIBV5, cFmtHDrop}
 
 func New() *Clipboard {
 	return new(Clipboard)
@@ -37,35 +44,47 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	wndProc := syscall.NewCallback(func(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
 		switch msg {
 		case wmClipboardUpdate:
-			killTimer.Call(uintptr(hwnd), timerID)
-			setTimer.Call(uintptr(hwnd), timerID, debounceMs, 0)
+			_, _, _ = killTimer.Call(uintptr(hwnd), timerID)
+			_, _, _ = setTimer.Call(uintptr(hwnd), timerID, debounceMs, 0)
 			return 0
 
 		case wmTimer:
 			if wparam == timerID {
-				killTimer.Call(uintptr(hwnd), timerID)
+				_, _, _ = killTimer.Call(uintptr(hwnd), timerID)
 
-				data, det := ReadDetected(FmtImage)
-				if data == nil {
-					data, det = ReadDetected(FmtText)
-				}
-				if data == nil {
-					data, det = ReadDetected(FmtFile)
+				r, _, _ := getPriorityClipboardFormat.Call(
+					uintptr(unsafe.Pointer(&priorityList[0])),
+					uintptr(len(priorityList)),
+				)
+
+				if r == 0 {
+					return 0
 				}
 
-				if len(data) > 0 {
-					select {
-					case update <- eventful.Update{Data: data, MimeType: det}:
-					default:
-					}
+				var targetFmt format
+				switch uint32(r) {
+				case cFmtHDrop:
+					targetFmt = fmtFile
+				case cFmtDIBV5:
+					targetFmt = fmtImage
+				case cFmtUnicodeText:
+					targetFmt = fmtText
+				default:
+					return 0
 				}
+
+				data, mime, err := readDetected(targetFmt)
+				if err == nil {
+					update <- eventful.Update{Data: data, MimeType: mime}
+				}
+
 				return 0
 			}
 			return 0
 
 		case wmDestroy:
-			killTimer.Call(uintptr(hwnd), timerID)
-			postQuitMessage.Call(0)
+			_, _, _ = killTimer.Call(uintptr(hwnd), timerID)
+			_, _, _ = postQuitMessage.Call(0)
 			return 0
 		}
 
@@ -80,7 +99,7 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 		ClassName: clsNamePtr,
 	}
 
-	registerClassEx.Call(uintptr(unsafe.Pointer(&wc)))
+	_, _, _ = registerClassEx.Call(uintptr(unsafe.Pointer(&wc)))
 
 	hwnd, _, _ := createWindowEx.Call(
 		0,
@@ -97,7 +116,7 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 
 	ret, _, _ := addClipboardFormatListener.Call(hwnd)
 	if ret == 0 {
-		destroyWindow.Call(hwnd)
+		_, _, _ = destroyWindow.Call(hwnd)
 		return fmt.Errorf("failed to add clipboard format listener")
 	}
 
@@ -105,7 +124,7 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	go func() {
 		select {
 		case <-ctx.Done():
-			postMessage.Call(hwnd, wmDestroy, 0, 0)
+			_, _, _ = postMessage.Call(hwnd, wmDestroy, 0, 0)
 		case <-done:
 		}
 	}()
@@ -124,30 +143,25 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 		if int32(r) <= 0 {
 			break
 		}
-		translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
-		dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		_, _, _ = translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		_, _, _ = dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 	}
 
 	close(done)
-	removeClipboardFormatListener.Call(hwnd)
+	_, _, _ = removeClipboardFormatListener.Call(hwnd)
 	return nil
 }
 
 func (w *Clipboard) Write(p []byte) (n int, err error) {
 	mimeType := http.DetectContentType(p)
-	fmtType := FmtText
+	fmtType := fmtText
 	if mimeType == "image/png" || mimeType == "image/jpeg" || mimeType == "image/gif" {
-		fmtType = FmtImage
+		fmtType = fmtImage
 	}
 
-	_, err = write(fmtType, p)
-	if err != nil {
+	if err := write(fmtType, p); err != nil {
 		return 0, err
 	}
+
 	return len(p), nil
 }
-
-var (
-	errUnavailable = errors.New("clipboard unavailable")
-	errUnsupported = errors.New("unsupported format")
-)

@@ -4,133 +4,97 @@ package windows
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"time"
 
 	"github.com/labi-le/belphegor/pkg/mime"
 )
 
-type Format int
+type format int
 
 const (
-	FmtText Format = iota
-	FmtImage
-	FmtFile
+	fmtText format = iota
+	fmtImage
+	fmtFile
 )
 
-func ReadDetected(t Format) ([]byte, mime.Type) {
-	buf, det, err := readDetected(t)
-	if err != nil {
-		return nil, mime.TypeUnknown
-	}
-	return buf, det
-}
-
-func readDetected(t Format) (buf []byte, det mime.Type, err error) {
+func readDetected(t format) ([]byte, mime.Type, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	det = mime.TypeUnknown
-
 	var format uintptr
 	switch t {
-	case FmtImage:
+	case fmtImage:
 		format = cFmtDIBV5
-	case FmtFile:
+	case fmtFile:
 		format = cFmtHDrop
-	case FmtText:
+	case fmtText:
 		fallthrough
 	default:
 		format = cFmtUnicodeText
 	}
 
-	r, _, err := isClipboardFormatAvailable.Call(format)
-	if r == 0 {
-		return nil, det, errUnavailable
+	closer, err := tryOpenClipboard()
+	defer closer()
+	if err != nil {
+		return nil, mime.TypeUnknown, fmt.Errorf("read detected: %w", err)
 	}
-
-	for i := 0; i < 5; i++ {
-		r, _, _ = openClipboard.Call(0)
-		if r != 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if r == 0 {
-		return nil, det, errors.New("failed to open clipboard")
-	}
-	defer closeClipboard.Call()
 
 	switch format {
 	case cFmtDIBV5:
 		b, err := readImage()
 		if err != nil {
-			return nil, det, err
+			return nil, mime.TypeUnknown, fmt.Errorf("failed to read image: %w", err)
 		}
-		det = mime.TypeImage
-		return b, det, nil
+		return b, mime.TypeImage, nil
 
 	case cFmtHDrop:
+		// todo: in future possible return multiply paths
 		return readFileFirstMime()
 
 	default:
 		b, err := readText()
 		if err != nil {
-			return nil, det, err
+			return nil, mime.TypeUnknown, fmt.Errorf("failed to read text: %w", err)
 		}
-		det = mime.TypeText
-		return b, det, nil
+		return b, mime.TypeText, nil
 	}
 }
 
-func write(t Format, buf []byte) (<-chan struct{}, error) {
-	errch := make(chan error)
-	changed := make(chan struct{}, 1)
-	go func() {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-
-		// Retry loop for OpenClipboard
-		var r uintptr
-		for i := 0; i < 5; i++ {
-			r, _, _ = openClipboard.Call(0)
-			if r != 0 {
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
+func tryOpenClipboard() (func(), error) {
+	for i := 0; i < 5; i++ {
+		r, _, _ := openClipboard.Call(0)
+		if r != 0 {
+			return func() { _, _, _ = closeClipboard.Call() }, nil
 		}
-		if r == 0 {
-			errch <- errors.New("failed to open clipboard")
-			return
-		}
-
-		switch t {
-		case FmtImage:
-			err := writeImage(buf)
-			if err != nil {
-				errch <- err
-				closeClipboard.Call()
-				return
-			}
-		case FmtText:
-			fallthrough
-		default:
-			err := writeText(buf)
-			if err != nil {
-				errch <- err
-				closeClipboard.Call()
-				return
-			}
-		}
-		closeClipboard.Call()
-
-		errch <- nil
-		close(changed)
-	}()
-
-	err := <-errch
-	if err != nil {
-		return nil, err
+		time.Sleep(10 * time.Millisecond)
 	}
-	return changed, nil
+	return func() {}, errors.New("failed to open clipboard")
+}
+
+func write(t format, buf []byte) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	closer, err := tryOpenClipboard()
+	defer closer()
+	if err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	switch t {
+	case fmtImage:
+		if err := writeImage(buf); err != nil {
+			return fmt.Errorf("failed to write image: %w", err)
+		}
+	case fmtText:
+		fallthrough
+	default:
+		if err := writeText(buf); err != nil {
+			return fmt.Errorf("failed to write text: %w", err)
+		}
+	}
+
+	return nil
 }

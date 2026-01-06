@@ -17,18 +17,13 @@ func readFileFirstMime() ([]byte, mime.Type, error) {
 		return nil, det, errUnavailable
 	}
 
-	cnt, _, _ := dragQueryFileW.Call(hDrop, 0xFFFFFFFF, 0, 0)
-	if cnt == 0 {
-		return nil, det, nil
-	}
-
 	ln, _, _ := dragQueryFileW.Call(hDrop, 0, 0, 0)
 	if ln == 0 {
 		return nil, det, nil
 	}
 
 	buf := make([]uint16, ln+1)
-	dragQueryFileW.Call(hDrop, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	_, _, _ = dragQueryFileW.Call(hDrop, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
 
 	path := syscall.UTF16ToString(buf)
 	if path == "" {

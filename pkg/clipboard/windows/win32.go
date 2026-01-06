@@ -39,12 +39,11 @@ var (
 	shell32  = syscall.MustLoadDLL("shell32")
 	kernel32 = syscall.NewLazyDLL("kernel32")
 
-	openClipboard              = user32.MustFindProc("OpenClipboard")
-	closeClipboard             = user32.MustFindProc("CloseClipboard")
-	emptyClipboard             = user32.MustFindProc("EmptyClipboard")
-	getClipboardData           = user32.MustFindProc("GetClipboardData")
-	setClipboardData           = user32.MustFindProc("SetClipboardData")
-	isClipboardFormatAvailable = user32.MustFindProc("IsClipboardFormatAvailable")
+	openClipboard    = user32.MustFindProc("OpenClipboard")
+	closeClipboard   = user32.MustFindProc("CloseClipboard")
+	emptyClipboard   = user32.MustFindProc("EmptyClipboard")
+	getClipboardData = user32.MustFindProc("GetClipboardData")
+	setClipboardData = user32.MustFindProc("SetClipboardData")
 
 	addClipboardFormatListener    = user32.MustFindProc("AddClipboardFormatListener")
 	removeClipboardFormatListener = user32.MustFindProc("RemoveClipboardFormatListener")
@@ -66,6 +65,7 @@ var (
 	gFree   = kernel32.NewProc("GlobalFree")
 	memMove = kernel32.NewProc("RtlMoveMemory")
 
-	setTimer  = user32.MustFindProc("SetTimer")
-	killTimer = user32.MustFindProc("KillTimer")
+	setTimer                   = user32.MustFindProc("SetTimer")
+	killTimer                  = user32.MustFindProc("KillTimer")
+	getPriorityClipboardFormat = user32.MustFindProc("GetPriorityClipboardFormat")
 )

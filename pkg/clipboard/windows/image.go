@@ -94,7 +94,7 @@ func readImage() ([]byte, error) {
 			g := data[idx+1]
 			b := data[idx+0]
 			a := data[idx+3]
-			img.SetRGBA(xhat, yhat, color.RGBA{r, g, b, a})
+			img.SetRGBA(xhat, yhat, color.RGBA{R: r, G: g, B: b, A: a})
 		}
 	}
 	var buf bytes.Buffer
