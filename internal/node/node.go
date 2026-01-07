@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -28,7 +29,7 @@ type Node struct {
 	clipboard eventful.Eventful
 	peers     *Storage
 	channel   *channel.Channel
-	transport transport.Transport // Внедренная зависимость
+	transport transport.Transport
 	opts      Options
 }
 
@@ -374,4 +375,36 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 	if err := p.Request(ctx, ann.Payload.ID); err != nil {
 		logger.Err(err).Str("peer", p.String()).Msg("failed to request")
 	}
+}
+
+func (n *Node) DiscoveryPayload() []byte {
+	greet := domain.NewGreet(
+		domain.WithMetadata(n.Metadata()),
+		domain.WithPort(uint16(n.opts.PublicPort)),
+	)
+	return protocol.MustEncode(greet)
+}
+
+func (n *Node) PeerDiscovered(ctx context.Context, peerIP net.IP, payload []byte) {
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.PeerDiscovered")
+
+	greet, err := protocol.DecodeExpect[domain.EventHandshake](bytes.NewReader(payload))
+	if err != nil {
+		ctxLog.Warn().Err(err).Msg("failed to decode discovery payload")
+		return
+	}
+
+	ctxLog.Trace().
+		Str("peer", greet.Payload.MetaData.String()).
+		Str("addr", peerIP.String()).
+		Uint32("port", greet.Payload.Port).
+		Msg("discovered via UDP")
+
+	// if metadata.IsMajorDifference(n.Metadata().Version, greet.Payload.Version) {
+	//     ctxLog.Trace().Str("peer", greet.Payload.MetaData.String()).Msg("skipping peer due to version mismatch")
+	//     return
+	// }
+
+	addr := fmt.Sprintf("%s:%d", peerIP.String(), greet.Payload.Port)
+	_ = n.ConnectTo(ctx, addr)
 }

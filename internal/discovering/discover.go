@@ -1,14 +1,10 @@
 package discovering
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"net"
 	"time"
 
-	"github.com/labi-le/belphegor/internal/protocol"
-	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/rs/zerolog"
@@ -16,8 +12,8 @@ import (
 )
 
 type Connector interface {
-	ConnectTo(ctx context.Context, addr string) error
-	Metadata() domain.Device
+	DiscoveryPayload() []byte
+	PeerDiscovered(ctx context.Context, addr net.IP, payload []byte)
 }
 
 type Discover struct {
@@ -71,7 +67,6 @@ func New(opts ...Option) *Discover {
 		port:     defaultConfig.port,
 	}
 
-	// Apply the options
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -83,7 +78,7 @@ func (d *Discover) Discover(ctx context.Context, connector Connector) {
 	ctxLog := ctxlog.Op(d.logger, "discover.Discover")
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
-			Payload:   createPayload(connector.Metadata(), d.port),
+			Payload:   connector.DiscoveryPayload(),
 			Limit:     d.maxPeers,
 			TimeLimit: -1,
 			Delay:     d.delay,
@@ -95,19 +90,7 @@ func (d *Discover) Discover(ctx context.Context, connector Connector) {
 					return
 				}
 
-				greet, err := protocol.DecodeExpect[domain.EventHandshake](bytes.NewReader(d.Payload))
-				if err != nil {
-					ctxLog.Err(err).Msg("failed to decode discovery payload")
-					return
-				}
-
-				ctxLog.Trace().
-					Str("peer", greet.Payload.MetaData.String()).
-					Str("addr", peerIP.String()).
-					Uint32("port", greet.Payload.Port).
-					Msg("discovered")
-
-				go func() { _ = connector.ConnectTo(ctx, createConnDsn(peerIP, greet)) }()
+				go connector.PeerDiscovered(ctx, peerIP, d.Payload)
 			},
 		},
 	)
@@ -115,19 +98,4 @@ func (d *Discover) Discover(ctx context.Context, connector Connector) {
 	if err != nil {
 		ctxLog.Fatal().Err(err).Msg("failed to start discover")
 	}
-}
-
-func createConnDsn(peerIP net.IP, greet domain.EventHandshake) string {
-	return fmt.Sprintf(
-		"%s:%d",
-		peerIP.String(),
-		greet.Payload.Port,
-	)
-}
-
-func createPayload(metadata domain.Device, port int) []byte {
-	greet := domain.NewGreet(domain.WithMetadata(metadata))
-	greet.Payload.Port = uint32(port)
-
-	return protocol.MustEncode(greet)
 }
