@@ -2,6 +2,8 @@ package domain
 
 import (
 	"encoding/binary"
+	"hash"
+	"sync"
 	"time"
 
 	"github.com/cespare/xxhash"
@@ -53,11 +55,22 @@ func MessageNew(data []byte) EventMessage {
 	}
 }
 
+var hasherPool = sync.Pool{
+	New: func() any {
+		return xxhash.New()
+	},
+}
+
 func hashMessage(mt mime.Type, data []byte) uint64 {
 	var buf [8]byte
 	binary.LittleEndian.PutUint64(buf[:], uint64(mt))
 
-	d := xxhash.New()
+	d := hasherPool.Get().(hash.Hash64)
+	defer func() {
+		d.Reset()
+		hasherPool.Put(d)
+	}()
+
 	_, _ = d.Write(buf[:])
 	_, _ = d.Write(data)
 	return d.Sum64()

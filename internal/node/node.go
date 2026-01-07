@@ -38,6 +38,7 @@ type Node struct {
 
 func (n *Node) Close() error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Close")
+	ctxLog.Trace().Msg("shutting down")
 
 	n.peers.Tap(func(_ id.Unique, p *peer.Peer) bool {
 		if closeErr := p.Close(); closeErr != nil {
@@ -45,10 +46,6 @@ func (n *Node) Close() error {
 		}
 		return true
 	})
-	if closeErr := n.channel.Close(); closeErr != nil {
-		ctxLog.Error().Err(closeErr).Msg("failed to close channel")
-		return closeErr
-	}
 
 	return nil
 }
@@ -249,7 +246,6 @@ func openOrAcceptStream(ctx context.Context, conn transport.Connection, accept b
 func (n *Node) Broadcast(ctx context.Context, announce domain.EventAnnounce) {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Broadcast")
 
-	blob := protocol.MustEncode(announce)
 	n.peers.Tap(func(id id.Unique, peer *peer.Peer) bool {
 		ctxLog := ctxLog.
 			With().
@@ -262,7 +258,7 @@ func (n *Node) Broadcast(ctx context.Context, announce domain.EventAnnounce) {
 
 		ctxLog.Trace().Msg("announced")
 
-		encodeErr := peer.WriteContext(ctx, blob, nil)
+		encodeErr := peer.WriteContext(ctx, announce, nil)
 		if encodeErr != nil {
 			if errors.Is(encodeErr, net.ErrClosed) ||
 				strings.Contains(encodeErr.Error(), "bad file descriptor") ||
@@ -334,7 +330,7 @@ func (n *Node) monitor(ctx context.Context) error {
 				}
 			}
 
-			n.Broadcast(ctx, domain.EventAnnounce{
+			go n.Broadcast(ctx, domain.EventAnnounce{
 				From:    msg.From,
 				Created: msg.Created,
 				Payload: msg.Payload.Announce(),

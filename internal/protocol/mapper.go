@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"sync"
+
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/id"
@@ -8,60 +10,71 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+var eventProtoPool = sync.Pool{
+	New: func() any { return &proto.Event{} },
+}
+
+func releaseEvent(pb *proto.Event) {
+	pb.Reset()
+	eventProtoPool.Put(pb)
+}
+
 func MapToProto(v any) *proto.Event {
+	pb := eventProtoPool.Get().(*proto.Event)
+	pb.Reset()
+
 	switch e := v.(type) {
 	case domain.EventMessage:
-		return &proto.Event{
-			Created: timestamppb.New(e.Created),
-			Payload: &proto.Event_Message{
-				Message: &proto.Message{
-					ID:            e.Payload.ID,
-					ContentLength: e.Payload.ContentLength,
-					MimeType:      toProtoMime(e.Payload.MimeType),
-					ContentHash:   e.Payload.ContentHash,
-				},
+		pb.Created = timestamppb.New(e.Created)
+		// Примечание: Мы все еще аллоцируем обертку &proto.Event_Message,
+		// так как это поле интерфейса, но это дешевле, чем аллоцировать весь Event.
+		pb.Payload = &proto.Event_Message{
+			Message: &proto.Message{
+				ID:            e.Payload.ID,
+				ContentLength: e.Payload.ContentLength,
+				MimeType:      toProtoMime(e.Payload.MimeType),
+				ContentHash:   e.Payload.ContentHash,
 			},
 		}
+		return pb
 
 	case domain.EventAnnounce:
-		return &proto.Event{
-			Created: timestamppb.New(e.Created),
-			Payload: &proto.Event_Announce{
-				Announce: &proto.Announce{
-					ID:          e.Payload.ID,
-					MimeType:    toProtoMime(e.Payload.MimeType),
-					ContentHash: e.Payload.ContentHash,
-				},
+		pb.Created = timestamppb.New(e.Created)
+		pb.Payload = &proto.Event_Announce{
+			Announce: &proto.Announce{
+				ID:          e.Payload.ID,
+				MimeType:    toProtoMime(e.Payload.MimeType),
+				ContentHash: e.Payload.ContentHash,
 			},
 		}
+		return pb
 
 	case domain.EventRequest:
-		return &proto.Event{
-			Created: timestamppb.New(e.Created),
-			Payload: &proto.Event_Request{
-				Request: &proto.RequestMessage{
-					ID: e.Payload.ID,
-				},
+		pb.Created = timestamppb.New(e.Created)
+		pb.Payload = &proto.Event_Request{
+			Request: &proto.RequestMessage{
+				ID: e.Payload.ID,
 			},
 		}
+		return pb
 
 	case domain.EventHandshake:
-		return &proto.Event{
-			Created: timestamppb.New(e.Created),
-			Payload: &proto.Event_Handshake{
-				Handshake: &proto.Handshake{
-					Version: e.Payload.Version,
-					Port:    e.Payload.Port,
-					Device: &proto.Device{
-						Name: e.Payload.MetaData.Name,
-						Arch: e.Payload.MetaData.Arch,
-						ID:   e.Payload.MetaData.ID,
-					},
+		pb.Created = timestamppb.New(e.Created)
+		pb.Payload = &proto.Event_Handshake{
+			Handshake: &proto.Handshake{
+				Version: e.Payload.Version,
+				Port:    e.Payload.Port,
+				Device: &proto.Device{
+					Name: e.Payload.MetaData.Name,
+					Arch: e.Payload.MetaData.Arch,
+					ID:   e.Payload.MetaData.ID,
 				},
 			},
 		}
+		return pb
 	}
 
+	releaseEvent(pb)
 	return nil
 }
 

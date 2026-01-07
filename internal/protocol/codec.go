@@ -34,6 +34,8 @@ func Encode(v any) ([]byte, error) {
 	if pb == nil {
 		return nil, fmt.Errorf("unsupported type for encoding: %T", v)
 	}
+	defer releaseEvent(pb)
+
 	return protoutil.EncodeBytes(pb)
 }
 
@@ -59,4 +61,15 @@ func DecodeExpect[T domain.AnyEvent](r io.Reader) (T, error) {
 	}
 
 	return typed, nil
+}
+
+func WriteEvent(w io.Writer, v any) error {
+	pb := MapToProto(v)
+	if pb == nil {
+		return fmt.Errorf("unsupported type for encoding: %T", v)
+	}
+
+	defer releaseEvent(pb)
+
+	return protoutil.EncodeToWriter(w, pb)
 }

@@ -35,11 +35,12 @@ func New(
 	dd network.Deadline,
 ) *Peer {
 	return &Peer{
-		conn:     conn,
-		metaData: metadata,
-		channel:  channel,
-		logger:   logger,
-		deadline: dd,
+		conn:       conn,
+		metaData:   metadata,
+		channel:    channel,
+		logger:     logger,
+		deadline:   dd,
+		stringRepr: fmt.Sprintf("%s -> %s", metadata.Name, conn.RemoteAddr().String()),
 	}
 }
 
@@ -52,14 +53,6 @@ func (p *Peer) Close() error {
 }
 
 func (p *Peer) String() string {
-	if p.stringRepr == "" {
-		p.stringRepr = fmt.Sprintf(
-			"%s -> %s",
-			p.MetaData().Name,
-			p.conn.RemoteAddr().String(),
-		)
-	}
-
 	return p.stringRepr
 }
 
@@ -104,7 +97,7 @@ func isConnClosed(err error) bool {
 	return strings.Contains(msg, "closed") || strings.Contains(msg, "application error 0x0")
 }
 
-func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
+func (p *Peer) WriteContext(ctx context.Context, meta any, raw []byte) error {
 	stream, err := p.conn.OpenStream(ctx)
 	if err != nil {
 		return fmt.Errorf("open stream: %w", err)
@@ -120,13 +113,13 @@ func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
 		return err
 	}
 
-	if _, err := stream.Write(meta); err != nil {
-		return fmt.Errorf("write: %w", err)
+	if err := protocol.WriteEvent(stream, meta); err != nil {
+		return fmt.Errorf("write event: %w", err)
 	}
 
-	if raw != nil {
+	if len(raw) > 0 {
 		if _, err := stream.Write(raw); err != nil {
-			return fmt.Errorf("write: %w", err)
+			return fmt.Errorf("write raw: %w", err)
 		}
 	}
 
@@ -168,6 +161,11 @@ func (p *Peer) handleMessage(
 	msg domain.EventMessage,
 	reader io.Reader,
 ) error {
+	// todo file sending implementation
+	//if msg.Payload.ContentLength > MaxMessageSize {
+	//	return fmt.Errorf("message too large: %d > %d", msg.Payload.ContentLength, MaxMessageSize)
+	//}
+
 	data := make([]byte, msg.Payload.ContentLength)
 
 	if _, err := io.ReadFull(reader, data); err != nil {
@@ -187,15 +185,9 @@ func (p *Peer) handleMessage(
 
 func (p *Peer) Request(ctx context.Context, messageID id.Unique) error {
 	req := domain.NewRequest(messageID)
-
-	bytes, err := protocol.Encode(req)
-	if err != nil {
-		return fmt.Errorf("encode request: %w", err)
-	}
-
 	p.logger.Trace().Int64("msg_id", messageID).Msg("sending request packet")
 
-	return p.WriteContext(ctx, bytes, nil)
+	return p.WriteContext(ctx, req, nil)
 }
 
 func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req domain.EventRequest) error {
@@ -212,10 +204,5 @@ func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req do
 	// data written separately to stream
 	meta.Payload.Data = nil
 
-	dst, err := protocol.Encode(meta)
-	if err != nil {
-		return fmt.Errorf("encode response: %w", err)
-	}
-
-	return p.WriteContext(ctx, dst, ev.Payload.Data)
+	return p.WriteContext(ctx, meta, ev.Payload.Data)
 }

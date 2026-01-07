@@ -69,9 +69,3 @@ func (c *Channel) Announce(ann domain.EventAnnounce) {
 func (c *Channel) Announcements() <-chan domain.EventAnnounce {
 	return c.ann
 }
-
-func (c *Channel) Close() error {
-	close(c.msg)
-	close(c.ann)
-	return nil
-}

@@ -3,6 +3,7 @@ package protoutil
 import (
 	"encoding/binary"
 	"io"
+	"sync"
 
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
 	"google.golang.org/protobuf/proto"
@@ -59,4 +60,38 @@ func dataLen(r io.Reader) (int, error) {
 
 type Proto[T proto.Message] interface {
 	Proto() T
+}
+
+var encodePool = sync.Pool{
+	New: func() any {
+		b := make([]byte, Length, DefaultBufferSize)
+		return &b
+	},
+}
+
+func EncodeToWriter(w io.Writer, src proto.Message) error {
+	bufPtr := encodePool.Get().(*[]byte)
+	defer encodePool.Put(bufPtr)
+
+	buf := *bufPtr
+
+	buf = buf[:Length]
+
+	options := proto.MarshalOptions{
+		UseCachedSize: true,
+	}
+
+	var err error
+	buf, err = options.MarshalAppend(buf, src)
+	if err != nil {
+		return err
+	}
+
+	*bufPtr = buf
+
+	msgLen := len(buf) - Length
+	binary.BigEndian.PutUint32(buf[:Length], uint32(msgLen))
+
+	_, err = w.Write(buf)
+	return err
 }

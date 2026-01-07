@@ -41,7 +41,7 @@ func (h *handshake) exchange(ctx context.Context, conn transport.Connection, inc
 	}
 	defer func(stream io.Closer) { _ = stream.Close() }(stream)
 
-	if _, err := stream.Write(protocol.MustEncode(h.my)); err != nil {
+	if err := protocol.WriteEvent(stream, h.my); err != nil {
 		return empty, fmt.Errorf("send greeting: %w", err)
 	}
 
