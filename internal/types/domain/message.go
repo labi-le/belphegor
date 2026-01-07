@@ -95,9 +95,10 @@ func (m Message) Announce() Announce {
 	}
 }
 
-func MsgLogger(base zerolog.Logger, msg MessageID) zerolog.Logger {
-	return base.With().
-		Int64("msg_id", msg).
-		Int64("node_id", id.Author(msg)).
-		Logger()
+func (m Message) MarshalZerologObject(e *zerolog.Event) {
+	e.Int64("id", m.ID)
+	e.Int64("node", id.Author(m.ID))
+	e.Stringer("mime_type", m.MimeType)
+	e.Int64("length", m.ContentLength)
+	e.Uint64("hash", m.ContentHash)
 }

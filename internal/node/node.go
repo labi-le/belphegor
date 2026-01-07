@@ -297,14 +297,13 @@ func (n *Node) monitor(ctx context.Context) error {
 		)
 		for update := range updates {
 			msg := messageFromUpdate(update)
-			msgLog := domain.MsgLogger(ctxLog, msg.ID)
 
 			if msg.Duplicate(current) && !current.Zero() {
-				msgLog.Trace().Msg("detected duplicate")
+				ctxLog.Trace().Object("msg", msg).Msg("detected duplicate")
 				continue
 			}
 
-			msgLog.Trace().Msg("new update")
+			ctxLog.Trace().Object("msg", msg).Msg("new update")
 
 			current = msg
 			n.channel.Send(msg.Event())
@@ -325,11 +324,10 @@ func (n *Node) monitor(ctx context.Context) error {
 				return nil
 			}
 			if msg.From != n.opts.Metadata.UniqueID() {
-				msgLog := domain.MsgLogger(ctxLog, msg.Payload.ID)
-				msgLog.Trace().Msg("set clipboard data")
+				ctxLog.Trace().Object("msg", msg.Payload).Msg("set clipboard data")
 
 				if _, err := n.clipboard.Write(msg.Payload.Data); err != nil {
-					msgLog.Error().Err(err).Send()
+					ctxLog.Error().Err(err).Object("msg", msg.Payload).Send()
 				}
 			}
 
@@ -369,7 +367,7 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 		return
 	}
 
-	logger := domain.MsgLogger(n.opts.Logger, ann.Payload.ID)
+	logger := n.opts.Logger.With().Int64("msg_id", ann.Payload.ID).Logger()
 	logger.Trace().Msg("requesting message")
 
 	if err := p.Request(ctx, ann.Payload.ID); err != nil {
@@ -398,7 +396,7 @@ func (n *Node) PeerDiscovered(ctx context.Context, peerIP net.IP, payload []byte
 		Str("peer", greet.Payload.MetaData.String()).
 		Str("addr", peerIP.String()).
 		Uint32("port", greet.Payload.Port).
-		Msg("discovered via UDP")
+		Msg("discovered")
 
 	// if metadata.IsMajorDifference(n.Metadata().Version, greet.Payload.Version) {
 	//     ctxLog.Trace().Str("peer", greet.Payload.MetaData.String()).Msg("skipping peer due to version mismatch")

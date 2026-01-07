@@ -26,6 +26,25 @@ func (t Type) IsImage() bool { return t == TypeImage }
 func (t Type) IsText() bool  { return t == TypeText }
 func (t Type) IsPath() bool  { return t == TypePath }
 
+func (t Type) String() string {
+	switch t {
+	case TypeText:
+		return "text"
+	case TypeImage:
+		return "image"
+	case TypePath:
+		return "path"
+	case TypeAudio:
+		return "audio"
+	case TypeVideo:
+		return "video"
+	case TypeBinary:
+		return "binary"
+	default:
+		return "unknown"
+	}
+}
+
 var (
 	imageTypes = TypeMap{
 		"image/png":  TypeImage,

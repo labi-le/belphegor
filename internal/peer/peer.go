@@ -38,14 +38,8 @@ func New(
 		conn:     conn,
 		metaData: metadata,
 		channel:  channel,
-		logger:   logger.Hook(addNodeHook(id.MyID)),
+		logger:   logger,
 		deadline: dd,
-	}
-}
-
-func addNodeHook(nodeID id.Unique) zerolog.HookFunc {
-	return func(e *zerolog.Event, level zerolog.Level, msg string) {
-		e.Int64("node_id", nodeID)
 	}
 }
 
@@ -183,7 +177,7 @@ func (p *Peer) handleMessage(
 	msg.Payload.Data = data
 
 	p.logger.Trace().
-		Int64("msg_id", msg.Payload.ID).
+		Object("msg", msg.Payload).
 		Msg("received message")
 
 	p.channel.Send(msg)
@@ -205,14 +199,14 @@ func (p *Peer) Request(ctx context.Context, messageID id.Unique) error {
 }
 
 func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req domain.EventRequest) error {
-	logger := domain.MsgLogger(p.logger, ev.Payload.ID)
-	logger.Trace().Msg("received request")
+	ctxLog := ctxlog.Op(p.logger, "peer.handleRequest").With().Object("msg", ev.Payload).Logger()
+	ctxLog.Trace().Msg("received request")
 
 	if ev.Payload.ID != req.Payload.ID {
 		return nil
 	}
 
-	logger.Trace().Msg("sending")
+	ctxLog.Trace().Msg("sending")
 
 	meta := ev
 	// data written separately to stream
