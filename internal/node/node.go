@@ -295,7 +295,7 @@ func (n *Node) monitor(ctx context.Context) error {
 			current domain.Message
 		)
 		for update := range updates {
-			msg := domain.MessageFromUpdate(update)
+			msg := messageFromUpdate(update)
 			msgLog := domain.MsgLogger(ctxLog, msg.ID)
 
 			if msg.Duplicate(current) && !current.Zero() {
@@ -341,6 +341,16 @@ func (n *Node) monitor(ctx context.Context) error {
 		case ann := <-n.channel.Announcements():
 			n.handleAnnounce(ctx, ann)
 		}
+	}
+}
+
+func messageFromUpdate(update eventful.Update) domain.Message {
+	return domain.Message{
+		ID:            id.New(),
+		Data:          update.Data,
+		MimeType:      update.MimeType,
+		ContentHash:   update.Hash,
+		ContentLength: int64(len(update.Data)),
 	}
 }
 

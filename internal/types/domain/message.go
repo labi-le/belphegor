@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash"
-	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/rs/zerolog"
@@ -93,16 +92,6 @@ func (m Message) Announce() Announce {
 		ID:          m.ID,
 		MimeType:    m.MimeType,
 		ContentHash: m.ContentHash,
-	}
-}
-
-func MessageFromUpdate(update eventful.Update) Message {
-	return Message{
-		ID:            id.New(),
-		Data:          update.Data,
-		MimeType:      update.MimeType,
-		ContentHash:   update.Hash,
-		ContentLength: int64(len(update.Data)),
 	}
 }
 
