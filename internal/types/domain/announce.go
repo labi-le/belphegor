@@ -8,7 +8,8 @@ import (
 type EventAnnounce = Event[Announce]
 
 type Announce struct {
-	ID          id.Unique
-	MimeType    mime.Type
-	ContentHash uint64
+	ID            id.Unique
+	MimeType      mime.Type
+	ContentHash   uint64
+	ContentLength uint64
 }

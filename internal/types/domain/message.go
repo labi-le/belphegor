@@ -24,7 +24,8 @@ type Message struct {
 	Data          Data
 	MimeType      mime.Type
 	ContentHash   uint64
-	ContentLength int64
+	ContentLength uint64
+	Name          string
 }
 
 func (m Message) Zero() bool {
@@ -110,9 +111,10 @@ func (m Message) DuplicateByAnnounce(ann Announce) bool {
 
 func (m Message) Announce() Announce {
 	return Announce{
-		ID:          m.ID,
-		MimeType:    m.MimeType,
-		ContentHash: m.ContentHash,
+		ID:            m.ID,
+		MimeType:      m.MimeType,
+		ContentHash:   m.ContentHash,
+		ContentLength: m.ContentLength,
 	}
 }
 

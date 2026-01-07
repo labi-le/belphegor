@@ -74,9 +74,11 @@ func (Mime) EnumDescriptor() ([]byte, []int) {
 type Message struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
-	ContentLength int64                  `protobuf:"varint,2,opt,name=ContentLength,proto3" json:"ContentLength,omitempty"`
+	ContentLength uint64                 `protobuf:"varint,2,opt,name=ContentLength,proto3" json:"ContentLength,omitempty"`
 	MimeType      Mime                   `protobuf:"varint,3,opt,name=MimeType,proto3,enum=belphegor.Mime" json:"MimeType,omitempty"`
-	ContentHash   uint64                 `protobuf:"varint,4,opt,name=ContentHash,proto3" json:"ContentHash,omitempty"` // data as raw stream after write metadata
+	ContentHash   uint64                 `protobuf:"varint,4,opt,name=ContentHash,proto3" json:"ContentHash,omitempty"`
+	// file name if mime == path
+	Name          string `protobuf:"bytes,5,opt,name=Name,proto3" json:"Name,omitempty"` // data as raw stream after write metadata
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -118,7 +120,7 @@ func (x *Message) GetID() int64 {
 	return 0
 }
 
-func (x *Message) GetContentLength() int64 {
+func (x *Message) GetContentLength() uint64 {
 	if x != nil {
 		return x.ContentLength
 	}
@@ -139,11 +141,19 @@ func (x *Message) GetContentHash() uint64 {
 	return 0
 }
 
+func (x *Message) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type Announce struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	MimeType      Mime                   `protobuf:"varint,3,opt,name=MimeType,proto3,enum=belphegor.Mime" json:"MimeType,omitempty"`
 	ContentHash   uint64                 `protobuf:"varint,4,opt,name=ContentHash,proto3" json:"ContentHash,omitempty"`
+	ContentLength uint64                 `protobuf:"varint,2,opt,name=ContentLength,proto3" json:"ContentLength,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -199,6 +209,13 @@ func (x *Announce) GetContentHash() uint64 {
 	return 0
 }
 
+func (x *Announce) GetContentLength() uint64 {
+	if x != nil {
+		return x.ContentLength
+	}
+	return 0
+}
+
 type RequestMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
@@ -247,16 +264,18 @@ var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
 	"\n" +
-	"\rmessage.proto\x12\tbelphegor\"\x8e\x01\n" +
+	"\rmessage.proto\x12\tbelphegor\"\xa2\x01\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12$\n" +
-	"\rContentLength\x18\x02 \x01(\x03R\rContentLength\x12+\n" +
+	"\rContentLength\x18\x02 \x01(\x04R\rContentLength\x12+\n" +
 	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType\x12 \n" +
-	"\vContentHash\x18\x04 \x01(\x04R\vContentHash\"i\n" +
+	"\vContentHash\x18\x04 \x01(\x04R\vContentHash\x12\x12\n" +
+	"\x04Name\x18\x05 \x01(\tR\x04Name\"\x8f\x01\n" +
 	"\bAnnounce\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12+\n" +
 	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType\x12 \n" +
-	"\vContentHash\x18\x04 \x01(\x04R\vContentHash\" \n" +
+	"\vContentHash\x18\x04 \x01(\x04R\vContentHash\x12$\n" +
+	"\rContentLength\x18\x02 \x01(\x04R\rContentLength\" \n" +
 	"\x0eRequestMessage\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\x03R\x02ID*%\n" +
 	"\x04Mime\x12\b\n" +

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/labi-le/belphegor/internal/channel"
@@ -56,7 +58,7 @@ func (p *Peer) String() string {
 	return p.stringRepr
 }
 
-func (p *Peer) Receive(ctx context.Context) error {
+func (p *Peer) Receive(ctx context.Context, savePath string) error {
 	ctxLog := ctxlog.Op(p.logger, "peer.Receive")
 	defer ctxLog.
 		Info().
@@ -77,7 +79,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 				continue
 			}
 
-			if handleErr := p.handleStream(ctx, stream); handleErr != nil {
+			if handleErr := p.handleStream(ctx, stream, savePath); handleErr != nil {
 				ctxLog.Trace().Err(handleErr).Msg("failed to handle stream")
 			}
 		}
@@ -126,7 +128,7 @@ func (p *Peer) WriteContext(ctx context.Context, meta any, raw []byte) error {
 	return nil
 }
 
-func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error {
+func (p *Peer) handleStream(ctx context.Context, stream transport.Stream, path string) error {
 	defer stream.Close()
 
 	if err := network.SetReadDeadline(stream, p.deadline); err != nil {
@@ -140,7 +142,7 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 
 	switch payload := event.(type) {
 	case domain.EventMessage:
-		return p.handleMessage(payload, stream)
+		return p.handleMessage(payload, stream, path)
 
 	case domain.EventAnnounce:
 		p.channel.Announce(payload)
@@ -157,22 +159,23 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 	}
 }
 
-func (p *Peer) handleMessage(
-	msg domain.EventMessage,
-	reader io.Reader,
-) error {
-	// todo file sending implementation
-	//if msg.Payload.ContentLength > MaxMessageSize {
-	//	return fmt.Errorf("message too large: %d > %d", msg.Payload.ContentLength, MaxMessageSize)
-	//}
+func (p *Peer) handleMessage(msg domain.EventMessage, reader io.Reader, path string) error {
+	if msg.Payload.MimeType.IsPath() {
+		filePath, err := p.createOrGetCachedFile(path, msg.Payload, reader)
+		if err != nil {
+			p.logger.Error().Err(err).Msg("failed to handle incoming file")
+			return err
+		}
+		msg.Payload.Data = []byte(filePath)
+	} else {
+		data := make([]byte, msg.Payload.ContentLength)
 
-	data := make([]byte, msg.Payload.ContentLength)
+		if _, err := io.ReadFull(reader, data); err != nil {
+			return fmt.Errorf("read raw data: %w", err)
+		}
 
-	if _, err := io.ReadFull(reader, data); err != nil {
-		return fmt.Errorf("read raw data: %w", err)
+		msg.Payload.Data = data
 	}
-
-	msg.Payload.Data = data
 
 	p.logger.Trace().
 		Object("msg", msg.Payload).
@@ -200,9 +203,87 @@ func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req do
 
 	ctxLog.Trace().Msg("sending")
 
+	if ev.Payload.MimeType.IsPath() {
+		return p.streamFile(ctx, ev)
+	}
+
 	meta := ev
 	// data written separately to stream
 	meta.Payload.Data = nil
 
 	return p.WriteContext(ctx, meta, ev.Payload.Data)
+}
+
+func (p *Peer) streamFile(ctx context.Context, meta domain.EventMessage) error {
+	fp := string(meta.Payload.Data)
+	file, err := os.Open(fp)
+	if err != nil {
+		return fmt.Errorf("failed to open file for streaming %s: %w", fp, err)
+	}
+	defer file.Close()
+
+	stream, err := p.conn.OpenStream(ctx)
+	if err != nil {
+		return fmt.Errorf("open stream for file: %w", err)
+	}
+	defer func(stream transport.Stream) {
+		if err := stream.Close(); err != nil {
+			p.logger.Trace().Err(err).Msg("failed to close writer stream")
+		}
+	}(stream)
+
+	if err := network.SetWriteDeadline(stream, p.deadline); err != nil {
+		return err
+	}
+
+	if err := protocol.WriteEvent(stream, meta); err != nil {
+		return fmt.Errorf("write file event: %w", err)
+	}
+
+	bytesSent, err := io.Copy(stream, file)
+	if err != nil {
+		return fmt.Errorf("write file raw data: %w", err)
+	}
+
+	p.logger.Trace().
+		Int64("bytes_sent", bytesSent).
+		Msg("file stream sent successfully")
+
+	return nil
+}
+
+func (p *Peer) createOrGetCachedFile(path string, msg domain.Message, reader io.Reader) (string, error) {
+	filePath := filepath.Join(path, msg.Name)
+
+	if _, err := os.Stat(filePath); err == nil {
+		p.logger.Trace().
+			Str("file_path", filePath).
+			Msg("file already exists in cache, skipping download")
+
+		_, _ = io.CopyN(io.Discard, reader, int64(msg.ContentLength))
+
+		return filePath, nil
+	}
+
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return "", fmt.Errorf("failed to create cache directory: %w", err)
+	}
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create cache file: %w", err)
+	}
+	defer file.Close()
+
+	_, err = io.CopyN(file, reader, int64(msg.ContentLength))
+	if err != nil {
+		_ = os.Remove(filePath)
+		return "", fmt.Errorf("failed to write stream to cache file: %w", err)
+	}
+
+	p.logger.Trace().
+		Str("file_path", filePath).
+		Msg("received file and saved to cache")
+
+	return filePath, nil
 }

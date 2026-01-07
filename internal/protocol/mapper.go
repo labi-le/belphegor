@@ -26,14 +26,13 @@ func MapToProto(v any) *proto.Event {
 	switch e := v.(type) {
 	case domain.EventMessage:
 		pb.Created = timestamppb.New(e.Created)
-		// Примечание: Мы все еще аллоцируем обертку &proto.Event_Message,
-		// так как это поле интерфейса, но это дешевле, чем аллоцировать весь Event.
 		pb.Payload = &proto.Event_Message{
 			Message: &proto.Message{
 				ID:            e.Payload.ID,
 				ContentLength: e.Payload.ContentLength,
 				MimeType:      toProtoMime(e.Payload.MimeType),
 				ContentHash:   e.Payload.ContentHash,
+				Name:          e.Payload.Name,
 			},
 		}
 		return pb
@@ -88,6 +87,7 @@ func toDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.Ev
 			MimeType:      toDomainMime(msg.GetMimeType()),
 			ContentHash:   msg.GetContentHash(),
 			ContentLength: msg.GetContentLength(),
+			Name:          msg.Name,
 		},
 	}
 }

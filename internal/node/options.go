@@ -11,15 +11,17 @@ import (
 )
 
 type Options struct {
-	PublicPort  int
-	KeepAlive   time.Duration
-	Deadline    network.Deadline
-	Notifier    notification.Notifier
-	Discovering DiscoverOptions
-	Metadata    domain.Device
-	Logger      zerolog.Logger
-	Secret      string
-	MaxPeers    int
+	PublicPort     int
+	KeepAlive      time.Duration
+	Deadline       network.Deadline
+	Notifier       notification.Notifier
+	Discovering    DiscoverOptions
+	Metadata       domain.Device
+	Logger         zerolog.Logger
+	Secret         string
+	MaxPeers       int
+	MaxReceiveSize uint64
+	FileSavePath   string
 }
 
 type DiscoverOptions struct {
@@ -109,5 +111,17 @@ func WithSecret(secret string) Option {
 func WithMaxPeers(peers int) Option {
 	return func(options *Options) {
 		options.MaxPeers = peers
+	}
+}
+
+func WithMaxReceiveSize(size uint64) Option {
+	return func(options *Options) {
+		options.MaxReceiveSize = size
+	}
+}
+
+func WithFileSavePath(path string) Option {
+	return func(options *Options) {
+		options.FileSavePath = path
 	}
 }

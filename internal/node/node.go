@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/labi-le/belphegor/internal/channel"
@@ -237,7 +240,7 @@ func (n *Node) handleConnection(ctx context.Context, conn transport.Connection, 
 
 	ctxLog.Info().Msg("connected")
 
-	return pr.Receive(ctx)
+	return pr.Receive(ctx, n.opts.FileSavePath)
 }
 
 func openOrAcceptStream(ctx context.Context, conn transport.Connection, accept bool) (transport.Stream, error) {
@@ -301,6 +304,10 @@ func (n *Node) monitor(ctx context.Context) error {
 		)
 		for update := range updates {
 			msg := messageFromUpdate(update)
+			if msg.Zero() {
+				ctxLog.Trace().Interface("update", update).Msg("that message type not supported")
+				continue
+			}
 
 			if msg.Duplicate(current) && !current.Zero() {
 				ctxLog.Trace().Object("msg", msg).Msg("detected duplicate")
@@ -330,7 +337,7 @@ func (n *Node) monitor(ctx context.Context) error {
 			if msg.From != n.opts.Metadata.UniqueID() {
 				ctxLog.Trace().Object("msg", msg.Payload).Msg("set clipboard data")
 
-				if _, err := n.clipboard.Write(msg.Payload.Data); err != nil {
+				if _, err := n.clipboard.Write(msg.Payload.MimeType, msg.Payload.Data); err != nil {
 					ctxLog.Error().Err(err).Object("msg", msg.Payload).Send()
 				}
 			}
@@ -348,13 +355,63 @@ func (n *Node) monitor(ctx context.Context) error {
 }
 
 func messageFromUpdate(update eventful.Update) domain.Message {
+	if update.MimeType.IsPath() {
+		return messageFromPath(update)
+	}
+
 	return domain.Message{
 		ID:            id.New(),
 		Data:          update.Data,
 		MimeType:      update.MimeType,
 		ContentHash:   update.Hash,
-		ContentLength: int64(len(update.Data)),
+		ContentLength: uint64(len(update.Data)),
 	}
+}
+
+func messageFromPath(update eventful.Update) domain.Message {
+	rawPath := string(update.Data)
+
+	cleanPath := sanitizePath(rawPath)
+
+	stat, err := os.Stat(cleanPath)
+	if err != nil {
+		return domain.Message{}
+	}
+
+	if stat.IsDir() {
+		return domain.Message{}
+	}
+
+	return domain.Message{
+		ID:            id.New(),
+		Data:          []byte(cleanPath),
+		Name:          filepath.Base(cleanPath),
+		MimeType:      update.MimeType,
+		ContentHash:   update.Hash,
+		ContentLength: uint64(stat.Size()),
+	}
+}
+
+func sanitizePath(raw string) string {
+	raw = strings.TrimSpace(raw)
+
+	if idx := strings.Index(raw, "://"); idx != -1 {
+		raw = raw[idx+3:]
+	}
+
+	if unescaped, err := url.PathUnescape(raw); err == nil {
+		raw = unescaped
+	}
+
+	raw = filepath.ToSlash(raw)
+
+	clean := filepath.Clean(raw)
+
+	if len(clean) > 2 && clean[0] == '/' && clean[2] == ':' {
+		clean = clean[1:]
+	}
+
+	return clean
 }
 
 func (n *Node) Notify(message string, v ...any) {
@@ -373,8 +430,15 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 
 	logger := ctxlog.Op(n.opts.Logger, "node.handleAnnounce").With().Int64("msg_id", ann.Payload.ID).Logger()
 
+	if ann.Payload.ContentLength > n.opts.MaxReceiveSize {
+		logger.Warn().
+			Uint64("max_file_size", n.opts.MaxReceiveSize).
+			Msg("i cannot accept this announce; its size exceeds the permitted limits")
+		return
+	}
+
 	if n.channel.LastMsg().Payload.DuplicateByAnnounce(ann.Payload) {
-		logger.Trace().Msg("we already have such a message, skipping")
+		logger.Trace().Msg("i already have this message, skipping")
 		return
 	}
 	logger.Trace().Msg("requesting message")

@@ -15,6 +15,8 @@ import (
 	"github.com/labi-le/belphegor/pkg/mime"
 )
 
+var _ eventful.Eventful = (*Clipboard)(nil)
+
 var clipboardTick = 3 * time.Second
 
 func init() {
@@ -70,7 +72,7 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	return nil
 }
 
-func (m *Clipboard) Write(p []byte) (n int, err error) {
+func (m *Clipboard) Write(t mime.Type, p []byte) (n int, err error) {
 	if err := clipboardSet(p, exec.Command("wl-copy")); err != nil {
 		return 0, err
 	}

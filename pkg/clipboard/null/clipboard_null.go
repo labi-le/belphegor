@@ -4,7 +4,10 @@ import (
 	"context"
 
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
+	"github.com/labi-le/belphegor/pkg/mime"
 )
+
+var _ eventful.Eventful = (*Clipboard)(nil)
 
 type Clipboard struct {
 	data       chan []byte
@@ -35,7 +38,7 @@ func (n *Clipboard) Watch(_ context.Context, up chan<- eventful.Update) error {
 	return nil
 }
 
-func (n *Clipboard) Write(p []byte) (int, error) {
+func (n *Clipboard) Write(t mime.Type, p []byte) (int, error) {
 	n.data <- p
 
 	return len(n.data), nil

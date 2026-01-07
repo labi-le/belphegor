@@ -22,6 +22,7 @@ require (
 	deedles.dev/ximage v0.0.0-20250321223218-e433919886dd // indirect
 	deedles.dev/xsync v0.0.0-20250321154350-4e8049be7ced // indirect
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect

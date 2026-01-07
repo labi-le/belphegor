@@ -10,8 +10,11 @@ import (
 
 	wl "deedles.dev/wl/client"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
+	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/rs/zerolog"
 )
+
+var _ eventful.Eventful = (*Clipboard)(nil)
 
 var Supported = (func() bool {
 	_, exist1 := os.LookupEnv("WAYLAND_DISPLAY")
@@ -56,7 +59,7 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	return w.run(ctx)
 }
 
-func (w *Clipboard) Write(data []byte) (int, error) {
+func (w *Clipboard) Write(t mime.Type, data []byte) (int, error) {
 	log := w.logger.With().Str("op", "wlr.Write").Logger()
 
 	if w.closed.Load() {
@@ -66,7 +69,7 @@ func (w *Clipboard) Write(data []byte) (int, error) {
 		return 0, errors.New("clipboard is closed")
 	}
 
-	return w.writer.Write(data)
+	return w.writer.Write(t, data)
 }
 
 func (w *Clipboard) run(ctx context.Context) error {

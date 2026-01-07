@@ -1,14 +1,13 @@
 package wlr
 
 import (
-	"bytes"
 	"errors"
 	"os"
 	"sync"
 	"syscall"
 	"time"
-	"unicode/utf8"
 
+	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/rs/zerolog"
 )
 
@@ -95,7 +94,7 @@ func (s *sourceListener) Cancelled() {
 	}
 }
 
-func (w *writer) Write(p []byte) (n int, err error) {
+func (w *writer) Write(t mime.Type, p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -120,15 +119,8 @@ func (w *writer) Write(p []byte) (n int, err error) {
 	}
 	source.Listener = listener
 
-	typ := mimeType(p)
-	if typ == "" || utf8.Valid(p) {
-		source.Offer("text/plain;charset=utf-8")
-		source.Offer("text/plain")
-		source.Offer("TEXT")
-		source.Offer("STRING")
-		source.Offer("UTF8_STRING")
-	} else {
-		source.Offer(typ)
+	for _, o := range w.convertMimeType(t) {
+		source.Offer(o)
 	}
 
 	if w.reader != nil {
@@ -155,23 +147,39 @@ func (w *writer) Close() error {
 	return nil
 }
 
-func mimeType(data []byte) string {
-	switch {
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x89, 0x50, 0x4E, 0x47}):
-		return "image/png"
-	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0xFF, 0xD8}):
-		return "image/jpeg"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x47, 0x49, 0x46, 0x38}):
-		return "image/gif"
-	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0x42, 0x4D}):
-		return "image/bmp"
-	case len(data) >= 12 && bytes.Equal(data[8:12], []byte("WEBP")):
-		return "image/webp"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x25, 0x50, 0x44, 0x46}):
-		return "application/pdf"
-	case len(data) >= 4 && bytes.Equal(data[:4], []byte{0x50, 0x4B, 0x03, 0x04}):
-		return "application/zip"
+var (
+	offerText = []string{
+		"text/plain;charset=utf-8",
+		"text/plain",
+		"TEXT",
+		"STRING",
+		"UTF8_STRING",
+	}
+
+	offerPath = append([]string{
+		"text/uri-list",
+		"x-special/gnome-copied-files",
+	}, offerText...)
+
+	offerImage = []string{
+		"image/png",
+		"image/jpeg",
+		"image/gif",
+		"image/bmp",
+		"image/webp",
+	}
+	offerBinary = []string{"application/octet-stream"}
+)
+
+func (w *writer) convertMimeType(t mime.Type) []string {
+	switch t {
+	case mime.TypeText:
+		return offerText
+	case mime.TypePath:
+		return offerPath
+	case mime.TypeImage:
+		return offerImage
 	default:
-		return ""
+		return offerBinary
 	}
 }

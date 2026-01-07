@@ -7,9 +7,11 @@ option go_package = "internal/types/proto";
 // Message represents clipboard data and its associated metadata
 message Message {
   int64 ID = 1;
-  int64 ContentLength = 2;
+  uint64 ContentLength = 2;
   Mime MimeType = 3;
   uint64 ContentHash = 4;
+  // file name if mime == path
+  string Name = 5;
   // data as raw stream after write metadata
 }
 
@@ -17,6 +19,7 @@ message Announce {
   int64 ID = 1;
   Mime MimeType = 3;
   uint64 ContentHash = 4;
+  uint64 ContentLength = 2;
 }
 
 message RequestMessage {

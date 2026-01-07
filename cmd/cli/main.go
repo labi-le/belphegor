@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/console"
 	"github.com/labi-le/belphegor/internal/discovering"
@@ -29,8 +31,14 @@ var (
 )
 
 var (
-	addressIP   string
-	secret      string
+	addressIP string
+	secret    string
+
+	fileSavePath string
+
+	maxFileSizeRaw string
+	maxFileSize    uint64
+
 	verbose     bool
 	showVersion bool
 	showHelp    bool
@@ -55,14 +63,23 @@ func init() {
 	flag.DurationVar(&writeTimeout, "write_timeout", time.Minute, "Write timeout")
 	flag.DurationVar(&readTimeout, "read_timeout", time.Minute, "Write timeout")
 	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of discovered peers")
-	flag.BoolVarP(&verbose, "verbose", "", false, "Verbose logs")
+	flag.BoolVar(&verbose, "verbose", false, "Verbose logs")
 	flag.BoolVar(&notify, "notify", true, "Enable notifications")
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
 	flag.BoolVar(&hidden, "hidden", true, "Hide console window (for windows user)")
-	flag.StringVarP(&secret, "secret", "s", "", "Key to connect between node (empty=all may connect)")
+	flag.StringVar(&secret, "secret", "s", "Key to connect between node (empty=all may connect)")
+	flag.StringVar(&maxFileSizeRaw, "max_file_size", "500MiB", "Maximum number of discovered peers")
+	flag.StringVar(&fileSavePath, "file_save_path", path.Join(os.TempDir(), "bfg_cache"), "Folder where the files sent to us will be saved")
 
 	flag.Parse()
+
+	size, err := humanize.ParseBytes(maxFileSizeRaw)
+	if err != nil {
+		flag.Usage()
+		return
+	}
+	maxFileSize = size
 
 	logger = initLogger(verbose)
 }
@@ -112,6 +129,8 @@ func main() {
 		}),
 		node.WithSecret(secret),
 		node.WithMaxPeers(maxPeers),
+		node.WithMaxReceiveSize(maxFileSize),
+		node.WithFileSavePath(fileSavePath),
 	}, options...)
 
 	nodeSettings := node.NewOptions(options...)

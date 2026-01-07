@@ -10,6 +10,7 @@ ___
 - P2P
 - Discovering local nodes
 - Image sharing (`wayland` <—> `wayland`, `wayland` <—> `windows`)
+- File sharing
 
 ___
 
