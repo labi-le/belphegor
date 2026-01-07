@@ -6,23 +6,20 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 
 	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/protocol"
+	"github.com/labi-le/belphegor/internal/transport"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/network"
-	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
 )
 
-var (
-	ErrConnClosed = quic.ApplicationErrorCode(0)
-)
-
 type Peer struct {
-	conn       *quic.Conn
+	conn       transport.Connection
 	metaData   domain.Device
 	channel    *channel.Channel
 	stringRepr string
@@ -31,7 +28,7 @@ type Peer struct {
 }
 
 func New(
-	conn *quic.Conn,
+	conn transport.Connection,
 	metadata domain.Device,
 	channel *channel.Channel,
 	logger zerolog.Logger,
@@ -54,10 +51,10 @@ func addNodeHook(nodeID id.Unique) zerolog.HookFunc {
 
 func (p *Peer) MetaData() domain.Device { return p.metaData }
 
-func (p *Peer) Conn() *quic.Conn { return p.conn }
+func (p *Peer) Conn() transport.Connection { return p.conn }
 
 func (p *Peer) Close() error {
-	return p.conn.CloseWithError(ErrConnClosed, "closed conn")
+	return p.conn.Close()
 }
 
 func (p *Peer) String() string {
@@ -84,7 +81,7 @@ func (p *Peer) Receive(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		default:
-			stream, err := p.Conn().AcceptUniStream(ctx)
+			stream, err := p.conn.AcceptStream(ctx)
 			if err != nil {
 				if isConnClosed(err) {
 					return nil
@@ -105,26 +102,21 @@ func isConnClosed(err error) bool {
 		return true
 	}
 
-	var err2 *quic.ApplicationError
-	if errors.As(err, &err2) && err2.ErrorCode == ErrConnClosed {
+	if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 		return true
 	}
 
-	var err3 *quic.IdleTimeoutError
-	if errors.As(err, &err3) {
-		return true
-	}
-
-	var opErr *net.OpError
-	return errors.As(err, &opErr) || errors.Is(err, io.EOF)
+	msg := err.Error()
+	return strings.Contains(msg, "closed") || strings.Contains(msg, "application error 0x0")
 }
 
 func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
-	stream, err := p.conn.OpenUniStreamSync(ctx)
+	stream, err := p.conn.OpenStream(ctx)
 	if err != nil {
 		return fmt.Errorf("open stream: %w", err)
 	}
-	defer func(stream *quic.SendStream) {
+
+	defer func(stream transport.Stream) {
 		if err := stream.Close(); err != nil {
 			p.logger.Trace().Err(err).Msg("failed to close writer stream")
 		}
@@ -147,8 +139,8 @@ func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
 	return nil
 }
 
-func (p *Peer) handleStream(ctx context.Context, stream *quic.ReceiveStream) error {
-	defer stream.CancelRead(0)
+func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error {
+	defer stream.Close()
 
 	if err := network.SetReadDeadline(stream, p.deadline); err != nil {
 		return err

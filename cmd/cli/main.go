@@ -15,11 +15,9 @@ import (
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
-	"github.com/labi-le/belphegor/internal/peer"
+	"github.com/labi-le/belphegor/internal/transport/quic"
 	"github.com/labi-le/belphegor/pkg/clipboard"
-	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/network"
-	"github.com/labi-le/belphegor/pkg/storage"
 	"github.com/rs/zerolog"
 	flag "github.com/spf13/pflag"
 )
@@ -114,9 +112,19 @@ func main() {
 		node.WithSecret(secret),
 	}, options...)
 
+	nodeSettings := node.NewOptions(options...)
+
+	tlsConfig, err := node.MakeTLSConfig(nodeSettings)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to generate TLS config")
+	}
+
+	quicTransport := quic.New(tlsConfig, nodeSettings.KeepAlive)
+
 	nd := node.New(
+		quicTransport,
 		clipboard.New(logger),
-		storage.NewSyncMapStorage[id.Unique, *peer.Peer](),
+		new(node.Storage),
 		channel.New(),
 		options...,
 	)

@@ -22,11 +22,11 @@ import (
 	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/peer"
 	"github.com/labi-le/belphegor/internal/protocol"
+	"github.com/labi-le/belphegor/internal/transport"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/id"
-	"github.com/quic-go/quic-go"
 )
 
 var (
@@ -43,6 +43,7 @@ type Node struct {
 	clipboard eventful.Eventful
 	peers     *Storage
 	channel   *channel.Channel
+	transport transport.Transport // Внедренная зависимость
 	opts      Options
 }
 
@@ -65,6 +66,7 @@ func (n *Node) Close() error {
 
 // New creates a new instance of Node with the specified settings
 func New(
+	tr transport.Transport,
 	clipboard eventful.Eventful,
 	peers *Storage,
 	channel *channel.Channel,
@@ -73,6 +75,7 @@ func New(
 	options := NewOptions(opts...)
 
 	return &Node{
+		transport: tr,
 		clipboard: clipboard,
 		peers:     peers,
 		channel:   channel,
@@ -80,19 +83,14 @@ func New(
 	}
 }
 
-// ConnectTo establishes a TCP connection to a remote clipboard at the specified address
+// ConnectTo establishes a connection to a remote node
 func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.ConnectTo").
 		With().
 		Str("addr", addr).
 		Logger()
 
-	config, err2 := n.generateTLSConfig()
-	if err2 != nil {
-		return fmt.Errorf("generateTLSConfig: %w", err2)
-	}
-
-	conn, err := quic.DialAddr(ctx, addr, config, generateQuicConfig(n.opts.KeepAlive))
+	conn, err := n.transport.Dial(ctx, addr)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrLocalSecretMissing):
@@ -116,7 +114,7 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	return nil
 }
 
-func (n *Node) addPeer(hisHand domain.Handshake, conn *quic.Conn) (*peer.Peer, cleanup, error) {
+func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*peer.Peer, cleanup, error) {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.addPeer")
 
 	metadata := hisHand.MetaData
@@ -147,7 +145,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn *quic.Conn) (*peer.Peer, c
 	return pr, cleanup, nil
 }
 
-// Start starts the node by listening for incoming connections on the specified public port
+// Start starts the node by listening for incoming connections
 func (n *Node) Start(ctx context.Context) error {
 	defer func(n *Node) {
 		_ = n.Close()
@@ -156,15 +154,7 @@ func (n *Node) Start(ctx context.Context) error {
 
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
 
-	config, err2 := n.generateTLSConfig()
-	if err2 != nil {
-		return fmt.Errorf("generateTLSConfig: %w", err2)
-	}
-	l, err := quic.ListenAddr(
-		fmt.Sprintf(":%d", n.opts.PublicPort),
-		config,
-		generateQuicConfig(n.opts.KeepAlive),
-	)
+	l, err := n.transport.Listen(ctx, fmt.Sprintf(":%d", n.opts.PublicPort))
 	if err != nil {
 		ctxLog.Err(err).Msg("failed to listen")
 		return fmt.Errorf("node.Start: %w", err)
@@ -224,7 +214,7 @@ func (n *Node) Start(ctx context.Context) error {
 	}
 }
 
-func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept bool) error {
+func (n *Node) handleConnection(ctx context.Context, conn transport.Connection, accept bool) error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.handleConnection").
 		With().
 		Str("node", n.Metadata().String()).
@@ -259,12 +249,12 @@ func (n *Node) handleConnection(ctx context.Context, conn *quic.Conn, accept boo
 	return pr.Receive(ctx)
 }
 
-func openOrAcceptStream(ctx context.Context, conn *quic.Conn, accept bool) (*quic.Stream, error) {
+func openOrAcceptStream(ctx context.Context, conn transport.Connection, accept bool) (transport.Stream, error) {
 	if accept {
 		return conn.AcceptStream(ctx)
 	}
 
-	return conn.OpenStreamSync(ctx)
+	return conn.OpenStream(ctx)
 }
 
 func (n *Node) Broadcast(ctx context.Context, announce domain.EventAnnounce) {
@@ -377,8 +367,8 @@ func (n *Node) Metadata() domain.Device {
 	return n.opts.Metadata
 }
 
-//nolint:mnd,gosec //shut up
-func (n *Node) generateTLSConfig() (*tls.Config, error) {
+func MakeTLSConfig(opts Options) (*tls.Config, error) {
+	//nolint:mnd,gosec //shut up
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
 		return nil, fmt.Errorf("rand.Int: %w", err)
@@ -397,7 +387,7 @@ func (n *Node) generateTLSConfig() (*tls.Config, error) {
 		},
 	}
 
-	privateKey, publicKey, err2 := n.genKey()
+	privateKey, publicKey, err2 := genKey(opts.Secret)
 	if err2 != nil {
 		return nil, err2
 	}
@@ -427,7 +417,7 @@ func (n *Node) generateTLSConfig() (*tls.Config, error) {
 		MinVersion:         tls.VersionTLS13,
 	}
 
-	populateKeyLog(n.opts.Logger, conf)
+	populateKeyLog(opts.Logger, conf)
 
 	conf.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		if len(rawCerts) == 0 {
@@ -468,9 +458,9 @@ func (n *Node) generateTLSConfig() (*tls.Config, error) {
 	return conf, nil
 }
 
-func (n *Node) genKey() (crypto.PrivateKey, crypto.PublicKey, error) {
-	if n.opts.Secret != "" {
-		seed := sha256.Sum256([]byte(n.opts.Secret))
+func genKey(secret string) (crypto.PrivateKey, crypto.PublicKey, error) {
+	if secret != "" {
+		seed := sha256.Sum256([]byte(secret))
 		pk := ed25519.NewKeyFromSeed(seed[:])
 		return pk, pk.Public(), nil
 	}
@@ -493,12 +483,5 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 
 	if err := p.Request(ctx, ann.Payload.ID); err != nil {
 		logger.Err(err).Str("peer", p.String()).Msg("failed to request")
-	}
-
-}
-
-func generateQuicConfig(keepAlive time.Duration) *quic.Config {
-	return &quic.Config{
-		KeepAlivePeriod: keepAlive,
 	}
 }

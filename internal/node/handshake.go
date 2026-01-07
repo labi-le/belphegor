@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/labi-le/belphegor/internal/metadata"
 	"github.com/labi-le/belphegor/internal/protocol"
+	"github.com/labi-le/belphegor/internal/transport"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
 )
 
@@ -32,13 +33,13 @@ func newHandshake(meta domain.Device, port int, logger zerolog.Logger) *handshak
 	}
 }
 
-func (h *handshake) exchange(ctx context.Context, conn *quic.Conn, incoming bool) (domain.EventHandshake, error) {
+func (h *handshake) exchange(ctx context.Context, conn transport.Connection, incoming bool) (domain.EventHandshake, error) {
 	var empty domain.EventHandshake
 	stream, err := openOrAcceptStream(ctx, conn, incoming)
 	if err != nil {
 		return empty, fmt.Errorf("openOrAcceptStream error: %w", err)
 	}
-	defer func(stream *quic.Stream) { _ = stream.Close() }(stream)
+	defer func(stream io.Closer) { _ = stream.Close() }(stream)
 
 	if _, err := stream.Write(protocol.MustEncode(h.my)); err != nil {
 		return empty, fmt.Errorf("send greeting: %w", err)
