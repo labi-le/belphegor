@@ -1,0 +1,154 @@
+package protocol
+
+import (
+	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/labi-le/belphegor/internal/types/proto"
+	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/labi-le/belphegor/pkg/mime"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+func MapToProto(v any) *proto.Event {
+	switch e := v.(type) {
+	case domain.EventMessage:
+		return &proto.Event{
+			Created: timestamppb.New(e.Created),
+			Payload: &proto.Event_Message{
+				Message: &proto.Message{
+					ID:            e.Payload.ID,
+					ContentLength: e.Payload.ContentLength,
+					MimeType:      toProtoMime(e.Payload.MimeType),
+					ContentHash:   e.Payload.ContentHash,
+				},
+			},
+		}
+
+	case domain.EventAnnounce:
+		return &proto.Event{
+			Created: timestamppb.New(e.Created),
+			Payload: &proto.Event_Announce{
+				Announce: &proto.Announce{
+					ID:          e.Payload.ID,
+					MimeType:    toProtoMime(e.Payload.MimeType),
+					ContentHash: e.Payload.ContentHash,
+				},
+			},
+		}
+
+	case domain.EventRequest:
+		return &proto.Event{
+			Created: timestamppb.New(e.Created),
+			Payload: &proto.Event_Request{
+				Request: &proto.RequestMessage{
+					ID: e.Payload.ID,
+				},
+			},
+		}
+
+	case domain.EventHandshake:
+		return &proto.Event{
+			Created: timestamppb.New(e.Created),
+			Payload: &proto.Event_Handshake{
+				Handshake: &proto.Handshake{
+					Version: e.Payload.Version,
+					Port:    e.Payload.Port,
+					Device: &proto.Device{
+						Name: e.Payload.MetaData.Name,
+						Arch: e.Payload.MetaData.Arch,
+						ID:   e.Payload.MetaData.ID,
+					},
+				},
+			},
+		}
+	}
+
+	return nil
+}
+
+func ToDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.EventMessage {
+	return domain.EventMessage{
+		From:    id.Author(msg.GetID()),
+		Created: ev.GetCreated().AsTime(),
+		Payload: domain.Message{
+			ID:            msg.GetID(),
+			Data:          data,
+			MimeType:      toDomainMime(msg.GetMimeType()),
+			ContentHash:   msg.GetContentHash(),
+			ContentLength: msg.GetContentLength(),
+		},
+	}
+}
+
+func ToDomainAnnounce(ev *proto.Event, ann *proto.Announce) domain.EventAnnounce {
+	return domain.EventAnnounce{
+		From:    id.Author(ann.GetID()),
+		Created: ev.GetCreated().AsTime(),
+		Payload: domain.Announce{
+			ID:          ann.GetID(),
+			MimeType:    toDomainMime(ann.GetMimeType()),
+			ContentHash: ann.GetContentHash(),
+		},
+	}
+}
+
+func ToDomainRequest(ev *proto.Event, req *proto.RequestMessage) domain.EventRequest {
+	return domain.EventRequest{
+		From:    id.Author(req.GetID()),
+		Created: ev.GetCreated().AsTime(),
+		Payload: domain.Request{
+			ID: req.GetID(),
+		},
+	}
+}
+
+func ToDomainHandshake(ev *proto.Event, hs *proto.Handshake) domain.EventHandshake {
+	return domain.EventHandshake{
+		Created: ev.GetCreated().AsTime(),
+		Payload: domain.Handshake{
+			Version:  hs.GetVersion(),
+			Port:     hs.GetPort(),
+			MetaData: toDomainDevice(hs.GetDevice()),
+		},
+	}
+}
+
+func toDomainDevice(d *proto.Device) domain.Device {
+	if d == nil {
+		return domain.Device{Name: "unknown", Arch: "unknown"}
+	}
+	return domain.Device{
+		ID:   d.GetID(),
+		Name: d.GetName(),
+		Arch: d.GetArch(),
+	}
+}
+
+func toProtoMime(t mime.Type) proto.Mime {
+	switch t {
+	case mime.TypeText:
+		return proto.Mime_TEXT
+	case mime.TypeImage:
+		return proto.Mime_IMAGE
+	case mime.TypePath:
+		return proto.Mime_PATH
+
+	case mime.TypeAudio, mime.TypeVideo, mime.TypeBinary:
+		return proto.Mime_PATH
+
+	default:
+		return proto.Mime_TEXT
+	}
+}
+
+func toDomainMime(p proto.Mime) mime.Type {
+	switch p {
+	case proto.Mime_TEXT:
+		return mime.TypeText
+	case proto.Mime_IMAGE:
+		return mime.TypeImage
+	case proto.Mime_PATH:
+		return mime.TypePath
+	default:
+		return mime.TypeText
+	}
+}

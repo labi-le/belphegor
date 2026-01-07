@@ -8,12 +8,11 @@ import (
 	"net"
 
 	"github.com/labi-le/belphegor/internal/channel"
+	"github.com/labi-le/belphegor/internal/protocol"
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/network"
-	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
 )
@@ -148,36 +147,6 @@ func (p *Peer) WriteContext(ctx context.Context, meta, raw []byte) error {
 	return nil
 }
 
-func (p *Peer) receiveMessage(ctx context.Context) (domain.EventMessage, error) {
-	var empty domain.EventMessage
-
-	stream, err := p.Conn().AcceptUniStream(ctx)
-	if err != nil {
-		return empty, fmt.Errorf("receive error: %w", err)
-	}
-
-	if err := network.SetReadDeadline(stream, p.deadline); err != nil {
-		return empty, err
-	}
-
-	var event proto.Event
-	if decodeEnc := protoutil.DecodeReader(stream, &event); decodeEnc != nil {
-		return empty, decodeEnc
-	}
-
-	payload, ok := event.GetPayload().(*proto.Event_Message)
-	if !ok {
-		return empty, fmt.Errorf("expected: %T, actual: %T", proto.Event_Message{}, event.GetPayload())
-	}
-
-	data := make([]byte, payload.Message.GetContentLength())
-	if _, err := io.ReadFull(stream, data); err != nil {
-		return empty, fmt.Errorf("read payload: %w", err)
-	}
-
-	return domain.MessageFromProto(&event, payload.Message, data), nil
-}
-
 func (p *Peer) handleStream(ctx context.Context, stream *quic.ReceiveStream) error {
 	defer stream.CancelRead(0)
 
@@ -185,60 +154,47 @@ func (p *Peer) handleStream(ctx context.Context, stream *quic.ReceiveStream) err
 		return err
 	}
 
-	var event proto.Event
-	if err := protoutil.DecodeReader(stream, &event); err != nil {
-		return fmt.Errorf("decode header: %w", err)
+	event, err := protocol.DecodeEvent(stream)
+	if err != nil {
+		return fmt.Errorf("decode event: %w", err)
 	}
 
-	switch payload := event.GetPayload().(type) {
-	case *proto.Event_Message:
-		return p.handleMessage(&event, payload.Message, stream)
+	switch payload := event.(type) {
+	case domain.EventMessage:
+		return p.handleMessage(payload, stream)
 
-	case *proto.Event_Announce:
-		return p.handleAnnounce(&event, payload.Announce)
+	case domain.EventAnnounce:
+		p.channel.Announce(payload)
+		p.logger.Trace().
+			Int64("msg_id", payload.Payload.ID).
+			Msg("received announce")
+		return nil
 
-	case *proto.Event_Request:
-		return p.handleRequest(ctx, p.channel.LastMsg(), payload.Request)
+	case domain.EventRequest:
+		return p.handleRequest(ctx, p.channel.LastMsg(), payload)
 
 	default:
 		return fmt.Errorf("unknown payload type: %T", payload)
 	}
-
 }
 
 func (p *Peer) handleMessage(
-	header *proto.Event,
-	meta *proto.Message,
+	msg domain.EventMessage,
 	reader io.Reader,
 ) error {
-	data := make([]byte, meta.GetContentLength())
+	data := make([]byte, msg.Payload.ContentLength)
 
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return fmt.Errorf("read raw data: %w", err)
 	}
 
-	domainMsg := domain.MessageFromProto(header, meta, data)
+	msg.Payload.Data = data
 
 	p.logger.Trace().
-		Int64("msg_id", domainMsg.Payload.ID).
+		Int64("msg_id", msg.Payload.ID).
 		Msg("received message")
 
-	p.channel.Send(domainMsg)
-
-	return nil
-}
-
-func (p *Peer) handleAnnounce(
-	header *proto.Event,
-	announce *proto.Announce,
-) error {
-	domainAnnounce := domain.AnnounceFromProto(header, announce)
-
-	p.logger.Trace().
-		Int64("msg_id", domainAnnounce.Payload.ID).
-		Msg("received announce")
-
-	p.channel.Announce(domainAnnounce)
+	p.channel.Send(msg)
 
 	return nil
 }
@@ -246,7 +202,7 @@ func (p *Peer) handleAnnounce(
 func (p *Peer) Request(ctx context.Context, messageID id.Unique) error {
 	req := domain.NewRequest(messageID)
 
-	bytes, err := protoutil.EncodeBytes(req.Proto())
+	bytes, err := protocol.Encode(req)
 	if err != nil {
 		return fmt.Errorf("encode request: %w", err)
 	}
@@ -256,11 +212,11 @@ func (p *Peer) Request(ctx context.Context, messageID id.Unique) error {
 	return p.WriteContext(ctx, bytes, nil)
 }
 
-func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, request *proto.RequestMessage) error {
+func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req domain.EventRequest) error {
 	logger := domain.MsgLogger(p.logger, ev.Payload.ID)
 	logger.Trace().Msg("received request")
 
-	if ev.Payload.ID != request.GetID() {
+	if ev.Payload.ID != req.Payload.ID {
 		return nil
 	}
 
@@ -269,8 +225,10 @@ func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, reques
 	meta := ev
 	meta.Payload.Data = nil
 
-	pt := meta.Proto()
-	dst, _ := protoutil.EncodeBytes(pt)
+	dst, err := protocol.Encode(meta)
+	if err != nil {
+		return fmt.Errorf("encode response: %w", err)
+	}
 
 	return p.WriteContext(ctx, dst, ev.Payload.Data)
 }

@@ -5,15 +5,11 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash"
-	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/mime"
-	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/rs/zerolog"
 )
-
-var _ protoutil.Proto[*proto.Message] = Message{}
 
 type EventMessage = Event[Message]
 
@@ -100,15 +96,6 @@ func (m Message) Announce() Announce {
 	}
 }
 
-func (m Message) Proto() *proto.Message {
-	return &proto.Message{
-		MimeType:      proto.Mime(m.MimeType),
-		ID:            m.ID,
-		ContentLength: m.ContentLength,
-		ContentHash:   m.ContentHash,
-	}
-}
-
 func MessageFromUpdate(update eventful.Update) Message {
 	return Message{
 		ID:            id.New(),
@@ -116,20 +103,6 @@ func MessageFromUpdate(update eventful.Update) Message {
 		MimeType:      update.MimeType,
 		ContentHash:   update.Hash,
 		ContentLength: int64(len(update.Data)),
-	}
-}
-
-func MessageFromProto(proto *proto.Event, payload *proto.Message, src []byte) EventMessage {
-	return EventMessage{
-		From:    id.Author(payload.GetID()),
-		Created: proto.GetCreated().AsTime(),
-		Payload: Message{
-			ID:            payload.GetID(),
-			Data:          src,
-			MimeType:      mime.Type(payload.GetMimeType()),
-			ContentHash:   payload.GetContentHash(),
-			ContentLength: payload.ContentLength,
-		},
 	}
 }
 

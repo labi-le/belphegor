@@ -6,12 +6,8 @@ import (
 	"os/user"
 	"runtime"
 
-	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/id"
-	"github.com/labi-le/belphegor/pkg/protoutil"
 )
-
-var _ protoutil.Proto[*proto.Device] = Device{}
 
 type Device struct {
 	ID   id.Unique
@@ -46,20 +42,4 @@ func (meta Device) UniqueID() id.Unique {
 
 func (meta Device) String() string {
 	return meta.Name
-}
-
-func MetaDataFromProto(device *proto.Device) Device {
-	return Device{
-		Name: device.GetName(),
-		Arch: device.GetArch(),
-		ID:   device.GetID(),
-	}
-}
-
-func (meta Device) Proto() *proto.Device {
-	return &proto.Device{
-		Name: meta.Name,
-		Arch: meta.Arch,
-		ID:   meta.ID,
-	}
 }

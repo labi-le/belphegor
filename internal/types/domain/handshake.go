@@ -1,14 +1,8 @@
 package domain
 
 import (
-	"io"
-
 	"github.com/labi-le/belphegor/internal/metadata"
-	"github.com/labi-le/belphegor/internal/types/proto"
-	"github.com/labi-le/belphegor/pkg/protoutil"
 )
-
-var _ protoutil.Proto[*proto.Handshake] = Handshake{}
 
 type EventHandshake = Event[Handshake]
 
@@ -28,39 +22,6 @@ func NewGreet(opts ...GreetOption) EventHandshake {
 	}
 
 	return NewEvent[Handshake](*greet)
-}
-
-func GreetFromProto(m *proto.Event) EventHandshake {
-	ev, ok := m.GetPayload().(*proto.Event_Handshake)
-	if !ok {
-		return EventHandshake{}
-	}
-
-	return EventHandshake{
-		Created: m.GetCreated().AsTime(),
-		Payload: Handshake{
-			Version:  ev.Handshake.GetVersion(),
-			MetaData: MetaDataFromProto(ev.Handshake.GetDevice()),
-			Port:     ev.Handshake.GetPort(),
-		},
-	}
-}
-
-func NewGreetFromReader(reader io.Reader) (EventHandshake, error) {
-	var gp proto.Event
-	if err := protoutil.DecodeReader(reader, &gp); err != nil {
-		return EventHandshake{}, err
-	}
-
-	return GreetFromProto(&gp), nil
-}
-
-func (g Handshake) Proto() *proto.Handshake {
-	return &proto.Handshake{
-		Version: g.Version,
-		Device:  g.MetaData.Proto(),
-		Port:    g.Port,
-	}
 }
 
 type GreetOption func(g *Handshake)

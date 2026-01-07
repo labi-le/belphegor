@@ -21,11 +21,11 @@ import (
 
 	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/peer"
+	"github.com/labi-le/belphegor/internal/protocol"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/id"
-	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/quic-go/quic-go"
 )
 
@@ -270,7 +270,7 @@ func openOrAcceptStream(ctx context.Context, conn *quic.Conn, accept bool) (*qui
 func (n *Node) Broadcast(ctx context.Context, announce domain.EventAnnounce) {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Broadcast")
 
-	dst, _ := protoutil.EncodeBytes(announce.Proto())
+	blob := protocol.MustEncode(announce)
 	n.peers.Tap(func(id id.Unique, peer *peer.Peer) bool {
 		ctxLog := ctxLog.
 			With().
@@ -283,7 +283,7 @@ func (n *Node) Broadcast(ctx context.Context, announce domain.EventAnnounce) {
 
 		ctxLog.Trace().Msg("announced")
 
-		encodeErr := peer.WriteContext(ctx, dst, nil)
+		encodeErr := peer.WriteContext(ctx, blob, nil)
 		if encodeErr != nil {
 			if errors.Is(encodeErr, net.ErrClosed) ||
 				strings.Contains(encodeErr.Error(), "bad file descriptor") ||
@@ -488,13 +488,12 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 		return
 	}
 
-	n.opts.Logger.Trace().Int64("msg_id", ann.Payload.ID).Msg("requesting message")
+	logger := domain.MsgLogger(n.opts.Logger, ann.Payload.ID)
+	logger.Trace().Msg("requesting message")
 
-	go func() {
-		if err := p.Request(ctx, ann.Payload.ID); err != nil {
-			n.opts.Logger.Err(err).Str("peer", p.String()).Msg("failed to request")
-		}
-	}()
+	if err := p.Request(ctx, ann.Payload.ID); err != nil {
+		logger.Err(err).Str("peer", p.String()).Msg("failed to request")
+	}
 
 }
 

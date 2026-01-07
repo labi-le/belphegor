@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/labi-le/belphegor/internal/metadata"
+	"github.com/labi-le/belphegor/internal/protocol"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/protoutil"
 	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
 )
@@ -40,11 +40,11 @@ func (h *handshake) exchange(ctx context.Context, conn *quic.Conn, incoming bool
 	}
 	defer func(stream *quic.Stream) { _ = stream.Close() }(stream)
 
-	if _, err := protoutil.EncodeWriter(h.my.Proto(), stream); err != nil {
+	if _, err := stream.Write(protocol.MustEncode(h.my)); err != nil {
 		return empty, fmt.Errorf("send greeting: %w", err)
 	}
 
-	from, err := domain.NewGreetFromReader(stream)
+	from, err := protocol.DecodeExpect[domain.EventHandshake](stream)
 	if err != nil {
 		return empty, fmt.Errorf("receive greeting: %w", err)
 	}
