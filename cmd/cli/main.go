@@ -111,6 +111,7 @@ func main() {
 			MaxPeers: maxPeers,
 		}),
 		node.WithSecret(secret),
+		node.WithMaxPeers(maxPeers),
 	}, options...)
 
 	nodeSettings := node.NewOptions(options...)

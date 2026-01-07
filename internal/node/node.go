@@ -76,6 +76,11 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 		Str("addr", addr).
 		Logger()
 
+	if n.peers.Len() >= n.opts.MaxPeers {
+		ctxLog.Warn().Int("max_peers", n.opts.MaxPeers).Msg("peer limit")
+		return nil
+	}
+
 	conn, err := n.transport.Dial(ctx, addr)
 	if err != nil {
 		switch {

@@ -19,6 +19,7 @@ type Options struct {
 	Metadata    domain.Device
 	Logger      zerolog.Logger
 	Secret      string
+	MaxPeers    int
 }
 
 type DiscoverOptions struct {
@@ -102,5 +103,11 @@ func WithLogger(logger zerolog.Logger) Option {
 func WithSecret(secret string) Option {
 	return func(options *Options) {
 		options.Secret = secret
+	}
+}
+
+func WithMaxPeers(peers int) Option {
+	return func(options *Options) {
+		options.MaxPeers = peers
 	}
 }
