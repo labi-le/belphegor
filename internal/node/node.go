@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/labi-le/belphegor/internal/channel"
+	"github.com/labi-le/belphegor/internal/discovering"
 	"github.com/labi-le/belphegor/internal/peer"
 	"github.com/labi-le/belphegor/internal/protocol"
 	"github.com/labi-le/belphegor/internal/security"
@@ -22,6 +23,8 @@ import (
 var (
 	ErrAlreadyConnected = errors.New("already connected")
 )
+
+var _ discovering.Connector = (*Node)(nil)
 
 type cleanup func()
 
@@ -367,7 +370,12 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 		return
 	}
 
-	logger := n.opts.Logger.With().Int64("msg_id", ann.Payload.ID).Logger()
+	logger := ctxlog.Op(n.opts.Logger, "node.handleAnnounce").With().Int64("msg_id", ann.Payload.ID).Logger()
+
+	if n.channel.LastMsg().Payload.DuplicateByAnnounce(ann.Payload) {
+		logger.Trace().Msg("we already have such a message, skipping")
+		return
+	}
 	logger.Trace().Msg("requesting message")
 
 	if err := p.Request(ctx, ann.Payload.ID); err != nil {

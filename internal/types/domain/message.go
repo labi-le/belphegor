@@ -87,6 +87,14 @@ func (m Message) Duplicate(msg Message) bool {
 	//}
 }
 
+func (m Message) DuplicateByAnnounce(ann Announce) bool {
+	if m.ID == ann.ID {
+		return true
+	}
+
+	return m.ContentHash != 0 && m.ContentHash == ann.ContentHash
+}
+
 func (m Message) Announce() Announce {
 	return Announce{
 		ID:          m.ID,
@@ -98,7 +106,7 @@ func (m Message) Announce() Announce {
 func (m Message) MarshalZerologObject(e *zerolog.Event) {
 	e.Int64("id", m.ID)
 	e.Int64("node", id.Author(m.ID))
-	e.Stringer("mime_type", m.MimeType)
-	e.Int64("length", m.ContentLength)
+	e.Stringer("mime", m.MimeType)
+	//e.Int64("length", m.ContentLength)
 	e.Uint64("hash", m.ContentHash)
 }
