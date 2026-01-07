@@ -36,6 +36,8 @@ type Clipboard struct {
 }
 
 func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
+	defer close(update)
+
 	for range time.Tick(clipboardTick) {
 		if ctx.Err() != nil {
 			return nil

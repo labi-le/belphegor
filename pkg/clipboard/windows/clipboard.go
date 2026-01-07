@@ -68,6 +68,8 @@ func (w *Clipboard) dedup(data []byte) bool {
 }
 
 func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
+	defer close(update)
+
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
