@@ -15,6 +15,7 @@ import (
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
+	"github.com/labi-le/belphegor/internal/security"
 	"github.com/labi-le/belphegor/internal/transport/quic"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/labi-le/belphegor/pkg/network"
@@ -114,7 +115,7 @@ func main() {
 
 	nodeSettings := node.NewOptions(options...)
 
-	tlsConfig, err := node.MakeTLSConfig(nodeSettings)
+	tlsConfig, err := security.MakeTLSConfig(secret, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to generate TLS config")
 	}

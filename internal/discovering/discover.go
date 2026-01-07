@@ -7,7 +7,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/protocol"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
@@ -15,6 +14,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/schollz/peerdiscovery"
 )
+
+type Connector interface {
+	ConnectTo(ctx context.Context, addr string) error
+	Metadata() domain.Device
+}
 
 type Discover struct {
 	maxPeers int
@@ -75,11 +79,11 @@ func New(opts ...Option) *Discover {
 	return d
 }
 
-func (d *Discover) Discover(ctx context.Context, n *node.Node) {
+func (d *Discover) Discover(ctx context.Context, connector Connector) {
 	ctxLog := ctxlog.Op(d.logger, "discover.Discover")
 	_, err := peerdiscovery.NewPeerDiscovery(
 		peerdiscovery.Settings{
-			Payload:   createPayload(n.Metadata(), d.port),
+			Payload:   createPayload(connector.Metadata(), d.port),
 			Limit:     d.maxPeers,
 			TimeLimit: -1,
 			Delay:     d.delay,
@@ -103,7 +107,7 @@ func (d *Discover) Discover(ctx context.Context, n *node.Node) {
 					Uint32("port", greet.Payload.Port).
 					Msg("discovered")
 
-				go func() { _ = n.ConnectTo(ctx, createConnDsn(peerIP, greet)) }()
+				go func() { _ = connector.ConnectTo(ctx, createConnDsn(peerIP, greet)) }()
 			},
 		},
 	)

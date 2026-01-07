@@ -1,6 +1,6 @@
 //go:build debug
 
-package node
+package security
 
 import (
 	"crypto/tls"
