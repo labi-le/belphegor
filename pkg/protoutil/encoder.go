@@ -14,10 +14,7 @@ const (
 )
 
 func EncodeBytes(src proto.Message) ([]byte, error) {
-	buf := byteslice.Get(DefaultBufferSize)
-	defer byteslice.Put(buf)
-
-	target := buf[:Length]
+	target := make([]byte, Length, DefaultBufferSize)
 
 	options := proto.MarshalOptions{
 		UseCachedSize: true,
@@ -25,7 +22,6 @@ func EncodeBytes(src proto.Message) ([]byte, error) {
 
 	target, err := options.MarshalAppend(target, src)
 	if err != nil {
-		byteslice.Put(buf)
 		return nil, err
 	}
 
@@ -33,26 +29,6 @@ func EncodeBytes(src proto.Message) ([]byte, error) {
 	binary.BigEndian.PutUint32(target[:Length], uint32(msgLen))
 
 	return target, nil
-}
-
-func EncodeWriter(src proto.Message, w io.Writer) (int, error) {
-	buf := byteslice.Get(DefaultBufferSize)
-	defer byteslice.Put(buf)
-
-	target := buf[:Length]
-
-	var err error
-	options := proto.MarshalOptions{}
-	target, err = options.MarshalAppend(target, src)
-	if err != nil {
-		return 0, err
-	}
-
-	msgLen := len(target) - Length
-
-	binary.BigEndian.PutUint32(target[:Length], uint32(msgLen))
-
-	return w.Write(target)
 }
 
 func DecodeReader(r io.Reader, dst proto.Message) error {
