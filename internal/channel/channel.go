@@ -15,7 +15,12 @@ type Channel struct {
 }
 
 func (c *Channel) LastMsg() domain.EventMessage {
-	return *c.lastMsg.Load()
+	load := c.lastMsg.Load()
+	if load == nil {
+		return domain.EventMessage{}
+	}
+
+	return *load
 }
 
 func New() *Channel {
