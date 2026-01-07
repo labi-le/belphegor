@@ -17,13 +17,13 @@ func DecodeEvent(r io.Reader) (any, error) {
 
 	switch p := pb.Payload.(type) {
 	case *proto.Event_Message:
-		return ToDomainMessage(&pb, p.Message, nil), nil
+		return toDomainMessage(&pb, p.Message, nil), nil
 	case *proto.Event_Announce:
-		return ToDomainAnnounce(&pb, p.Announce), nil
+		return toDomainAnnounce(&pb, p.Announce), nil
 	case *proto.Event_Request:
-		return ToDomainRequest(&pb, p.Request), nil
+		return toDomainRequest(&pb, p.Request), nil
 	case *proto.Event_Handshake:
-		return ToDomainHandshake(&pb, p.Handshake), nil
+		return toDomainHandshake(&pb, p.Handshake), nil
 	default:
 		return nil, fmt.Errorf("unknown event type %T", p)
 	}

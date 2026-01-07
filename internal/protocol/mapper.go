@@ -65,7 +65,7 @@ func MapToProto(v any) *proto.Event {
 	return nil
 }
 
-func ToDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.EventMessage {
+func toDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.EventMessage {
 	return domain.EventMessage{
 		From:    id.Author(msg.GetID()),
 		Created: ev.GetCreated().AsTime(),
@@ -79,7 +79,7 @@ func ToDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.Ev
 	}
 }
 
-func ToDomainAnnounce(ev *proto.Event, ann *proto.Announce) domain.EventAnnounce {
+func toDomainAnnounce(ev *proto.Event, ann *proto.Announce) domain.EventAnnounce {
 	return domain.EventAnnounce{
 		From:    id.Author(ann.GetID()),
 		Created: ev.GetCreated().AsTime(),
@@ -91,7 +91,7 @@ func ToDomainAnnounce(ev *proto.Event, ann *proto.Announce) domain.EventAnnounce
 	}
 }
 
-func ToDomainRequest(ev *proto.Event, req *proto.RequestMessage) domain.EventRequest {
+func toDomainRequest(ev *proto.Event, req *proto.RequestMessage) domain.EventRequest {
 	return domain.EventRequest{
 		From:    id.Author(req.GetID()),
 		Created: ev.GetCreated().AsTime(),
@@ -101,7 +101,7 @@ func ToDomainRequest(ev *proto.Event, req *proto.RequestMessage) domain.EventReq
 	}
 }
 
-func ToDomainHandshake(ev *proto.Event, hs *proto.Handshake) domain.EventHandshake {
+func toDomainHandshake(ev *proto.Event, hs *proto.Handshake) domain.EventHandshake {
 	return domain.EventHandshake{
 		Created: ev.GetCreated().AsTime(),
 		Payload: domain.Handshake{
