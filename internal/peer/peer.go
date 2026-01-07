@@ -215,6 +215,7 @@ func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req do
 	logger.Trace().Msg("sending")
 
 	meta := ev
+	// data written separately to stream
 	meta.Payload.Data = nil
 
 	dst, err := protocol.Encode(meta)
