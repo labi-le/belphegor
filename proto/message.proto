@@ -10,6 +10,17 @@ message Message {
   int64 ContentLength = 2;
   Mime MimeType = 3;
   uint64 ContentHash = 4;
+  // data as raw stream after write metadata
+}
+
+message Announce {
+  int64 ID = 1;
+  Mime MimeType = 3;
+  uint64 ContentHash = 4;
+}
+
+message RequestMessage {
+  int64 ID = 1;
 }
 
 enum Mime {

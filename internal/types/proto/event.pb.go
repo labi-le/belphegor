@@ -76,9 +76,10 @@ type Event struct {
 	Created *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=Created,proto3" json:"Created,omitempty"`
 	// Types that are valid to be assigned to Payload:
 	//
-	//	*Event_Heartbeat
 	//	*Event_Message
 	//	*Event_Handshake
+	//	*Event_Announce
+	//	*Event_Request
 	Payload       isEvent_Payload `protobuf_oneof:"Payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -128,15 +129,6 @@ func (x *Event) GetPayload() isEvent_Payload {
 	return nil
 }
 
-func (x *Event) GetHeartbeat() *HeartbeatPayload {
-	if x != nil {
-		if x, ok := x.Payload.(*Event_Heartbeat); ok {
-			return x.Heartbeat
-		}
-	}
-	return nil
-}
-
 func (x *Event) GetMessage() *Message {
 	if x != nil {
 		if x, ok := x.Payload.(*Event_Message); ok {
@@ -155,27 +147,51 @@ func (x *Event) GetHandshake() *Handshake {
 	return nil
 }
 
+func (x *Event) GetAnnounce() *Announce {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_Announce); ok {
+			return x.Announce
+		}
+	}
+	return nil
+}
+
+func (x *Event) GetRequest() *RequestMessage {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_Request); ok {
+			return x.Request
+		}
+	}
+	return nil
+}
+
 type isEvent_Payload interface {
 	isEvent_Payload()
 }
 
-type Event_Heartbeat struct {
-	Heartbeat *HeartbeatPayload `protobuf:"bytes,2,opt,name=Heartbeat,proto3,oneof"`
-}
-
 type Event_Message struct {
-	Message *Message `protobuf:"bytes,3,opt,name=Message,proto3,oneof"`
+	Message *Message `protobuf:"bytes,2,opt,name=Message,proto3,oneof"`
 }
 
 type Event_Handshake struct {
-	Handshake *Handshake `protobuf:"bytes,4,opt,name=Handshake,proto3,oneof"`
+	Handshake *Handshake `protobuf:"bytes,3,opt,name=Handshake,proto3,oneof"`
 }
 
-func (*Event_Heartbeat) isEvent_Payload() {}
+type Event_Announce struct {
+	Announce *Announce `protobuf:"bytes,4,opt,name=Announce,proto3,oneof"`
+}
+
+type Event_Request struct {
+	Request *RequestMessage `protobuf:"bytes,6,opt,name=Request,proto3,oneof"`
+}
 
 func (*Event_Message) isEvent_Payload() {}
 
 func (*Event_Handshake) isEvent_Payload() {}
+
+func (*Event_Announce) isEvent_Payload() {}
+
+func (*Event_Request) isEvent_Payload() {}
 
 type HeartbeatPayload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -217,12 +233,13 @@ var File_event_proto protoreflect.FileDescriptor
 
 const file_event_proto_rawDesc = "" +
 	"\n" +
-	"\vevent.proto\x12\tbelphegor\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0fhandshake.proto\x1a\rmessage.proto\"\xeb\x01\n" +
+	"\vevent.proto\x12\tbelphegor\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0fhandshake.proto\x1a\rmessage.proto\"\x98\x02\n" +
 	"\x05Event\x124\n" +
-	"\aCreated\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\aCreated\x12;\n" +
-	"\tHeartbeat\x18\x02 \x01(\v2\x1b.belphegor.HeartbeatPayloadH\x00R\tHeartbeat\x12.\n" +
-	"\aMessage\x18\x03 \x01(\v2\x12.belphegor.MessageH\x00R\aMessage\x124\n" +
-	"\tHandshake\x18\x04 \x01(\v2\x14.belphegor.HandshakeH\x00R\tHandshakeB\t\n" +
+	"\aCreated\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\aCreated\x12.\n" +
+	"\aMessage\x18\x02 \x01(\v2\x12.belphegor.MessageH\x00R\aMessage\x124\n" +
+	"\tHandshake\x18\x03 \x01(\v2\x14.belphegor.HandshakeH\x00R\tHandshake\x121\n" +
+	"\bAnnounce\x18\x04 \x01(\v2\x13.belphegor.AnnounceH\x00R\bAnnounce\x125\n" +
+	"\aRequest\x18\x06 \x01(\v2\x19.belphegor.RequestMessageH\x00R\aRequestB\t\n" +
 	"\aPayload\"\x12\n" +
 	"\x10HeartbeatPayload*0\n" +
 	"\x04Type\x12\r\n" +
@@ -252,17 +269,20 @@ var file_event_proto_goTypes = []any{
 	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
 	(*Message)(nil),               // 4: belphegor.Message
 	(*Handshake)(nil),             // 5: belphegor.Handshake
+	(*Announce)(nil),              // 6: belphegor.Announce
+	(*RequestMessage)(nil),        // 7: belphegor.RequestMessage
 }
 var file_event_proto_depIdxs = []int32{
 	3, // 0: belphegor.Event.Created:type_name -> google.protobuf.Timestamp
-	2, // 1: belphegor.Event.Heartbeat:type_name -> belphegor.HeartbeatPayload
-	4, // 2: belphegor.Event.Message:type_name -> belphegor.Message
-	5, // 3: belphegor.Event.Handshake:type_name -> belphegor.Handshake
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4, // 1: belphegor.Event.Message:type_name -> belphegor.Message
+	5, // 2: belphegor.Event.Handshake:type_name -> belphegor.Handshake
+	6, // 3: belphegor.Event.Announce:type_name -> belphegor.Announce
+	7, // 4: belphegor.Event.Request:type_name -> belphegor.RequestMessage
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_event_proto_init() }
@@ -273,9 +293,10 @@ func file_event_proto_init() {
 	file_handshake_proto_init()
 	file_message_proto_init()
 	file_event_proto_msgTypes[0].OneofWrappers = []any{
-		(*Event_Heartbeat)(nil),
 		(*Event_Message)(nil),
 		(*Event_Handshake)(nil),
+		(*Event_Announce)(nil),
+		(*Event_Request)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

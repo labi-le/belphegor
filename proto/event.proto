@@ -12,9 +12,10 @@ message Event {
   google.protobuf.Timestamp Created = 1;
 
   oneof Payload {
-    HeartbeatPayload Heartbeat = 2;
-    Message Message = 3;
-    Handshake Handshake = 4;
+    Message Message = 2;
+    Handshake Handshake = 3;
+    Announce Announce = 4;
+    RequestMessage Request = 6;
   }
 }
 

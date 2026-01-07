@@ -13,19 +13,21 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var (
-	_ protoutil.Proto[*proto.Message] = Message{}
-)
+var _ protoutil.Proto[*proto.Message] = Message{}
 
 type EventMessage = Event[Message]
 
-type Data []byte
+type (
+	MessageID = id.Unique
+	Data      []byte
+)
 
 type Message struct {
-	ID          id.Unique
-	Data        Data
-	Mime        mime.Type
-	ContentHash uint64
+	ID            MessageID
+	Data          Data
+	MimeType      mime.Type
+	ContentHash   uint64
+	ContentLength int64
 }
 
 func (m Message) Zero() bool {
@@ -41,6 +43,7 @@ func (m Message) Event() EventMessage {
 }
 
 // MessageNew creates a new Message with the provided data.
+// Deprecated: Use MessageFromUpdate instead.
 func MessageNew(data []byte) EventMessage {
 	mt := mime.From(data)
 	return EventMessage{
@@ -48,7 +51,7 @@ func MessageNew(data []byte) EventMessage {
 		Created: time.Now(),
 		Payload: Message{
 			Data:        data,
-			Mime:        mt,
+			MimeType:    mt,
 			ID:          id.New(),
 			ContentHash: hashMessage(mt, data),
 		},
@@ -70,7 +73,7 @@ func (m Message) Duplicate(msg Message) bool {
 		return true
 	}
 
-	if m.Mime != msg.Mime {
+	if m.MimeType != msg.MimeType {
 		return false
 	}
 
@@ -89,40 +92,50 @@ func (m Message) Duplicate(msg Message) bool {
 	//}
 }
 
+func (m Message) Announce() Announce {
+	return Announce{
+		ID:          m.ID,
+		MimeType:    m.MimeType,
+		ContentHash: m.ContentHash,
+	}
+}
+
 func (m Message) Proto() *proto.Message {
 	return &proto.Message{
-		MimeType:      proto.Mime(m.Mime),
-		ID:            id.New(),
-		ContentLength: int64(len(m.Data)),
+		MimeType:      proto.Mime(m.MimeType),
+		ID:            m.ID,
+		ContentLength: m.ContentLength,
 		ContentHash:   m.ContentHash,
 	}
 }
 
-func FromUpdate(update eventful.Update) Message {
+func MessageFromUpdate(update eventful.Update) Message {
 	return Message{
-		ID:          id.New(),
-		Data:        update.Data,
-		Mime:        update.MimeType,
-		ContentHash: update.Hash,
+		ID:            id.New(),
+		Data:          update.Data,
+		MimeType:      update.MimeType,
+		ContentHash:   update.Hash,
+		ContentLength: int64(len(update.Data)),
 	}
 }
 
-func FromProto(proto *proto.Event, payload *proto.Event_Message, src []byte) EventMessage {
+func MessageFromProto(proto *proto.Event, payload *proto.Message, src []byte) EventMessage {
 	return EventMessage{
-		From:    id.Author(payload.Message.GetID()),
+		From:    id.Author(payload.GetID()),
 		Created: proto.GetCreated().AsTime(),
 		Payload: Message{
-			ID:          payload.Message.GetID(),
-			Data:        src,
-			Mime:        mime.Type(payload.Message.GetMimeType()),
-			ContentHash: payload.Message.GetContentHash(),
+			ID:            payload.GetID(),
+			Data:          src,
+			MimeType:      mime.Type(payload.GetMimeType()),
+			ContentHash:   payload.GetContentHash(),
+			ContentLength: payload.ContentLength,
 		},
 	}
 }
 
-func MsgLogger(base zerolog.Logger, msg Message) zerolog.Logger {
+func MsgLogger(base zerolog.Logger, msg MessageID) zerolog.Logger {
 	return base.With().
-		Int64("msg_id", msg.ID).
-		Int64("node_id", id.Author(msg.ID)).
+		Int64("msg_id", msg).
+		Int64("node_id", id.Author(msg)).
 		Logger()
 }

@@ -8,7 +8,10 @@ import (
 
 	"github.com/labi-le/belphegor/internal/types/proto"
 	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/labi-le/belphegor/pkg/protoutil"
 )
+
+var _ protoutil.Proto[*proto.Device] = Device{}
 
 type Device struct {
 	ID   id.Unique

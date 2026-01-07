@@ -76,7 +76,7 @@ type Message struct {
 	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	ContentLength int64                  `protobuf:"varint,2,opt,name=ContentLength,proto3" json:"ContentLength,omitempty"`
 	MimeType      Mime                   `protobuf:"varint,3,opt,name=MimeType,proto3,enum=belphegor.Mime" json:"MimeType,omitempty"`
-	ContentHash   uint64                 `protobuf:"varint,4,opt,name=ContentHash,proto3" json:"ContentHash,omitempty"`
+	ContentHash   uint64                 `protobuf:"varint,4,opt,name=ContentHash,proto3" json:"ContentHash,omitempty"` // data as raw stream after write metadata
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -139,6 +139,110 @@ func (x *Message) GetContentHash() uint64 {
 	return 0
 }
 
+type Announce struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	MimeType      Mime                   `protobuf:"varint,3,opt,name=MimeType,proto3,enum=belphegor.Mime" json:"MimeType,omitempty"`
+	ContentHash   uint64                 `protobuf:"varint,4,opt,name=ContentHash,proto3" json:"ContentHash,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Announce) Reset() {
+	*x = Announce{}
+	mi := &file_message_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Announce) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Announce) ProtoMessage() {}
+
+func (x *Announce) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Announce.ProtoReflect.Descriptor instead.
+func (*Announce) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Announce) GetID() int64 {
+	if x != nil {
+		return x.ID
+	}
+	return 0
+}
+
+func (x *Announce) GetMimeType() Mime {
+	if x != nil {
+		return x.MimeType
+	}
+	return Mime_TEXT
+}
+
+func (x *Announce) GetContentHash() uint64 {
+	if x != nil {
+		return x.ContentHash
+	}
+	return 0
+}
+
+type RequestMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestMessage) Reset() {
+	*x = RequestMessage{}
+	mi := &file_message_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestMessage) ProtoMessage() {}
+
+func (x *RequestMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestMessage.ProtoReflect.Descriptor instead.
+func (*RequestMessage) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RequestMessage) GetID() int64 {
+	if x != nil {
+		return x.ID
+	}
+	return 0
+}
+
 var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
@@ -148,7 +252,13 @@ const file_message_proto_rawDesc = "" +
 	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12$\n" +
 	"\rContentLength\x18\x02 \x01(\x03R\rContentLength\x12+\n" +
 	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType\x12 \n" +
-	"\vContentHash\x18\x04 \x01(\x04R\vContentHash*%\n" +
+	"\vContentHash\x18\x04 \x01(\x04R\vContentHash\"i\n" +
+	"\bAnnounce\x12\x0e\n" +
+	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12+\n" +
+	"\bMimeType\x18\x03 \x01(\x0e2\x0f.belphegor.MimeR\bMimeType\x12 \n" +
+	"\vContentHash\x18\x04 \x01(\x04R\vContentHash\" \n" +
+	"\x0eRequestMessage\x12\x0e\n" +
+	"\x02ID\x18\x01 \x01(\x03R\x02ID*%\n" +
 	"\x04Mime\x12\b\n" +
 	"\x04TEXT\x10\x00\x12\t\n" +
 	"\x05IMAGE\x10\x01\x12\b\n" +
@@ -167,18 +277,21 @@ func file_message_proto_rawDescGZIP() []byte {
 }
 
 var file_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_message_proto_goTypes = []any{
-	(Mime)(0),       // 0: belphegor.Mime
-	(*Message)(nil), // 1: belphegor.Message
+	(Mime)(0),              // 0: belphegor.Mime
+	(*Message)(nil),        // 1: belphegor.Message
+	(*Announce)(nil),       // 2: belphegor.Announce
+	(*RequestMessage)(nil), // 3: belphegor.RequestMessage
 }
 var file_message_proto_depIdxs = []int32{
 	0, // 0: belphegor.Message.MimeType:type_name -> belphegor.Mime
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0, // 1: belphegor.Announce.MimeType:type_name -> belphegor.Mime
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_message_proto_init() }
@@ -192,7 +305,7 @@ func file_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   1,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

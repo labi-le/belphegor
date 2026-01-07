@@ -9,7 +9,7 @@ import (
 )
 
 type payloadConstraint interface {
-	Heartbeat | Handshake | Message
+	Handshake | Message | Announce | Request
 }
 
 type OwnerID = id.Unique
@@ -21,9 +21,7 @@ type Event[T payloadConstraint] struct {
 }
 
 func (e Event[T]) Proto() *proto.Event {
-	ev := &proto.Event{
-		Created: timestamppb.New(e.Created),
-	}
+	ev := &proto.Event{Created: timestamppb.New(e.Created)}
 
 	payloadProto(e, ev)
 
@@ -32,20 +30,14 @@ func (e Event[T]) Proto() *proto.Event {
 
 func payloadProto[T payloadConstraint](e Event[T], ev *proto.Event) {
 	switch p := any(e.Payload).(type) {
-	case Heartbeat:
-		ev.Payload = &proto.Event_Heartbeat{
-			Heartbeat: p.Proto(),
-		}
-
 	case Message:
-		ev.Payload = &proto.Event_Message{
-			Message: p.Proto(),
-		}
+		ev.Payload = &proto.Event_Message{Message: p.Proto()}
 
 	case Handshake:
-		ev.Payload = &proto.Event_Handshake{
-			Handshake: p.Proto(),
-		}
+		ev.Payload = &proto.Event_Handshake{Handshake: p.Proto()}
+
+	case Announce:
+		ev.Payload = &proto.Event_Announce{Announce: p.Proto()}
 	}
 }
 
@@ -53,11 +45,6 @@ func NewEvent[concrete payloadConstraint](payload concrete) Event[concrete] {
 	return Event[concrete]{
 		Created: time.Now(),
 		Payload: payload,
+		From:    id.MyID,
 	}
-}
-
-type Heartbeat struct{}
-
-func (h Heartbeat) Proto() *proto.HeartbeatPayload {
-	return new(proto.HeartbeatPayload)
 }

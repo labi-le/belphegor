@@ -8,6 +8,8 @@ import (
 	"github.com/labi-le/belphegor/pkg/protoutil"
 )
 
+var _ protoutil.Proto[*proto.Handshake] = Handshake{}
+
 type EventHandshake = Event[Handshake]
 
 type Handshake struct {

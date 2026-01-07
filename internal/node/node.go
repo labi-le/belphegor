@@ -267,23 +267,23 @@ func openOrAcceptStream(ctx context.Context, conn *quic.Conn, accept bool) (*qui
 	return conn.OpenStreamSync(ctx)
 }
 
-func (n *Node) Broadcast(ctx context.Context, msg domain.EventMessage) {
-	ctxLog := domain.MsgLogger(ctxlog.Op(n.opts.Logger, "node.Broadcast"), msg.Payload)
+func (n *Node) Broadcast(ctx context.Context, announce domain.EventAnnounce) {
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.Broadcast")
 
-	dst, _ := protoutil.EncodeBytes(msg.Proto())
+	dst, _ := protoutil.EncodeBytes(announce.Proto())
 	n.peers.Tap(func(id id.Unique, peer *peer.Peer) bool {
 		ctxLog := ctxLog.
 			With().
 			Int64("node_id", peer.MetaData().ID).
 			Logger()
 
-		if id == msg.From {
+		if id == announce.From {
 			return true
 		}
 
-		ctxLog.Trace().Msg("sent")
+		ctxLog.Trace().Msg("announced")
 
-		encodeErr := peer.WriteContext(ctx, dst, msg.Payload.Data)
+		encodeErr := peer.WriteContext(ctx, dst, nil)
 		if encodeErr != nil {
 			if errors.Is(encodeErr, net.ErrClosed) ||
 				strings.Contains(encodeErr.Error(), "bad file descriptor") ||
@@ -320,8 +320,8 @@ func (n *Node) monitor(ctx context.Context) error {
 			current domain.Message
 		)
 		for update := range updates {
-			msg := domain.FromUpdate(update)
-			msgLog := domain.MsgLogger(ctxLog, msg)
+			msg := domain.MessageFromUpdate(update)
+			msgLog := domain.MsgLogger(ctxLog, msg.ID)
 
 			if msg.Duplicate(current) && !current.Zero() {
 				msgLog.Trace().Msg("detected duplicate")
@@ -344,12 +344,12 @@ func (n *Node) monitor(ctx context.Context) error {
 				return fmt.Errorf("node.monitor: %w", err)
 			}
 			return nil
-		case msg, ok := <-n.channel.Listen():
+		case msg, ok := <-n.channel.Messages():
 			if !ok {
 				return nil
 			}
 			if msg.From != n.opts.Metadata.UniqueID() {
-				msgLog := domain.MsgLogger(ctxLog, msg.Payload)
+				msgLog := domain.MsgLogger(ctxLog, msg.Payload.ID)
 				msgLog.Trace().Msg("set clipboard data")
 
 				if _, err := n.clipboard.Write(msg.Payload.Data); err != nil {
@@ -357,7 +357,14 @@ func (n *Node) monitor(ctx context.Context) error {
 				}
 			}
 
-			n.Broadcast(ctx, msg)
+			n.Broadcast(ctx, domain.EventAnnounce{
+				From:    msg.From,
+				Created: msg.Created,
+				Payload: msg.Payload.Announce(),
+			})
+
+		case ann := <-n.channel.Announcements():
+			n.handleAnnounce(ctx, ann)
 		}
 	}
 }
@@ -460,6 +467,7 @@ func (n *Node) generateTLSConfig() (*tls.Config, error) {
 
 	return conf, nil
 }
+
 func (n *Node) genKey() (crypto.PrivateKey, crypto.PublicKey, error) {
 	if n.opts.Secret != "" {
 		seed := sha256.Sum256([]byte(n.opts.Secret))
@@ -472,6 +480,22 @@ func (n *Node) genKey() (crypto.PrivateKey, crypto.PublicKey, error) {
 		return nil, nil, fmt.Errorf("ecdsa.GenerateKey: %w", eErr)
 	}
 	return ecdsaPriv, ecdsaPriv.Public(), nil
+}
+
+func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
+	p, ok := n.peers.Get(ann.From)
+	if !ok {
+		return
+	}
+
+	n.opts.Logger.Trace().Int64("msg_id", ann.Payload.ID).Msg("requesting message")
+
+	go func() {
+		if err := p.Request(ctx, ann.Payload.ID); err != nil {
+			n.opts.Logger.Err(err).Str("peer", p.String()).Msg("failed to request")
+		}
+	}()
+
 }
 
 func generateQuicConfig(keepAlive time.Duration) *quic.Config {
