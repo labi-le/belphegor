@@ -1,6 +1,7 @@
 package peer
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -20,6 +21,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type Options struct {
+	Channel        *channel.Channel
+	Store          store.FileWriter
+	Logger         zerolog.Logger
+	Deadline       network.Deadline
+	MaxReceiveSize uint64
+}
+
 type Peer struct {
 	conn       transport.Connection
 	metaData   domain.Device
@@ -28,25 +37,24 @@ type Peer struct {
 	logger     zerolog.Logger
 	deadline   network.Deadline
 
-	fileWriter store.FileWriter
+	fileWriter     store.FileWriter
+	maxReceiveSize uint64
 }
 
 func New(
 	conn transport.Connection,
 	metadata domain.Device,
-	channel *channel.Channel,
-	fileWriter store.FileWriter,
-	logger zerolog.Logger,
-	dd network.Deadline,
+	opts Options,
 ) *Peer {
 	return &Peer{
-		conn:       conn,
-		metaData:   metadata,
-		channel:    channel,
-		fileWriter: fileWriter,
-		logger:     logger,
-		deadline:   dd,
-		stringRepr: fmt.Sprintf("%s -> %s", metadata.Name, conn.RemoteAddr().String()),
+		conn:           conn,
+		metaData:       metadata,
+		channel:        opts.Channel,
+		fileWriter:     opts.Store,
+		logger:         opts.Logger,
+		deadline:       opts.Deadline,
+		stringRepr:     fmt.Sprintf("%s -> %s", metadata.Name, conn.RemoteAddr().String()),
+		maxReceiveSize: opts.MaxReceiveSize,
 	}
 }
 
@@ -103,7 +111,7 @@ func isConnClosed(err error) bool {
 	return strings.Contains(msg, "closed") || strings.Contains(msg, "application error 0x0")
 }
 
-func (p *Peer) WriteContext(ctx context.Context, meta any, raw []byte) error {
+func (p *Peer) WriteContext(ctx context.Context, meta domain.AnyEvent, raw io.Reader) error {
 	stream, err := p.conn.OpenStream(ctx)
 	if err != nil {
 		return fmt.Errorf("open stream: %w", err)
@@ -123,8 +131,8 @@ func (p *Peer) WriteContext(ctx context.Context, meta any, raw []byte) error {
 		return fmt.Errorf("write event: %w", err)
 	}
 
-	if len(raw) > 0 {
-		if _, err := stream.Write(raw); err != nil {
+	if raw != nil {
+		if _, err := io.Copy(stream, raw); err != nil {
 			return fmt.Errorf("write raw: %w", err)
 		}
 	}
@@ -164,10 +172,17 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 }
 
 func (p *Peer) handleMessage(msg domain.EventMessage, reader io.Reader) error {
+	if msg.Payload.ContentLength > p.maxReceiveSize {
+		return fmt.Errorf(
+			"message size exceeds limit: %d > %d",
+			msg.Payload.ContentLength,
+			p.maxReceiveSize,
+		)
+	}
+
 	if msg.Payload.MimeType.IsPath() {
 		filePath, err := p.fileWriter.Write(reader, msg.Payload)
 		if err != nil {
-			p.logger.Error().Err(err).Msg("failed to save incoming file")
 			return err
 		}
 		msg.Payload.Data = []byte(filePath)
@@ -207,51 +222,19 @@ func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req do
 
 	ctxLog.Trace().Msg("sending")
 
+	var r io.Reader
+
 	if ev.Payload.MimeType.IsPath() {
-		return p.streamFile(ctx, ev)
-	}
-
-	meta := ev
-	// data written separately to stream
-	meta.Payload.Data = nil
-
-	return p.WriteContext(ctx, meta, ev.Payload.Data)
-}
-
-func (p *Peer) streamFile(ctx context.Context, meta domain.EventMessage) error {
-	fp := string(meta.Payload.Data)
-	file, err := os.Open(fp)
-	if err != nil {
-		return fmt.Errorf("failed to open file for streaming %s: %w", fp, err)
-	}
-	defer file.Close()
-
-	stream, err := p.conn.OpenStream(ctx)
-	if err != nil {
-		return fmt.Errorf("open stream for file: %w", err)
-	}
-	defer func(stream transport.Stream) {
-		if err := stream.Close(); err != nil {
-			p.logger.Trace().Err(err).Msg("failed to close writer stream")
+		fp := string(ev.Payload.Data)
+		file, err := os.Open(fp)
+		if err != nil {
+			return fmt.Errorf("failed to open file for streaming %s: %w", fp, err)
 		}
-	}(stream)
-
-	if err := network.SetWriteDeadline(stream, p.deadline); err != nil {
-		return err
+		defer file.Close()
+		r = file
+	} else {
+		r = bytes.NewReader(ev.Payload.Data)
 	}
 
-	if err := protocol.WriteEvent(stream, meta); err != nil {
-		return fmt.Errorf("write file event: %w", err)
-	}
-
-	bytesSent, err := io.Copy(stream, file)
-	if err != nil {
-		return fmt.Errorf("write file raw data: %w", err)
-	}
-
-	p.logger.Trace().
-		Int64("bytes_sent", bytesSent).
-		Msg("file stream sent successfully")
-
-	return nil
+	return p.WriteContext(ctx, ev, r)
 }

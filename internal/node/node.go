@@ -120,10 +120,13 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 	pr := peer.New(
 		conn,
 		metadata,
-		n.channel,
-		n.opts.Store,
-		n.opts.Logger,
-		n.opts.Deadline,
+		peer.Options{
+			Channel:        n.channel,
+			Store:          n.opts.Store,
+			Logger:         n.opts.Logger,
+			Deadline:       n.opts.Deadline,
+			MaxReceiveSize: n.opts.MaxReceiveSize,
+		},
 	)
 
 	n.peers.Add(
