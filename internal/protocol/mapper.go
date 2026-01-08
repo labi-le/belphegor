@@ -41,9 +41,10 @@ func MapToProto(v any) *proto.Event {
 		pb.Created = timestamppb.New(e.Created)
 		pb.Payload = &proto.Event_Announce{
 			Announce: &proto.Announce{
-				ID:          e.Payload.ID,
-				MimeType:    toProtoMime(e.Payload.MimeType),
-				ContentHash: e.Payload.ContentHash,
+				ID:            e.Payload.ID,
+				MimeType:      toProtoMime(e.Payload.MimeType),
+				ContentHash:   e.Payload.ContentHash,
+				ContentLength: e.Payload.ContentLength,
 			},
 		}
 		return pb
@@ -97,9 +98,10 @@ func toDomainAnnounce(ev *proto.Event, ann *proto.Announce) domain.EventAnnounce
 		From:    id.Author(ann.GetID()),
 		Created: ev.GetCreated().AsTime(),
 		Payload: domain.Announce{
-			ID:          ann.GetID(),
-			MimeType:    toDomainMime(ann.GetMimeType()),
-			ContentHash: ann.GetContentHash(),
+			ID:            ann.GetID(),
+			MimeType:      toDomainMime(ann.GetMimeType()),
+			ContentHash:   ann.GetContentHash(),
+			ContentLength: ann.GetContentLength(),
 		},
 	}
 }
