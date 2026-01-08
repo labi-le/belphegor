@@ -4,7 +4,6 @@ package belphegor;
 
 option go_package = "internal/types/proto";
 
-// Device represents the device information
 message Device {
   string Name = 1;
   string Arch = 2;

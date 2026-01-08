@@ -29,24 +29,20 @@ var defaultConfig = &Discover{
 	delay:    time.Minute * 5,
 }
 
-// Option defines the method to configure Discover
 type Option func(*Discover)
 
-// WithMaxPeers sets the maximum number of peers
 func WithMaxPeers(maxPeers int) Option {
 	return func(d *Discover) {
 		d.maxPeers = maxPeers
 	}
 }
 
-// WithDelay sets the delay between discovery attempts
 func WithDelay(delay time.Duration) Option {
 	return func(d *Discover) {
 		d.delay = delay
 	}
 }
 
-// WithPort sets the port for peer discovery
 func WithPort(port int) Option {
 	return func(d *Discover) {
 		d.port = port
@@ -59,7 +55,6 @@ func WithLogger(logger zerolog.Logger) Option {
 	}
 }
 
-// New creates a new Discover instance with the provided options
 func New(opts ...Option) *Discover {
 	d := &Discover{
 		maxPeers: defaultConfig.maxPeers,

@@ -53,7 +53,6 @@ func (n *Node) Close() error {
 	return nil
 }
 
-// New creates a new instance of Node with the specified settings
 func New(
 	tr transport.Transport,
 	clipboard eventful.Eventful,
@@ -72,7 +71,6 @@ func New(
 	}
 }
 
-// ConnectTo establishes a connection to a remote node
 func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.ConnectTo").
 		With().
@@ -143,7 +141,6 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 	return pr, cleanup, nil
 }
 
-// Start starts the node by listening for incoming connections
 func (n *Node) Start(ctx context.Context) error {
 	defer func(n *Node) {
 		_ = n.Close()

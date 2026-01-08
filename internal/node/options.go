@@ -31,7 +31,6 @@ type DiscoverOptions struct {
 	MaxPeers int
 }
 
-// Option defines the method to configure Options
 type Option func(*Options)
 
 //nolint:mnd //shut up
@@ -51,7 +50,6 @@ var defaultOptions = Options{
 	Metadata: domain.SelfMetaData(),
 }
 
-// NewOptions creates Options with provided options
 func NewOptions(opts ...Option) Options {
 	options := defaultOptions
 

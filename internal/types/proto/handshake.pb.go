@@ -21,8 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Handshake represents the greeting message
-// Used to shake hands with other nodes
 type Handshake struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=Version,proto3" json:"Version,omitempty"`

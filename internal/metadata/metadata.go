@@ -6,12 +6,9 @@ import (
 )
 
 var (
-	// Version is the current Version of binary
-	Version = "freshest"
-	// CommitHash is the current commit hash of binary
+	Version    = "freshest"
 	CommitHash = "n/a"
-	// BuildTime is the current build time of binary
-	BuildTime = "n/a"
+	BuildTime  = "n/a"
 )
 
 func IsMajorDifference(v1, v2 string) bool {
