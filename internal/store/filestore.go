@@ -50,8 +50,8 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 	if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
 		if uint64(info.Size()) == msg.ContentLength {
 			fs.logger.Trace().Str("path", fullPath).Msg("file already exists, skipping download")
-			_, _ = io.CopyBuffer(io.Discard, io.LimitReader(r, int64(msg.ContentLength)), buf)
-			return fullPath, nil
+			//_, _ = io.CopyBuffer(io.Discard, io.LimitReader(r, int64(msg.ContentLength)), buf)
+			return fullPath, ErrFileExists
 		}
 	}
 

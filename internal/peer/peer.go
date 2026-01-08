@@ -91,9 +91,11 @@ func (p *Peer) Receive(ctx context.Context) error {
 				continue
 			}
 
-			if handleErr := p.handleStream(ctx, stream); handleErr != nil {
-				ctxLog.Trace().Err(handleErr).Msg("failed to handle stream")
-			}
+			go func() {
+				if handleErr := p.handleStream(ctx, stream); handleErr != nil {
+					ctxLog.Trace().Err(handleErr).Msg("failed to handle stream")
+				}
+			}()
 		}
 	}
 }
@@ -117,11 +119,7 @@ func (p *Peer) WriteContext(ctx context.Context, meta domain.AnyEvent, raw io.Re
 		return fmt.Errorf("open stream: %w", err)
 	}
 
-	defer func(stream transport.Stream) {
-		if err := stream.Close(); err != nil {
-			p.logger.Trace().Err(err).Msg("failed to close writer stream")
-		}
-	}(stream)
+	defer func(stream transport.Stream) { _ = stream.Close() }(stream)
 
 	if err := network.SetWriteDeadline(stream, p.deadline); err != nil {
 		return err
@@ -155,7 +153,6 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 	switch payload := event.(type) {
 	case domain.EventMessage:
 		return p.handleMessage(payload, stream)
-
 	case domain.EventAnnounce:
 		p.channel.Announce(payload)
 		return nil
@@ -168,7 +165,7 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 	}
 }
 
-func (p *Peer) handleMessage(msg domain.EventMessage, reader io.Reader) error {
+func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) error {
 	if msg.Payload.ContentLength > p.maxReceiveSize {
 		return fmt.Errorf(
 			"message size exceeds limit: %d > %d",
@@ -178,15 +175,19 @@ func (p *Peer) handleMessage(msg domain.EventMessage, reader io.Reader) error {
 	}
 
 	if msg.Payload.MimeType.IsPath() {
-		filePath, err := p.fileWriter.Write(reader, msg.Payload)
+		filePath, err := p.fileWriter.Write(stream, msg.Payload)
 		if err != nil {
+			if errors.Is(err, store.ErrFileExists) && stream.Reset() == nil {
+				return nil
+			}
+
 			return err
 		}
 		msg.Payload.Data = []byte(filePath)
 	} else {
 		data := make([]byte, msg.Payload.ContentLength)
 
-		if _, err := io.ReadFull(reader, data); err != nil {
+		if _, err := io.ReadFull(stream, data); err != nil {
 			return fmt.Errorf("read raw data: %w", err)
 		}
 
@@ -233,5 +234,11 @@ func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req do
 		r = bytes.NewReader(ev.Payload.Data)
 	}
 
-	return p.WriteContext(ctx, ev, r)
+	err := p.WriteContext(ctx, ev, r)
+	if errors.Is(err, transport.ErrStreamCanceled) {
+		ctxLog.Trace().Msg("peer canceled receiving file")
+		return nil
+	}
+
+	return err
 }

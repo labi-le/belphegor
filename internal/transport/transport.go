@@ -2,9 +2,15 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"time"
+)
+
+var (
+	ErrStreamCanceled   = errors.New("stream canceled by remote peer")
+	ErrConnectionClosed = errors.New("connection closed")
 )
 
 type Stream interface {
@@ -13,6 +19,7 @@ type Stream interface {
 	io.Closer
 	SetReadDeadline(t time.Time) error
 	SetWriteDeadline(t time.Time) error
+	Reset() error
 }
 
 type Connection interface {

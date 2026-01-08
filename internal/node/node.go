@@ -350,7 +350,7 @@ func (n *Node) monitor(ctx context.Context) error {
 			})
 
 		case ann := <-n.channel.Announcements():
-			n.handleAnnounce(ctx, ann)
+			go n.handleAnnounce(ctx, ann)
 		}
 	}
 }
