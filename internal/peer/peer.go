@@ -7,11 +7,11 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/protocol"
+	"github.com/labi-le/belphegor/internal/store"
 	"github.com/labi-le/belphegor/internal/transport"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
@@ -27,12 +27,15 @@ type Peer struct {
 	stringRepr string
 	logger     zerolog.Logger
 	deadline   network.Deadline
+
+	fileWriter store.FileWriter
 }
 
 func New(
 	conn transport.Connection,
 	metadata domain.Device,
 	channel *channel.Channel,
+	fileWriter store.FileWriter,
 	logger zerolog.Logger,
 	dd network.Deadline,
 ) *Peer {
@@ -40,6 +43,7 @@ func New(
 		conn:       conn,
 		metaData:   metadata,
 		channel:    channel,
+		fileWriter: fileWriter,
 		logger:     logger,
 		deadline:   dd,
 		stringRepr: fmt.Sprintf("%s -> %s", metadata.Name, conn.RemoteAddr().String()),
@@ -58,7 +62,7 @@ func (p *Peer) String() string {
 	return p.stringRepr
 }
 
-func (p *Peer) Receive(ctx context.Context, savePath string) error {
+func (p *Peer) Receive(ctx context.Context) error {
 	ctxLog := ctxlog.Op(p.logger, "peer.Receive")
 	defer ctxLog.
 		Info().
@@ -79,7 +83,7 @@ func (p *Peer) Receive(ctx context.Context, savePath string) error {
 				continue
 			}
 
-			if handleErr := p.handleStream(ctx, stream, savePath); handleErr != nil {
+			if handleErr := p.handleStream(ctx, stream); handleErr != nil {
 				ctxLog.Trace().Err(handleErr).Msg("failed to handle stream")
 			}
 		}
@@ -128,7 +132,7 @@ func (p *Peer) WriteContext(ctx context.Context, meta any, raw []byte) error {
 	return nil
 }
 
-func (p *Peer) handleStream(ctx context.Context, stream transport.Stream, path string) error {
+func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error {
 	defer stream.Close()
 
 	if err := network.SetReadDeadline(stream, p.deadline); err != nil {
@@ -142,7 +146,7 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream, path s
 
 	switch payload := event.(type) {
 	case domain.EventMessage:
-		return p.handleMessage(payload, stream, path)
+		return p.handleMessage(payload, stream)
 
 	case domain.EventAnnounce:
 		p.channel.Announce(payload)
@@ -159,11 +163,11 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream, path s
 	}
 }
 
-func (p *Peer) handleMessage(msg domain.EventMessage, reader io.Reader, path string) error {
+func (p *Peer) handleMessage(msg domain.EventMessage, reader io.Reader) error {
 	if msg.Payload.MimeType.IsPath() {
-		filePath, err := p.createOrGetCachedFile(path, msg.Payload, reader)
+		filePath, err := p.fileWriter.Write(reader, msg.Payload)
 		if err != nil {
-			p.logger.Error().Err(err).Msg("failed to handle incoming file")
+			p.logger.Error().Err(err).Msg("failed to save incoming file")
 			return err
 		}
 		msg.Payload.Data = []byte(filePath)
@@ -250,40 +254,4 @@ func (p *Peer) streamFile(ctx context.Context, meta domain.EventMessage) error {
 		Msg("file stream sent successfully")
 
 	return nil
-}
-
-func (p *Peer) createOrGetCachedFile(path string, msg domain.Message, reader io.Reader) (string, error) {
-	filePath := filepath.Join(path, msg.Name)
-
-	if _, err := os.Stat(filePath); err == nil {
-		p.logger.Trace().
-			Str("file_path", filePath).
-			Msg("file already exists in cache, skipping download")
-
-		_, _ = io.CopyN(io.Discard, reader, int64(msg.ContentLength))
-
-		return filePath, nil
-	}
-
-	if err := os.MkdirAll(path, 0755); err != nil {
-		return "", fmt.Errorf("failed to create cache directory: %w", err)
-	}
-
-	file, err := os.Create(filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to create cache file: %w", err)
-	}
-	defer file.Close()
-
-	_, err = io.CopyN(file, reader, int64(msg.ContentLength))
-	if err != nil {
-		_ = os.Remove(filePath)
-		return "", fmt.Errorf("failed to write stream to cache file: %w", err)
-	}
-
-	p.logger.Trace().
-		Str("file_path", filePath).
-		Msg("received file and saved to cache")
-
-	return filePath, nil
 }

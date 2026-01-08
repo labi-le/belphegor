@@ -121,6 +121,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 		conn,
 		metadata,
 		n.channel,
+		n.opts.Store,
 		n.opts.Logger,
 		n.opts.Deadline,
 	)
@@ -240,7 +241,7 @@ func (n *Node) handleConnection(ctx context.Context, conn transport.Connection, 
 
 	ctxLog.Info().Msg("connected")
 
-	return pr.Receive(ctx, n.opts.FileSavePath)
+	return pr.Receive(ctx)
 }
 
 func openOrAcceptStream(ctx context.Context, conn transport.Connection, accept bool) (transport.Stream, error) {

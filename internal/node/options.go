@@ -5,6 +5,7 @@ import (
 
 	"github.com/labi-le/belphegor/internal/netstack"
 	"github.com/labi-le/belphegor/internal/notification"
+	"github.com/labi-le/belphegor/internal/store"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/rs/zerolog"
@@ -21,7 +22,7 @@ type Options struct {
 	Secret         string
 	MaxPeers       int
 	MaxReceiveSize uint64
-	FileSavePath   string
+	Store          store.FileWriter
 }
 
 type DiscoverOptions struct {
@@ -120,8 +121,8 @@ func WithMaxReceiveSize(size uint64) Option {
 	}
 }
 
-func WithFileSavePath(path string) Option {
+func WithFileStore(store store.FileWriter) Option {
 	return func(options *Options) {
-		options.FileSavePath = path
+		options.Store = store
 	}
 }
