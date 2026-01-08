@@ -67,8 +67,8 @@ func (w *Clipboard) dedup(data []byte) bool {
 	return true
 }
 
-func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
-	defer close(update)
+func (w *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error {
+	defer close(upd)
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -98,7 +98,7 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 					return 0
 				}
 
-				update <- eventful.Update{
+				upd <- eventful.Update{
 					Data:     data,
 					MimeType: typ,
 					Hash:     w.lastHash.Load(),
@@ -174,12 +174,12 @@ func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	return nil
 }
 
-func (w *Clipboard) Write(p []byte) (n int, err error) {
+func (w *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	w.suppress()
 
-	if err := write(p, mime.From(p)); err != nil {
+	if err := write(t, src); err != nil {
 		return 0, err
 	}
 
-	return len(p), nil
+	return len(src), nil
 }

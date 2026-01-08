@@ -37,8 +37,8 @@ type Clipboard struct {
 	last []byte
 }
 
-func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
-	defer close(update)
+func (m *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error {
+	defer close(upd)
 
 	for range time.Tick(clipboardTick) {
 		if ctx.Err() != nil {
@@ -63,7 +63,7 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 		m.last = get
 		m.mu.Unlock()
 
-		update <- eventful.Update{
+		upd <- eventful.Update{
 			Data:     get,
 			MimeType: mime.From(get),
 		}
@@ -72,17 +72,17 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	return nil
 }
 
-func (m *Clipboard) Write(t mime.Type, p []byte) (n int, err error) {
-	if err := clipboardSet(p, exec.Command("wl-copy")); err != nil {
+func (m *Clipboard) Write(_ mime.Type, src []byte) (int, error) {
+	if err := clipboardSet(src, exec.Command("wl-copy")); err != nil {
 		return 0, err
 	}
 
 	m.mu.Lock()
-	m.last = make([]byte, len(p))
-	copy(m.last, p)
+	m.last = make([]byte, len(src))
+	copy(m.last, src)
 	m.mu.Unlock()
 
-	return len(p), nil
+	return len(src), nil
 }
 
 func clipboardGet(cmd *exec.Cmd) ([]byte, error) {

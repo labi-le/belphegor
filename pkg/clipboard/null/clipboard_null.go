@@ -18,11 +18,11 @@ func NewNull() *Clipboard {
 	return &Clipboard{RootUpdate: make(chan []byte), data: make(chan []byte)}
 }
 
-func (n *Clipboard) Watch(_ context.Context, up chan<- eventful.Update) error {
-	defer close(up)
+func (n *Clipboard) Watch(_ context.Context, upd chan<- eventful.Update) error {
+	defer close(upd)
 
 	for data := range n.data {
-		up <- eventful.Update{Data: data}
+		upd <- eventful.Update{Data: data}
 		n.RootUpdate <- data
 		//select {
 		//case up <- Update{Data: data}:
@@ -38,8 +38,8 @@ func (n *Clipboard) Watch(_ context.Context, up chan<- eventful.Update) error {
 	return nil
 }
 
-func (n *Clipboard) Write(t mime.Type, p []byte) (int, error) {
-	n.data <- p
+func (n *Clipboard) Write(_ mime.Type, src []byte) (int, error) {
+	n.data <- src
 
 	return len(n.data), nil
 }

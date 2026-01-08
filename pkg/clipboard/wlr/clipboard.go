@@ -49,17 +49,17 @@ func New(client *wl.Client, log zerolog.Logger) *Clipboard {
 	return wlr
 }
 
-func (w *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
-	defer close(update)
+func (w *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error {
+	defer close(upd)
 	log := w.logger.With().Str("op", "wlr.Watch").Logger()
 
-	w.reader = newReader(w.preset, update, log)
+	w.reader = newReader(w.preset, upd, log)
 	w.writer = newWriter(w.preset, w.reader, log)
 
 	return w.run(ctx)
 }
 
-func (w *Clipboard) Write(t mime.Type, data []byte) (int, error) {
+func (w *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	log := w.logger.With().Str("op", "wlr.Write").Logger()
 
 	if w.closed.Load() {
@@ -69,7 +69,7 @@ func (w *Clipboard) Write(t mime.Type, data []byte) (int, error) {
 		return 0, errors.New("clipboard is closed")
 	}
 
-	return w.writer.Write(t, data)
+	return w.writer.Write(t, src)
 }
 
 func (w *Clipboard) run(ctx context.Context) error {

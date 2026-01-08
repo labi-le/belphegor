@@ -54,7 +54,7 @@ func tryOpenClipboard() (func(), error) {
 	return func() {}, errors.New("failed to open clipboard")
 }
 
-func write(buf []byte, typ mime.Type) error {
+func write(typ mime.Type, buf []byte) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
