@@ -69,7 +69,7 @@ func init() {
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
 	flag.BoolVar(&hidden, "hidden", true, "Hide console window (for windows user)")
-	flag.StringVar(&secret, "secret", "s", "Key to connect between node (empty=all may connect)")
+	flag.StringVar(&secret, "secret", "", "Key to connect between node (empty=all may connect)")
 	flag.StringVar(&maxFileSizeRaw, "max_file_size", "500MiB", "Maximum number of discovered peers")
 	flag.StringVar(&fileSavePath, "file_save_path", path.Join(os.TempDir(), "bfg_cache"), "Folder where the files sent to us will be saved")
 

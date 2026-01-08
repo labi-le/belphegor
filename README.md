@@ -75,24 +75,25 @@ ___
 ```sh
 git clone https://github.com/labi-le/belphegor.git
 cd belphegor
-sudo make install
+make build
 ```
 
 ### Usage
 
 ```
-Usage of belphegor:
   -c, --connect string            Address in ip:port format to connect to the node
       --discover_delay duration   Delay between node discovery (default 5m0s)
+      --file_save_path string     Folder where the files sent to us will be saved (default: Tmp dir)
   -h, --help                      Show help
-      --hidden                    Hide console window (for windows user)
+      --hidden                    Hide console window (for windows user) (default true)
       --keep_alive duration       Interval for checking connections between nodes (default 1m0s)
+      --max_file_size string      Maximum number of discovered peers (default "500MiB")
       --max_peers int             Maximum number of discovered peers (default 5)
       --node_discover             Find local nodes on the network and connect to them (default true)
       --notify                    Enable notifications (default true)
   -p, --port int                  Port to use. Default: random
       --read_timeout duration     Write timeout (default 1m0s)
-  -s, --secret string             Key to connect between node (empty=all may connect)
+      --secret string             Key to connect between node (empty=all may connect)
       --verbose                   Verbose logs
   -v, --version                   Show version
       --write_timeout duration    Write timeout (default 1m0s)
@@ -104,19 +105,6 @@ Usage of belphegor:
 
   ```conf
   exec belphegor
-  ```
-  </details>
-
-  <details> <summary>windows</summary>
-
-  ```sh
-  schtasks /Create /TN "belphegor" /SC ONLOGON /IT /F /TR "C:\path\belphegor.exe"
-  ```
-  ```sh
-  schtasks /Run /TN "belphegor"
-  ```
-  ```sh
-  schtasks /Delete /TN "belphegor" /F
   ```
   </details>
 
