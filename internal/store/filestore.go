@@ -19,9 +19,12 @@ type FileStore struct {
 }
 
 func NewFileStore(baseDir string, logger zerolog.Logger) *FileStore {
+	with := logger.With().Str("component", "filestore").Logger()
+	with.Trace().Str("baseDir", baseDir).Msg("file save path")
+
 	return &FileStore{
 		baseDir: baseDir,
-		logger:  logger,
+		logger:  with,
 	}
 }
 
