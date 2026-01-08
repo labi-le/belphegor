@@ -429,12 +429,14 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 		return
 	}
 
-	logger := ctxlog.Op(n.opts.Logger, "node.handleAnnounce").With().Int64("msg_id", ann.Payload.ID).Logger()
+	logger := ctxlog.Op(n.opts.Logger, "node.handleAnnounce").With().Object("announce", ann.Payload).Logger()
+	logger.Trace().
+		Msg("received announce")
 
 	if ann.Payload.ContentLength > n.opts.MaxReceiveSize {
 		logger.Warn().
 			Uint64("max_file_size", n.opts.MaxReceiveSize).
-			Msg("i cannot accept this announce; its size exceeds the permitted limits")
+			Msg("i cannot accept; size exceeds permitted limits")
 		return
 	}
 

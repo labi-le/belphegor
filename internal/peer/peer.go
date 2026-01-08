@@ -158,9 +158,6 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 
 	case domain.EventAnnounce:
 		p.channel.Announce(payload)
-		p.logger.Trace().
-			Int64("msg_id", payload.Payload.ID).
-			Msg("received announce")
 		return nil
 
 	case domain.EventRequest:
