@@ -18,14 +18,27 @@ type FileStore struct {
 	logger  zerolog.Logger
 }
 
-func NewFileStore(baseDir string, logger zerolog.Logger) *FileStore {
+func NewFileStore(baseDir string, logger zerolog.Logger) (*FileStore, error) {
 	with := logger.With().Str("component", "filestore").Logger()
 	with.Trace().Str("baseDir", baseDir).Msg("file save path")
+
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return nil, fmt.Errorf("filestore mkdir: %w", err)
+	}
 
 	return &FileStore{
 		baseDir: baseDir,
 		logger:  with,
+	}, nil
+}
+
+func MustFileStore(baseDir string, logger zerolog.Logger) *FileStore {
+	store, err := NewFileStore(baseDir, logger)
+	if err != nil {
+		panic(err)
 	}
+
+	return store
 }
 
 func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
@@ -40,10 +53,6 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 			_, _ = io.CopyBuffer(io.Discard, io.LimitReader(r, int64(msg.ContentLength)), buf)
 			return fullPath, nil
 		}
-	}
-
-	if err := os.MkdirAll(fs.baseDir, 0755); err != nil {
-		return "", fmt.Errorf("filestore mkdir: %w", err)
 	}
 
 	file, err := os.Create(fullPath)

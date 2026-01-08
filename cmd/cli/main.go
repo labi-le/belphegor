@@ -131,7 +131,7 @@ func main() {
 		node.WithSecret(secret),
 		node.WithMaxPeers(maxPeers),
 		node.WithMaxReceiveSize(maxFileSize),
-		node.WithFileStore(store.NewFileStore(fileSavePath, logger)),
+		node.WithFileStore(store.MustFileStore(fileSavePath, logger)),
 	}, options...)
 
 	nodeSettings := node.NewOptions(options...)
