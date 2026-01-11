@@ -7,6 +7,8 @@ require (
 	fyne.io/systray v1.12.0
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cespare/xxhash v1.1.0
+	github.com/dustin/go-humanize v1.0.1
+	github.com/ebitengine/purego v0.9.1
 	github.com/gen2brain/beeep v0.11.2
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/quic-go/quic-go v0.58.0
@@ -22,7 +24,6 @@ require (
 	deedles.dev/ximage v0.0.0-20250321223218-e433919886dd // indirect
 	deedles.dev/xsync v0.0.0-20250321154350-4e8049be7ced // indirect
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect

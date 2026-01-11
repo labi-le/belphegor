@@ -9,7 +9,7 @@ ___
 - Encryption
 - P2P
 - Discovering local nodes
-- Image sharing (`wayland` <—> `wayland`, `wayland` <—> `windows`)
+- Image sharing
 - File sharing
 
 ___
@@ -22,7 +22,7 @@ ___
     * wl-clipboard
 
 - macos:
-  * pbpaste (i have no mac for testing)
+  * nothing (untested)
 - windows:
   * nothing (untested windows < 10)
 
