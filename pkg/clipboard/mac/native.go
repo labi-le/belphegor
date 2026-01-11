@@ -192,11 +192,14 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 
 	case mime.TypePath:
 		nsTypeFile := makeNSString(clsNSString, "NSFilenamesPboardType")
+		nsTypeText := makeNSString(clsNSString, "public.utf8-plain-text")
 		nsStrPath := makeNSString(clsNSString, string(src))
 
 		nsArray := objc.ID(clsNSArray).Send(selArrayWithObject, nsStrPath)
 
 		ret = uintptr(pb.Send(selSetPropertyList, nsArray, nsTypeFile))
+
+		pb.Send(selSetString, nsStrPath, nsTypeText)
 
 	default:
 		nsStrContent := makeNSString(clsNSString, string(src))
