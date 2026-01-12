@@ -32,6 +32,13 @@ $ExePath    = "$InstallDir\$AppName.exe"
 
 $RegPath    = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 
+$Proc = Get-Process -Name $AppName -ErrorAction SilentlyContinue
+if ($Proc) {
+    Write-Host "    stopping the process..."
+    Stop-Process -Name $AppName -Force
+    Start-Sleep -Seconds 1
+}
+
 if ($Uninstall) {
     Write-Host "[-] starting uninstallation process..." -ForegroundColor Yellow
 
@@ -40,13 +47,6 @@ if ($Uninstall) {
         Remove-ItemProperty -Path $RegPath -Name $AppName
     } else {
         Write-Host "    autostart entry not found."
-    }
-
-    $Proc = Get-Process -Name $AppName -ErrorAction SilentlyContinue
-    if ($Proc) {
-        Write-Host "    stopping the process..."
-        Stop-Process -Name $AppName -Force
-        Start-Sleep -Seconds 1
     }
 
     if (Test-Path $InstallDir) {
