@@ -87,8 +87,8 @@ func (p *Peer) Receive(ctx context.Context) error {
 				if isConnClosed(err) {
 					return nil
 				}
-				ctxLog.Error().Err(err).Msg("failed to accept stream")
-				continue
+				ctxLog.Info().Err(err).Msg("failed to accept stream, closing connection")
+				return fmt.Errorf("peer.Receive: %w", err)
 			}
 
 			go func() {
@@ -109,8 +109,28 @@ func isConnClosed(err error) bool {
 		return true
 	}
 
-	msg := err.Error()
-	return strings.Contains(msg, "closed") || strings.Contains(msg, "application error 0x0")
+	msg := strings.ToLower(err.Error())
+
+	switch {
+	case strings.Contains(msg, "closed"):
+		return true
+	case strings.Contains(msg, "application error 0x0"):
+		return true
+	case strings.Contains(msg, "unreachable"):
+		return true
+	case strings.Contains(msg, "reset"):
+		return true
+	case strings.Contains(msg, "broken pipe"):
+		return true
+	case strings.Contains(msg, "wsasendto"):
+		return true
+	case strings.Contains(msg, "timeout"):
+		return true
+	case strings.Contains(msg, "refused"):
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *Peer) WriteContext(ctx context.Context, meta domain.AnyEvent, raw io.Reader) error {
