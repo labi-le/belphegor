@@ -134,7 +134,8 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 
 	cleanup := func() {
 		n.peers.Delete(metadata.UniqueID())
-		n.Notify("Node disconnected %s", metadata.Name)
+		// too many notifications
+		//n.Notify("Node disconnected %s", metadata.Name)
 		_ = pr.Close()
 	}
 
@@ -144,7 +145,8 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 func (n *Node) Start(ctx context.Context) error {
 	defer func(n *Node) {
 		_ = n.Close()
-		n.Notify("Bye")
+		//too many notifications
+		//n.Notify("Bye")
 	}(n)
 
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
