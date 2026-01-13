@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/discovering"
 	"github.com/labi-le/belphegor/internal/peer"
@@ -443,7 +444,8 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 
 	if ann.Payload.ContentLength > n.opts.MaxReceiveSize {
 		logger.Warn().
-			Uint64("max_file_size", n.opts.MaxReceiveSize).
+			Str("max_size", humanize.Bytes(n.opts.MaxReceiveSize)).
+			Str("received_size", humanize.Bytes(ann.Payload.ContentLength)).
 			Msg("i cannot accept; size exceeds permitted limits")
 		return
 	}
