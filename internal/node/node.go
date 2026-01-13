@@ -22,6 +22,7 @@ import (
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -150,13 +151,12 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 }
 
 func (n *Node) Start(ctx context.Context) error {
-	defer func(n *Node) {
+	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
+	defer func(n *Node, log zerolog.Logger) {
 		_ = n.Close()
 		//too many notifications
 		//n.Notify("Bye")
-	}(n)
-
-	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
+	}(n, ctxLog)
 
 	l, err := n.transport.Listen(ctx, fmt.Sprintf(":%d", n.opts.PublicPort))
 	if err != nil {
@@ -315,7 +315,7 @@ func (n *Node) monitor(ctx context.Context) error {
 		for update := range updates {
 			msg := messageFromUpdate(update)
 			if msg.Zero() {
-				ctxLog.Trace().Interface("update", update).Msg("that message type not supported")
+				ctxLog.Trace().Object("update", update).Msg("that message type not supported")
 				continue
 			}
 
