@@ -110,9 +110,12 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.addPeer")
 
 	metadata := hisHand.MetaData
-	if n.peers.Exist(metadata.UniqueID()) {
-		ctxLog.Trace().Msgf("%s already connected, ignoring", metadata.String())
-		return nil, nil, ErrAlreadyConnected
+
+	if oldPeer, exists := n.peers.Get(metadata.UniqueID()); exists {
+		ctxLog.Warn().
+			Str("peer", oldPeer.String()).
+			Msg("try to reconnecting, closing stale connection")
+		_ = oldPeer.Close()
 	}
 
 	pr := peer.New(
@@ -133,9 +136,12 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 	)
 
 	cleanup := func() {
-		n.peers.Delete(metadata.UniqueID())
 		// too many notifications
 		//n.Notify("Node disconnected %s", metadata.Name)
+		if current, ok := n.peers.Get(metadata.UniqueID()); ok && current == pr {
+			n.peers.Delete(metadata.UniqueID())
+		}
+
 		_ = pr.Close()
 	}
 
@@ -480,6 +486,10 @@ func (n *Node) PeerDiscovered(ctx context.Context, peerIP net.IP, payload []byte
 	//     ctxLog.Trace().Str("peer", greet.Payload.MetaData.String()).Msg("skipping peer due to version mismatch")
 	//     return
 	// }
+
+	if n.peers.Exist(greet.Payload.MetaData.ID) {
+		return
+	}
 
 	addr := fmt.Sprintf("%s:%d", peerIP.String(), greet.Payload.Port)
 	_ = n.ConnectTo(ctx, addr)
