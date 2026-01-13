@@ -86,6 +86,7 @@ make build
       --file_save_path string     Folder where the files sent to us will be saved (default: Tmp dir)
   -h, --help                      Show help
       --hidden                    Hide console window (for windows user) (default true)
+      --install-service           Install systemd-unit and start the service
       --keep_alive duration       Interval for checking connections between nodes (default 1m0s)
       --max_file_size string      Maximum number of discovered peers (default "500MiB")
       --max_peers int             Maximum number of discovered peers (default 5)
@@ -106,6 +107,21 @@ make build
   ```conf
   exec belphegor
   ```
+  </details>
+
+  <details> <summary>systemd service</summary>
+to install service, you need to have PATH in current ENV, otherwise the notifications will not work
+
+  ```conf
+  belphegor --install-service
+  ```
+
+#### uninstall
+
+  ```conf
+  systemctl --user disable --now belphegor
+  ```
+
   </details>
 
 ### Todo

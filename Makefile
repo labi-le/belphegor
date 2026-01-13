@@ -1,6 +1,6 @@
 PACKAGE = belphegor
 
-MAIN_PATH = cmd/cli/*.go
+MAIN_PATH = ./cmd/cli
 BUILD_PATH = build/package/
 
 INSTALL_PATH = /usr/bin/

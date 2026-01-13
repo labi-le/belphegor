@@ -18,6 +18,7 @@ import (
 	"github.com/labi-le/belphegor/internal/node"
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/security"
+	"github.com/labi-le/belphegor/internal/service"
 	"github.com/labi-le/belphegor/internal/store"
 	"github.com/labi-le/belphegor/internal/transport/quic"
 	"github.com/labi-le/belphegor/pkg/clipboard"
@@ -40,11 +41,12 @@ var (
 	maxFileSizeRaw string
 	maxFileSize    uint64
 
-	verbose     bool
-	showVersion bool
-	showHelp    bool
-	notify      bool
-	hidden      bool
+	verbose        bool
+	showVersion    bool
+	showHelp       bool
+	notify         bool
+	hidden         bool
+	installService bool
 
 	port           int
 	discoverEnable bool
@@ -69,6 +71,7 @@ func init() {
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
 	flag.BoolVar(&hidden, "hidden", true, "Hide console window (for windows user)")
+	flag.BoolVar(&installService, "install-service", false, "Install systemd-unit and start the service")
 	flag.StringVar(&secret, "secret", "", "Key to connect between node (empty=all may connect)")
 	flag.StringVar(&maxFileSizeRaw, "max_file_size", "500MiB", "Maximum number of discovered peers")
 	flag.StringVar(&fileSavePath, "file_save_path", path.Join(os.TempDir(), "bfg_cache"), "Folder where the files sent to us will be saved")
@@ -95,6 +98,13 @@ func main() {
 
 	if showHelp {
 		flag.Usage()
+		return
+	}
+
+	if installService {
+		if err := service.InstallService(logger); err != nil {
+			logger.Fatal().Err(err).Msg("failed install service")
+		}
 		return
 	}
 
