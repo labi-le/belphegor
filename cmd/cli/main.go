@@ -27,17 +27,10 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-var (
-	options []node.Option
-	logger  zerolog.Logger
-)
-
-var (
-	addressIP string
-	secret    string
-
-	fileSavePath string
-
+type config struct {
+	addressIP      string
+	secret         string
+	fileSavePath   string
 	maxFileSizeRaw string
 	maxFileSize    uint64
 
@@ -47,68 +40,70 @@ var (
 	notify         bool
 	hidden         bool
 	installService bool
-
-	port           int
 	discoverEnable bool
-	discoverDelay  time.Duration
-	keepAlive      time.Duration
-	writeTimeout   time.Duration
-	readTimeout    time.Duration
-	maxPeers       int
-)
 
-func init() {
-	flag.StringVarP(&addressIP, "connect", "c", "", "Address in ip:port format to connect to the node")
-	flag.IntVarP(&port, "port", "p", netstack.RandomPort(), "Port to use. Default: random")
-	flag.BoolVar(&discoverEnable, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.DurationVar(&discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
-	flag.DurationVar(&keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
-	flag.DurationVar(&writeTimeout, "write_timeout", time.Minute, "Write timeout")
-	flag.DurationVar(&readTimeout, "read_timeout", time.Minute, "Write timeout")
-	flag.IntVar(&maxPeers, "max_peers", 5, "Maximum number of discovered peers")
-	flag.BoolVar(&verbose, "verbose", false, "Verbose logs")
-	flag.BoolVar(&notify, "notify", true, "Enable notifications")
-	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
-	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
-	flag.BoolVar(&hidden, "hidden", true, "Hide console window (for windows user)")
-	flag.BoolVar(&installService, "install-service", false, "Install systemd-unit and start the service")
-	flag.StringVar(&secret, "secret", "", "Key to connect between node (empty=all may connect)")
-	flag.StringVar(&maxFileSizeRaw, "max_file_size", "500MiB", "Maximum number of discovered peers")
-	flag.StringVar(&fileSavePath, "file_save_path", path.Join(os.TempDir(), "bfg_cache"), "Folder where the files sent to us will be saved")
+	port          int
+	maxPeers      int
+	discoverDelay time.Duration
+	keepAlive     time.Duration
+	writeTimeout  time.Duration
+	readTimeout   time.Duration
+}
+
+func parseFlags() *config {
+	cfg := &config{}
+
+	flag.StringVarP(&cfg.addressIP, "connect", "c", "", "Address in ip:port format to connect to the node")
+	flag.IntVarP(&cfg.port, "port", "p", netstack.RandomPort(), "Port to use. Default: random")
+	flag.BoolVar(&cfg.discoverEnable, "node_discover", true, "Find local nodes on the network and connect to them")
+	flag.DurationVar(&cfg.discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
+	flag.DurationVar(&cfg.keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
+	flag.DurationVar(&cfg.writeTimeout, "write_timeout", time.Minute, "Write timeout")
+	flag.DurationVar(&cfg.readTimeout, "read_timeout", time.Minute, "Read timeout")
+	flag.IntVar(&cfg.maxPeers, "max_peers", 5, "Maximum number of discovered peers")
+	flag.BoolVar(&cfg.verbose, "verbose", false, "Verbose logs")
+	flag.BoolVar(&cfg.notify, "notify", true, "Enable notifications")
+	flag.BoolVarP(&cfg.showVersion, "version", "v", false, "Show version")
+	flag.BoolVarP(&cfg.showHelp, "help", "h", false, "Show help")
+	flag.BoolVar(&cfg.hidden, "hidden", true, "Hide console window (for windows user)")
+	flag.BoolVar(&cfg.installService, "install-service", false, "Install systemd-unit and start the service")
+	flag.StringVar(&cfg.secret, "secret", "", "Key to connect between node (empty=all may connect)")
+	flag.StringVar(&cfg.maxFileSizeRaw, "max_file_size", "500MiB", "Maximum file size to receive")
+	flag.StringVar(&cfg.fileSavePath, "file_save_path", path.Join(os.TempDir(), "bfg_cache"), "Folder where the files sent to us will be saved")
 
 	flag.Parse()
 
-	size, err := humanize.ParseBytes(maxFileSizeRaw)
-	if err != nil {
-		flag.Usage()
-		return
+	if cfg.showHelp {
+		return cfg
 	}
-	maxFileSize = size
 
-	logger = initLogger(verbose)
+	size, err := humanize.ParseBytes(cfg.maxFileSizeRaw)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "invalid max_file_size format: %v\n", err)
+		flag.Usage()
+		os.Exit(1)
+	}
+	cfg.maxFileSize = size
+
+	if cfg.maxPeers <= 0 {
+		cfg.maxPeers = 5
+	}
+
+	return cfg
 }
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	if verbose {
-		logger.Info().Msg("verbose mode enabled")
-	}
+	cfg := parseFlags()
 
-	if showHelp {
+	if cfg.showHelp {
 		flag.Usage()
 		return
 	}
 
-	if installService {
-		if err := service.InstallService(logger); err != nil {
-			logger.Fatal().Err(err).Msg("failed install service")
-		}
-		return
-	}
-
-	if showVersion {
+	if cfg.showVersion {
 		_, _ = fmt.Fprintf(
 			os.Stderr,
 			"version: %s\ncommit: %s\nbuild time: %s\n",
@@ -119,34 +114,46 @@ func main() {
 		return
 	}
 
-	if hidden {
+	logger := initLogger(cfg.verbose)
+	if cfg.verbose {
+		logger.Info().Msg("verbose mode enabled")
+	}
+
+	if cfg.installService {
+		if err := service.InstallService(logger); err != nil {
+			logger.Fatal().Err(err).Msg("failed install service")
+		}
+		return
+	}
+
+	unlock := lock.Must(logger)
+	defer unlock()
+
+	if cfg.hidden {
 		logger.Trace().Msg("starting as hidden")
 		go console.HideConsoleWindow(cancel)
 	}
 
-	options = append([]node.Option{
+	nodeOptions := []node.Option{
 		node.WithLogger(logger),
-		node.WithPublicPort(port),
-		node.WithKeepAlive(keepAlive),
-		node.WithDeadline(network.Deadline{
-			Read:  readTimeout,
-			Write: writeTimeout,
-		}),
-		node.WithNotifier(notification.New(notify)),
+		node.WithPublicPort(cfg.port),
+		node.WithKeepAlive(cfg.keepAlive),
+		node.WithDeadline(network.Deadline{Read: cfg.readTimeout, Write: cfg.writeTimeout}),
+		node.WithNotifier(notification.New(cfg.notify)),
 		node.WithDiscovering(node.DiscoverOptions{
-			Enable:   discoverEnable,
-			Delay:    discoverDelay,
-			MaxPeers: maxPeers,
+			Enable:   cfg.discoverEnable,
+			Delay:    cfg.discoverDelay,
+			MaxPeers: cfg.maxPeers,
 		}),
-		node.WithSecret(secret),
-		node.WithMaxPeers(maxPeers),
-		node.WithMaxReceiveSize(maxFileSize),
-		node.WithFileStore(store.MustFileStore(fileSavePath, logger)),
-	}, options...)
+		node.WithSecret(cfg.secret),
+		node.WithMaxPeers(cfg.maxPeers),
+		node.WithMaxReceiveSize(cfg.maxFileSize),
+		node.WithFileStore(store.MustFileStore(cfg.fileSavePath, logger)),
+	}
 
-	nodeSettings := node.NewOptions(options...)
+	nodeSettings := node.NewOptions(nodeOptions...)
 
-	tlsConfig, err := security.MakeTLSConfig(secret, logger)
+	tlsConfig, err := security.MakeTLSConfig(cfg.secret, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to generate TLS config")
 	}
@@ -157,27 +164,29 @@ func main() {
 		quicTransport,
 		clipboard.New(logger),
 		new(node.Storage),
-		channel.New(),
-		options...,
+		channel.New(cfg.maxPeers),
+		nodeOptions...,
 	)
+	defer func(nd *node.Node) {
+		if err := nd.Close(); err != nil {
+			logger.Warn().Err(err).Msg("close self node")
+		}
+	}(nd)
 
-	unlock := lock.Must(logger)
-	defer unlock()
-
-	if addressIP != "" {
+	if cfg.addressIP != "" {
 		go func() {
-			if err := nd.ConnectTo(ctx, addressIP); err != nil {
+			if err := nd.ConnectTo(ctx, cfg.addressIP); err != nil {
 				logger.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
 			}
 		}()
 	}
 
-	if discoverEnable {
+	if cfg.discoverEnable {
 		go discovering.New(
 			discovering.WithLogger(logger),
-			discovering.WithMaxPeers(maxPeers),
-			discovering.WithDelay(discoverDelay),
-			discovering.WithPort(port),
+			discovering.WithMaxPeers(cfg.maxPeers),
+			discovering.WithDelay(cfg.discoverDelay),
+			discovering.WithPort(cfg.port),
 		).Discover(ctx, nd)
 	}
 
@@ -187,7 +196,7 @@ func main() {
 }
 
 func initLogger(verbose bool) zerolog.Logger {
-	output := zerolog.ConsoleWriter{Out: os.Stderr}
+	output := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}
 
 	if verbose {
 		zerolog.CallerMarshalFunc = func(_ uintptr, file string, line int) string {

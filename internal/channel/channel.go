@@ -1,47 +1,50 @@
 package channel
 
 import (
-	"sync/atomic"
+	"sync"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
 )
 
 type Channel struct {
+	msgMu   sync.Mutex
 	msg     chan domain.EventMessage
-	lastMsg atomic.Pointer[domain.EventMessage]
+	lastMsg domain.EventMessage
 
+	annMu   sync.Mutex
 	ann     chan domain.EventAnnounce
-	lastAnn atomic.Pointer[domain.EventAnnounce]
+	lastAnn domain.EventAnnounce
+}
+
+func New(peerMaxCount int) *Channel {
+	return &Channel{
+		msg: make(chan domain.EventMessage),
+		ann: make(chan domain.EventAnnounce, peerMaxCount),
+	}
 }
 
 func (c *Channel) LastMsg() domain.EventMessage {
-	load := c.lastMsg.Load()
-	if load == nil {
-		return domain.EventMessage{}
-	}
-
-	return *load
-}
-
-func New() *Channel {
-	return &Channel{
-		msg: make(chan domain.EventMessage),
-		ann: make(chan domain.EventAnnounce, 100),
-	}
+	c.msgMu.Lock()
+	defer c.msgMu.Unlock()
+	return c.lastMsg
 }
 
 func (c *Channel) Send(msg domain.EventMessage) {
-	for {
-		old := c.lastMsg.Load()
-		if old != nil && old.Payload.Duplicate(msg.Payload) {
-			return
-		}
-
-		if c.lastMsg.CompareAndSwap(old, &msg) {
-			c.msg <- msg
-			return
-		}
+	if c.shouldUpdateMsg(msg) {
+		c.msg <- msg
 	}
+}
+
+func (c *Channel) shouldUpdateMsg(msg domain.EventMessage) bool {
+	c.msgMu.Lock()
+	defer c.msgMu.Unlock()
+
+	if !c.lastMsg.Payload.Zero() && c.lastMsg.Payload.Duplicate(msg.Payload) {
+		return false
+	}
+
+	c.lastMsg = msg
+	return true
 }
 
 func (c *Channel) Messages() <-chan domain.EventMessage {
@@ -49,21 +52,21 @@ func (c *Channel) Messages() <-chan domain.EventMessage {
 }
 
 func (c *Channel) Announce(ann domain.EventAnnounce) {
-	for {
-		old := c.lastAnn.Load()
-
-		if old != nil && old.Payload.ID == ann.Payload.ID && old.From == ann.From {
-			return
-		}
-
-		if c.lastAnn.CompareAndSwap(old, &ann) {
-			select {
-			case c.ann <- ann:
-			default:
-			}
-			return
-		}
+	if c.shouldUpdateAnn(ann) {
+		c.ann <- ann
 	}
+}
+
+func (c *Channel) shouldUpdateAnn(ann domain.EventAnnounce) bool {
+	c.annMu.Lock()
+	defer c.annMu.Unlock()
+
+	if !c.lastAnn.Payload.Zero() && c.lastAnn.Payload.Duplicate(ann.Payload) {
+		return false
+	}
+
+	c.lastAnn = ann
+	return true
 }
 
 func (c *Channel) Announcements() <-chan domain.EventAnnounce {

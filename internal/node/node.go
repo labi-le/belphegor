@@ -22,7 +22,6 @@ import (
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
 	"github.com/labi-le/belphegor/pkg/id"
-	"github.com/rs/zerolog"
 )
 
 var (
@@ -152,11 +151,6 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 
 func (n *Node) Start(ctx context.Context) error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
-	defer func(n *Node, log zerolog.Logger) {
-		_ = n.Close()
-		//too many notifications
-		//n.Notify("Bye")
-	}(n, ctxLog)
 
 	l, err := n.transport.Listen(ctx, fmt.Sprintf(":%d", n.opts.PublicPort))
 	if err != nil {
