@@ -135,6 +135,10 @@ func (r *reader) readPipeData(mimeType string, p *pipe.Pipe) {
 		return
 	}
 
+	if len(data) == 0 {
+		return
+	}
+
 	if !r.dedup(data) {
 		return
 	}

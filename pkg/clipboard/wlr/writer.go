@@ -37,6 +37,7 @@ type sourceListener struct {
 	data   []byte
 	source *controlSource
 	logger zerolog.Logger
+	once   sync.Once
 }
 
 func (s *sourceListener) Send(_ string, f *os.File) {
@@ -89,9 +90,11 @@ func isExpectedSocketError(err error) bool {
 }
 
 func (s *sourceListener) Cancelled() {
-	if s.source != nil {
-		s.source.Destroy()
-	}
+	s.once.Do(func() {
+		if s.source != nil {
+			s.source.Destroy()
+		}
+	})
 }
 
 func (w *writer) Write(t mime.Type, p []byte) (n int, err error) {
