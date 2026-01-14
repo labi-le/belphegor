@@ -18,13 +18,18 @@ ___
 
 - linux:
   - wayland
-    * composer implements `ext_data_control_v1`
+    * composer implements `ext_data_control_v1` (sway, kde, etc)
     * wl-clipboard
 
 - macos:
-  * nothing (untested)
+  * nothing
 - windows:
   * nothing (untested windows < 10)
+
+### Limitations
+
+- [the app can't work properly on gnome](https://github.com/labi-le/belphegor/issues/119#issuecomment-3749681212)
+- no x11 support
 
 ### Installation
 
