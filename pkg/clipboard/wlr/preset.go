@@ -64,6 +64,9 @@ func (ws *preset) Setup() error {
 	if ws.seat == nil {
 		return errors.New("no seat found")
 	}
+	if ws.deviceManager == nil {
+		return fmt.Errorf("your wayland composer doesn't support protocol: %s", managerInterface)
+	}
 
 	ws.device = ws.deviceManager.GetDataDevice(ws.seat)
 	return nil
