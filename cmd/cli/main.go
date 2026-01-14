@@ -103,19 +103,20 @@ func main() {
 		return
 	}
 
+	logger := initLogger(cfg.verbose)
+	applyTagsOverrides(cfg, logger)
+
+	logger.Info().
+		Str("v", metadata.Version).
+		Str("commit_hash", metadata.CommitHash).
+		Str("build_time", metadata.BuildTime).
+		Send()
+
 	if cfg.showVersion {
-		_, _ = fmt.Fprintf(
-			os.Stderr,
-			"version: %s\ncommit: %s\nbuild time: %s\n",
-			metadata.Version,
-			metadata.CommitHash,
-			metadata.BuildTime,
-		)
+		// ^
 		return
 	}
 
-	logger := initLogger(cfg.verbose)
-	applyTagsOverrides(cfg, logger)
 	if cfg.verbose {
 		logger.Info().Msg("verbose mode enabled")
 	}
