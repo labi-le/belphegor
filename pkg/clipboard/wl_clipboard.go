@@ -9,5 +9,5 @@ import (
 )
 
 func New(logger zerolog.Logger) eventful.Eventful {
-	return new(wl_clipboard.Clipboard)
+	return wl_clipboard.New(logger)
 }
