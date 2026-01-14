@@ -115,6 +115,7 @@ func main() {
 	}
 
 	logger := initLogger(cfg.verbose)
+	applyTagsOverrides(cfg, logger)
 	if cfg.verbose {
 		logger.Info().Msg("verbose mode enabled")
 	}

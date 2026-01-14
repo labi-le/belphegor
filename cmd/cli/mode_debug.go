@@ -5,19 +5,20 @@ package main
 import (
 	"net/http"
 	_ "net/http/pprof"
+
+	"github.com/rs/zerolog"
 )
 
-func init() {
+func applyTagsOverrides(cfg *config, logger zerolog.Logger) {
+	cfg.verbose = true
+	cfg.port = 7777
+	cfg.notify = false
+
 	go func() {
 		addr := "0.0.0.0:6060"
 		logger.Debug().Msgf("starting pprof server on %s", addr)
 		if err := http.ListenAndServe(addr, nil); err != nil {
-			logger.Debug().Msgf("pprof server failed: %v", err)
+			logger.Fatal().Msgf("pprof server failed: %v", err)
 		}
 	}()
-
-	verbose = true
-	port = 7777
-	notify = false
-	//options = append(options, node.WithPublicPort(7777))
 }
