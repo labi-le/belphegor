@@ -166,7 +166,11 @@ func (n *Node) Start(ctx context.Context) error {
 		Type("provider", n.clipboard).
 		Msg("started")
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	go func() {
+		defer cancel()
 		if err := n.monitor(ctx); err != nil {
 			ctxLog.Error().Err(err).Msg("monitor")
 		}
