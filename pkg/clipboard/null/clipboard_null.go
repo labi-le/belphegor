@@ -12,6 +12,7 @@ var _ eventful.Eventful = (*Clipboard)(nil)
 type Clipboard struct {
 	data       chan []byte
 	RootUpdate chan []byte
+	dedup      eventful.Deduplicator
 }
 
 func NewNull() *Clipboard {
@@ -22,23 +23,21 @@ func (n *Clipboard) Watch(_ context.Context, upd chan<- eventful.Update) error {
 	defer close(upd)
 
 	for data := range n.data {
-		upd <- eventful.Update{Data: data}
-		n.RootUpdate <- data
-		//select {
-		//case up <- Update{Data: data}:
-		//default:
-		//}
-		//
-		//select {
-		//case n.RootUpdate <- data:
-		//default:
-		//}
+		if h, ok := n.dedup.Check(data); ok {
+			upd <- eventful.Update{
+				Data:     data,
+				MimeType: mime.From(data),
+				Hash:     h,
+			}
+			n.RootUpdate <- data
+		}
 	}
 
 	return nil
 }
 
 func (n *Clipboard) Write(_ mime.Type, src []byte) (int, error) {
+	n.dedup.Mark(src)
 	n.data <- src
 
 	return len(n.data), nil
