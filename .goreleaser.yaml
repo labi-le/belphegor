@@ -5,7 +5,8 @@ before:
     - go generate ./...
 
 builds:
-  - id: default
+  - &build_defaults
+    id: default
     main: "./cmd/cli/"
     binary: belphegor
     mod_timestamp: '{{ .CommitTimestamp }}'
@@ -34,30 +35,25 @@ builds:
       - -X {{ .ModulePath }}/internal/metadata.CommitHash={{ .Commit }}
       - -X {{ .ModulePath }}/internal/metadata.BuildTime={{ .CommitDate }}
 
-  - id: wl_clipboard
-    main: "./cmd/cli/"
-    binary: belphegor
-    mod_timestamp: '{{ .CommitTimestamp }}'
+  - <<: *build_defaults
+    id: wl_clipboard
     goos:
       - linux
-    goarch:
-      - amd64
-      - arm
-      - arm64
     tags:
       - netgo
       - osusergo
       - nodbus
       - wl_clipboard
-    env:
-      - CGO_ENABLED=0
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w -extldflags '-static'
-      - -X {{ .ModulePath }}/internal/metadata.Version={{ .Version }}
-      - -X {{ .ModulePath }}/internal/metadata.CommitHash={{ .Commit }}
-      - -X {{ .ModulePath }}/internal/metadata.BuildTime={{ .CommitDate }}
+
+  - <<: *build_defaults
+    id: x11
+    goos:
+      - linux
+    tags:
+      - netgo
+      - osusergo
+      - nodbus
+      - x11
 
 archives:
   - id: default
@@ -71,6 +67,12 @@ archives:
       - wl_clipboard
     formats: [ binary ]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_wl_clipboard"
+
+  - id: x11
+    ids:
+      - x11
+    formats: [ binary ]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_x11"
 
 checksum:
   name_template: 'checksums.txt'
@@ -90,7 +92,7 @@ release:
   make_latest: true
 
 nfpms:
-  - &base
+  - &nfpm_defaults
     id: default
     package_name: belphegor
     ids:
@@ -98,22 +100,28 @@ nfpms:
     vendor: labi-le
     homepage: https://github.com/labi-le/belphegor
     maintainer: labi-le <i@labile.cc>
-    description: "Share clipboard on network (Native Wayland)"
+    description: "Share clipboard on network (Wayland: ext_data_control_v1)"
     license: MIT
     formats:
       - deb
       - rpm
       - archlinux
 
-  - <<: *base
+  - <<: *nfpm_defaults
     id: wl_clipboard
-    package_name: belphegor_wl-clipboard
+    package_name: belphegor-wl-clipboard
     ids:
       - wl_clipboard
     description: "Share clipboard on network (via wl-clipboard utility)"
-
     recommends: [ ]
     dependencies:
       - wl-clipboard
-
     file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_wl_clipboard"
+
+  - <<: *nfpm_defaults
+    id: x11
+    package_name: belphegor-x11
+    ids:
+      - x11
+    description: "Share clipboard on network (X11: XFixes)"
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_x11"
