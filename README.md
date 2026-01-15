@@ -20,6 +20,8 @@ ___
   - wayland
     * composer implements `ext_data_control_v1` (sway, kde, etc)
     * wl-clipboard
+  - X11
+    * XFixes
 
 - macos:
   * nothing
@@ -29,7 +31,6 @@ ___
 ### Limitations
 
 - [the app can't work properly on gnome](https://github.com/labi-le/belphegor/issues/119#issuecomment-3749681212)
-- no x11 support
 
 ### Installation
 
@@ -135,6 +136,6 @@ to install service, you need to have PATH in current ENV, otherwise the notifica
 
 [x] Add flake
 
-[] Add x11 support
+[x] Add x11 support
 
 [] Upnp (?)
