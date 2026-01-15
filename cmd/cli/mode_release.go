@@ -2,6 +2,4 @@
 
 package main
 
-import "github.com/rs/zerolog"
-
-func applyTagsOverrides(*config, zerolog.Logger) {}
+func applyTagsOverrides(*config) {}

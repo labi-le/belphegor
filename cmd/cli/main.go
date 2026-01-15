@@ -103,8 +103,8 @@ func main() {
 		return
 	}
 
+	applyTagsOverrides(cfg)
 	logger := initLogger(cfg.verbose)
-	applyTagsOverrides(cfg, logger)
 
 	logger.Info().
 		Str("v", metadata.Version).

@@ -10,6 +10,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/ebitengine/purego v0.9.1
 	github.com/gen2brain/beeep v0.11.2
+	github.com/jezek/xgb v1.2.0
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/quic-go/quic-go v0.59.0
 	github.com/rs/zerolog v1.34.0
