@@ -21,7 +21,7 @@ After=graphical-session.target network.target
 
 Wants=network-online.target
 
-ConditionEnvironment=WAYLAND_DISPLAY
+ConditionEnvironment=DISPLAY
 
 [Service]
 Type=simple
