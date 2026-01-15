@@ -12,7 +12,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/cespare/xxhash"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/mime"
 )
@@ -35,8 +34,8 @@ func New() *Clipboard {
 }
 
 type Clipboard struct {
-	barrier  atomic.Int64
-	lastHash atomic.Uint64
+	barrier atomic.Int64
+	dedup   eventful.Deduplicator
 }
 
 func (w *Clipboard) suppress() {
@@ -55,15 +54,6 @@ func (w *Clipboard) allowed() bool {
 	}
 
 	w.barrier.Store(newDeadline)
-	return true
-}
-
-func (w *Clipboard) dedup(data []byte) bool {
-	h := xxhash.Sum64(data)
-	if h == w.lastHash.Load() {
-		return false
-	}
-	w.lastHash.Store(h)
 	return true
 }
 
@@ -94,14 +84,12 @@ func (w *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error
 
 			data, typ, err := readDetected(r)
 			if err == nil {
-				if !w.dedup(data) {
-					return 0
-				}
-
-				upd <- eventful.Update{
-					Data:     data,
-					MimeType: typ,
-					Hash:     w.lastHash.Load(),
+				if h, ok := w.dedup.Check(data); ok {
+					upd <- eventful.Update{
+						Data:     data,
+						MimeType: typ,
+						Hash:     h,
+					}
 				}
 			}
 			return 0

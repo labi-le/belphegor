@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
-	"github.com/cespare/xxhash"
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xfixes"
 	"github.com/jezek/xgb/xproto"
@@ -35,7 +33,7 @@ type Clipboard struct {
 	atoms  *atomCache
 
 	mu       sync.Mutex
-	lastHash atomic.Uint64
+	dedup    eventful.Deduplicator
 	serving  []byte
 	serveTyp xproto.Atom
 }
@@ -99,15 +97,6 @@ func (c *Clipboard) init() error {
 	return nil
 }
 
-func (c *Clipboard) dedup(data []byte) bool {
-	h := xxhash.Sum64(data)
-	if h == c.lastHash.Load() {
-		return false
-	}
-	c.lastHash.Store(h)
-	return true
-}
-
 func (c *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error {
 	defer close(upd)
 
@@ -160,7 +149,7 @@ func (c *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 
 	c.serving = make([]byte, len(src))
 	copy(c.serving, src)
-	c.lastHash.Store(xxhash.Sum64(src))
+	c.dedup.Mark(src)
 
 	switch t {
 	case mime.TypeImage:
@@ -319,24 +308,22 @@ func (c *Clipboard) handleNotify(e xproto.SelectionNotifyEvent, upd chan<- event
 		return
 	}
 
-	if !c.dedup(data) {
-		return
-	}
+	if h, ok := c.dedup.Check(data); ok {
+		var mTyp mime.Type
+		switch e.Target {
+		case c.atoms.ImagePng:
+			mTyp = mime.TypeImage
+		case c.atoms.UriList:
+			mTyp = mime.TypePath
+		default:
+			mTyp = mime.TypeText
+		}
 
-	var mTyp mime.Type
-	switch e.Target {
-	case c.atoms.ImagePng:
-		mTyp = mime.TypeImage
-	case c.atoms.UriList:
-		mTyp = mime.TypePath
-	default:
-		mTyp = mime.TypeText
-	}
-
-	upd <- eventful.Update{
-		Data:     data,
-		MimeType: mTyp,
-		Hash:     c.lastHash.Load(),
+		upd <- eventful.Update{
+			Data:     data,
+			MimeType: mTyp,
+			Hash:     h,
+		}
 	}
 }
 

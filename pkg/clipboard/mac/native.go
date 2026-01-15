@@ -7,11 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
-	"github.com/cespare/xxhash"
 	"github.com/ebitengine/purego"
 	"github.com/ebitengine/purego/objc"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
@@ -28,16 +26,7 @@ func init() {
 }
 
 type Clipboard struct {
-	lastHash atomic.Uint64
-}
-
-func (m *Clipboard) dedup(data []byte) bool {
-	h := xxhash.Sum64(data)
-	if h == m.lastHash.Load() {
-		return false
-	}
-	m.lastHash.Store(h)
-	return true
+	dedup eventful.Deduplicator
 }
 
 func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
@@ -87,19 +76,17 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 						bytesPtr := nsData.Send(selBytes)
 						data := unsafe.Slice((*byte)(unsafe.Pointer(bytesPtr)), int(length))
 
-						if !m.dedup(data) {
+						if h, ok := m.dedup.Check(data); ok {
+							dataCopy := make([]byte, len(data))
+							copy(dataCopy, data)
+
+							update <- eventful.Update{
+								MimeType: mime.TypeImage,
+								Data:     dataCopy,
+								Hash:     h,
+							}
 							continue
 						}
-
-						dataCopy := make([]byte, len(data))
-						copy(dataCopy, data)
-
-						update <- eventful.Update{
-							MimeType: mime.TypeImage,
-							Data:     dataCopy,
-							Hash:     m.lastHash.Load(),
-						}
-						continue
 					}
 				}
 
@@ -113,19 +100,17 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 							if utf8Ptr != 0 {
 								data := cStringToGoBytes(uintptr(utf8Ptr))
 
-								if !m.dedup(data) {
+								if h, ok := m.dedup.Check(data); ok {
+									dataCopy := make([]byte, len(data))
+									copy(dataCopy, data)
+
+									update <- eventful.Update{
+										MimeType: mime.TypePath,
+										Data:     dataCopy,
+										Hash:     h,
+									}
 									continue
 								}
-
-								dataCopy := make([]byte, len(data))
-								copy(dataCopy, data)
-
-								update <- eventful.Update{
-									MimeType: mime.TypePath,
-									Data:     dataCopy,
-									Hash:     m.lastHash.Load(),
-								}
-								continue
 							}
 						}
 					}
@@ -137,17 +122,15 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 					if utf8Ptr != 0 {
 						data := cStringToGoBytes(uintptr(utf8Ptr))
 
-						if !m.dedup(data) {
-							continue
-						}
+						if h, ok := m.dedup.Check(data); ok {
+							dataCopy := make([]byte, len(data))
+							copy(dataCopy, data)
 
-						dataCopy := make([]byte, len(data))
-						copy(dataCopy, data)
-
-						update <- eventful.Update{
-							MimeType: mime.TypeText,
-							Data:     dataCopy,
-							Hash:     m.lastHash.Load(),
+							update <- eventful.Update{
+								MimeType: mime.TypeText,
+								Data:     dataCopy,
+								Hash:     h,
+							}
 						}
 					}
 				}
@@ -212,7 +195,7 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 		return 0, errors.New("failed to set clipboard content")
 	}
 
-	m.dedup(src)
+	m.dedup.Mark(src)
 
 	return len(src), nil
 }

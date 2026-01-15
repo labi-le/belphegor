@@ -7,10 +7,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"sync/atomic"
 	"time"
 
-	"github.com/cespare/xxhash"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/rs/zerolog"
@@ -34,8 +32,8 @@ func init() {
 }
 
 type Clipboard struct {
-	logger   zerolog.Logger
-	lastHash atomic.Uint64
+	logger zerolog.Logger
+	dedup  eventful.Deduplicator
 }
 
 func New(log zerolog.Logger) *Clipboard {
@@ -70,22 +68,19 @@ func (c *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error
 				continue
 			}
 
-			if !c.dedup(get) {
-				continue
-			}
-
-			upd <- eventful.Update{
-				Data:     get,
-				MimeType: mime.From(get),
-				Hash:     c.lastHash.Load(),
+			if h, ok := c.dedup.Check(get); ok {
+				upd <- eventful.Update{
+					Data:     get,
+					MimeType: mime.From(get),
+					Hash:     h,
+				}
 			}
 		}
 	}
 }
 
 func (c *Clipboard) Write(_ mime.Type, src []byte) (int, error) {
-	dataHash := xxhash.Sum64(src)
-	c.lastHash.Store(dataHash)
+	c.dedup.Mark(src)
 
 	if err := clipboardSet(src, exec.Command("wl-copy")); err != nil {
 		c.logger.Error().Err(err).Msg("failed to write to wl-clipboard")
@@ -93,17 +88,6 @@ func (c *Clipboard) Write(_ mime.Type, src []byte) (int, error) {
 	}
 
 	return len(src), nil
-}
-
-func (c *Clipboard) dedup(data []byte) bool {
-	dataHash := xxhash.Sum64(data)
-
-	if dataHash == c.lastHash.Load() {
-		return false
-	}
-
-	c.lastHash.Store(dataHash)
-	return true
 }
 
 func clipboardGet(cmd *exec.Cmd) ([]byte, error) {

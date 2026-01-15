@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cespare/xxhash"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/labi-le/belphegor/pkg/pipe/pipe"
@@ -28,8 +27,8 @@ type reader struct {
 	mimeTypes    []string
 	dataChan     chan<- eventful.Update
 
-	lastHash atomic.Uint64
-	barrier  atomic.Int64
+	dedup   eventful.Deduplicator
+	barrier atomic.Int64
 }
 
 func newReader(preset *preset, dataChan chan<- eventful.Update, log zerolog.Logger) *reader {
@@ -139,26 +138,13 @@ func (r *reader) readPipeData(mimeType string, p *pipe.Pipe) {
 		return
 	}
 
-	if !r.dedup(data) {
-		return
+	if h, ok := r.dedup.Check(data); ok {
+		r.dataChan <- eventful.Update{
+			Data:     data,
+			MimeType: mime.AsType(mimeType),
+			Hash:     h,
+		}
 	}
-
-	r.dataChan <- eventful.Update{
-		Data:     data,
-		MimeType: mime.AsType(mimeType),
-		Hash:     r.lastHash.Load(),
-	}
-}
-
-func (r *reader) dedup(data []byte) bool {
-	dataHash := xxhash.Sum64(data)
-
-	if dataHash == r.lastHash.Load() {
-		return false
-	}
-
-	r.lastHash.Store(dataHash)
-	return true
 }
 
 func isExpectedError(err error) bool {
