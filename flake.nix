@@ -8,18 +8,18 @@
 
   outputs = { self, nixpkgs, flake-utils }:
     let
-      version = "3.4.1";
+      version = "3.5.0";
       pname = "belphegor";
       supportedSystems = [ "x86_64-linux" "aarch64-linux" ];
 
       systemConfigs = {
         x86_64-linux = {
           arch = "linux_amd64";
-          hash = "sha256-Au2pvFpIeYc+knNXBzvaDRVUtLQ8zL3jHpEaEBayg8I="; # x86_64-linux
+          hash = "sha256-jGC+wb0GLsQYJoqhSMXsJWqOxOjbvnNW04l55ks67nU="; # x86_64-linux
         };
         aarch64-linux = {
           arch = "linux_armv6";
-          hash = "sha256-T46V6wFTaWz6DoL4j7S3Eq1Pw98Q5z/UD56Eo8n31Ew="; # aarch64-linux
+          hash = "sha256-h5KZALKxoi/g8e67P9YmXoriCD9MD0JOzd2YThfTf7M="; # aarch64-linux
         };
       };
     in
