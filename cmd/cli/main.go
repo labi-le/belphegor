@@ -54,7 +54,7 @@ func parseFlags() (node.Options, action) {
 	flag.IntVar(&opts.MaxPeers, "max_peers", 5, "Maximum number of discovered peers")
 	flag.StringVar(&opts.Secret, "secret", "", "Key to connect between node (empty=all may connect)")
 	flag.BoolVar(&opts.Clip.AllowCopyFiles, "allow_copy_files", true, "Allow to copy files")
-	flag.IntVar(&opts.Clip.MaxClipboardFiles, "max_clipboard_files", 5, "Maximum number of files that can be copied (and announced) in a single copy operation")
+	flag.IntVar(&opts.Clip.MaxClipboardFiles, "max_clipboard_files", 15, "Maximum number of files that can be copied (and announced) in a single copy operation")
 
 	flag.StringVarP(&act.addressIP, "connect", "c", "", "Address in ip:port format to connect to the node")
 	flag.BoolVar(&act.verbose, "verbose", false, "Verbose logs")
@@ -86,8 +86,8 @@ func parseFlags() (node.Options, action) {
 		opts.MaxPeers = 5
 	}
 
-	if opts.Clip.MaxClipboardFiles <= 0 {
-		opts.Clip.MaxClipboardFiles = 5
+	if opts.Clip.MaxClipboardFiles == 0 {
+		opts.Clip.MaxClipboardFiles = 15
 	}
 
 	return opts, act
