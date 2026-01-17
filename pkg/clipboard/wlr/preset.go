@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	wl "deedles.dev/wl/client"
+	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/rs/zerolog"
 )
 
@@ -30,12 +31,14 @@ type preset struct {
 	display       *wl.Display
 	device        *controlDevice
 	logger        zerolog.Logger
+	opts          eventful.Options
 }
 
-func newPreset(client *wl.Client, log zerolog.Logger) *preset {
+func newPreset(client *wl.Client, log zerolog.Logger, opts eventful.Options) *preset {
 	return &preset{
 		client: client,
 		logger: log.With().Str("component", "preset").Logger(),
+		opts:   opts,
 	}
 }
 

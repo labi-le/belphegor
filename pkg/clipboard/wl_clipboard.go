@@ -8,6 +8,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func New(logger zerolog.Logger) eventful.Eventful {
+func New(opts eventful.Options, logger zerolog.Logger) *wl_clipboard.Clipboard {
 	return wl_clipboard.New(logger)
 }

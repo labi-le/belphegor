@@ -30,16 +30,16 @@ type Clipboard struct {
 	closed atomic.Bool
 }
 
-func Must(log zerolog.Logger) *Clipboard {
+func Must(log zerolog.Logger, opts eventful.Options) *Clipboard {
 	client, err := wl.Dial()
 	if err != nil {
 		panic(err)
 	}
-	return New(client, log)
+	return New(client, log, opts)
 }
 
-func New(client *wl.Client, log zerolog.Logger) *Clipboard {
-	preset := newPreset(client, log)
+func New(client *wl.Client, log zerolog.Logger, opts eventful.Options) *Clipboard {
+	preset := newPreset(client, log, opts)
 
 	wlr := &Clipboard{
 		preset: preset,

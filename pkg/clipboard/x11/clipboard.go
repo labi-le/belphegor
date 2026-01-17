@@ -31,6 +31,7 @@ type Clipboard struct {
 	conn   *xgb.Conn
 	win    xproto.Window
 	atoms  *atomCache
+	opts   eventful.Options
 
 	mu       sync.Mutex
 	dedup    eventful.Deduplicator
@@ -38,9 +39,10 @@ type Clipboard struct {
 	serveTyp xproto.Atom
 }
 
-func New(log zerolog.Logger) *Clipboard {
+func New(log zerolog.Logger, opts eventful.Options) *Clipboard {
 	return &Clipboard{
 		logger: log.With().Str("component", "x11").Logger(),
+		opts:   opts,
 	}
 }
 
@@ -308,13 +310,29 @@ func (c *Clipboard) handleNotify(e xproto.SelectionNotifyEvent, upd chan<- event
 		return
 	}
 
+	if e.Target == c.atoms.UriList {
+		if !c.opts.AllowCopyFiles {
+			return
+		}
+
+		updates, batchHash := eventful.UpdatesFromRawPath(data, c.opts.MaxClipboardFiles)
+		if len(updates) == 0 {
+			return
+		}
+
+		if _, ok := c.dedup.Check(batchHash); ok {
+			for _, u := range updates {
+				upd <- u
+			}
+		}
+		return
+	}
+
 	if h, ok := c.dedup.Check(data); ok {
 		var mTyp mime.Type
 		switch e.Target {
 		case c.atoms.ImagePng:
 			mTyp = mime.TypeImage
-		case c.atoms.UriList:
-			mTyp = mime.TypePath
 		default:
 			mTyp = mime.TypeText
 		}

@@ -9,11 +9,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func New(logger zerolog.Logger) eventful.Eventful {
+func New(opts eventful.Options, logger zerolog.Logger) *wlr.Clipboard {
 	client, err := wl.Dial()
 	if err != nil {
 		logger.Fatal().Err(err).Send()
 	}
 
-	return wlr.New(client, logger)
+	return wlr.New(client, logger, opts)
 }

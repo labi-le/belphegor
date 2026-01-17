@@ -4,7 +4,6 @@ package windows
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"runtime"
@@ -185,42 +184,13 @@ func (w *Clipboard) signAndSend(capture capturedData, upd chan<- eventful.Update
 		return
 	}
 
-	updates, hash := w.prepareUpdates(capture.Files, capture.Type)
+	updates, hash := eventful.UpdatesFromFileInfo(capture.Files, capture.Type)
 	if _, ok := w.dedup.Check(hash); ok {
 		for i := range updates {
 			upd <- updates[i]
 		}
 	}
 
-}
-
-func (w *Clipboard) prepareUpdates(files []fileInfo, typ mime.Type) ([]eventful.Update, []byte) {
-	updates := make([]eventful.Update, 0, len(files))
-
-	batchDigest := eventful.Hasher()
-
-	buf := make([]byte, 0, 512)
-
-	for _, file := range files {
-		buf = append(buf, file.Path...)
-		buf = binary.LittleEndian.AppendUint64(buf, file.Size)
-		buf = binary.LittleEndian.AppendUint64(buf, file.ModTime)
-
-		fileHash := w.dedup.Hash(buf)
-
-		_, _ = batchDigest.Write(buf)
-
-		updates = append(updates, eventful.Update{
-			Data:     unsafe.Slice(unsafe.StringData(file.Path), len(file.Path)),
-			Size:     file.Size,
-			MimeType: typ,
-			Hash:     fileHash,
-		})
-
-		buf = buf[:0]
-	}
-
-	return updates, batchDigest.Sum(nil)
 }
 
 func (w *Clipboard) Write(t mime.Type, src []byte) (int, error) {

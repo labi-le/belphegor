@@ -9,18 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/mime"
 )
 
-type fileInfo struct {
-	Path    string
-	Size    uint64
-	ModTime uint64
-}
-
 type capturedData struct {
 	Bytes []byte
-	Files []fileInfo
+	Files []eventful.FileInfo
 	Type  mime.Type
 }
 

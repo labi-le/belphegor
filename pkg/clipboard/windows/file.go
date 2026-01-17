@@ -6,9 +6,11 @@ import (
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
+
+	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 )
 
-func (w *Clipboard) readFiles() ([]fileInfo, error) {
+func (w *Clipboard) readFiles() ([]eventful.FileInfo, error) {
 	hDrop, _, _ := syscall.SyscallN(getClipboardData.Addr(), cFmtHDrop)
 	if hDrop == 0 {
 		return nil, errUnavailable
@@ -24,7 +26,7 @@ func (w *Clipboard) readFiles() ([]fileInfo, error) {
 		limit = count
 	}
 
-	result := make([]fileInfo, 0, limit)
+	result := make([]eventful.FileInfo, 0, limit)
 	var attr win32FileAttributeData
 
 	for i := uintptr(0); i < limit; i++ {
@@ -46,7 +48,7 @@ func (w *Clipboard) readFiles() ([]fileInfo, error) {
 			uintptr(unsafe.Pointer(&attr)),
 		)
 
-		info := fileInfo{
+		info := eventful.FileInfo{
 			Path: string(utf16.Decode(buf[:ln])),
 		}
 

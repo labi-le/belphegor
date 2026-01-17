@@ -138,10 +138,30 @@ func (r *reader) readPipeData(mimeType string, p *pipe.Pipe) {
 		return
 	}
 
+	typ := mime.AsType(mimeType)
+
+	if typ == mime.TypePath {
+		if !r.opts.AllowCopyFiles {
+			return
+		}
+
+		updates, batchHash := eventful.UpdatesFromRawPath(data, r.opts.MaxClipboardFiles)
+		if len(updates) == 0 {
+			return
+		}
+
+		if _, ok := r.dedup.Check(batchHash); ok {
+			for _, u := range updates {
+				r.dataChan <- u
+			}
+		}
+		return
+	}
+
 	if h, ok := r.dedup.Check(data); ok {
 		r.dataChan <- eventful.Update{
 			Data:     data,
-			MimeType: mime.AsType(mimeType),
+			MimeType: typ,
 			Hash:     h,
 		}
 	}
