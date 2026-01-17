@@ -7,22 +7,23 @@ import (
 	"github.com/labi-le/belphegor/internal/notification"
 	"github.com/labi-le/belphegor/internal/store"
 	"github.com/labi-le/belphegor/internal/types/domain"
+	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/rs/zerolog"
 )
 
 type Options struct {
-	PublicPort     int
-	KeepAlive      time.Duration
-	Deadline       network.Deadline
-	Notifier       notification.Notifier
-	Discovering    DiscoverOptions
-	Metadata       domain.Device
-	Logger         zerolog.Logger
-	Secret         string
-	MaxPeers       int
-	MaxReceiveSize uint64
-	Store          store.FileWriter
+	PublicPort  int
+	KeepAlive   time.Duration
+	Deadline    network.Deadline
+	Notifier    notification.Notifier
+	Discovering DiscoverOptions
+	Metadata    domain.Device
+	Logger      zerolog.Logger
+	Secret      string
+	MaxPeers    int
+	Store       store.FileWriter
+	Clip        eventful.Options
 }
 
 type DiscoverOptions struct {
@@ -34,7 +35,7 @@ type DiscoverOptions struct {
 type Option func(*Options)
 
 //nolint:mnd //shut up
-var defaultOptions = Options{
+var DefaultOptions = Options{
 	PublicPort: netstack.RandomPort(),
 	KeepAlive:  time.Minute,
 	Deadline: network.Deadline{
@@ -48,10 +49,11 @@ var defaultOptions = Options{
 		MaxPeers: 5,
 	},
 	Metadata: domain.SelfMetaData(),
+	MaxPeers: 4,
 }
 
 func NewOptions(opts ...Option) Options {
-	options := defaultOptions
+	options := DefaultOptions
 
 	for _, opt := range opts {
 		opt(&options)
@@ -66,29 +68,12 @@ func WithPublicPort(port int) Option {
 	}
 }
 
-func WithKeepAlive(duration time.Duration) Option {
-	return func(o *Options) {
-		o.KeepAlive = duration
-	}
-}
-
-func WithDeadline(dd network.Deadline) Option {
-	return func(o *Options) {
-		o.Deadline = dd
-	}
-}
-
 func WithNotifier(notifier notification.Notifier) Option {
 	return func(o *Options) {
 		o.Notifier = notifier
 	}
 }
 
-func WithDiscovering(opt DiscoverOptions) Option {
-	return func(o *Options) {
-		o.Discovering = opt
-	}
-}
 func WithMetadata(opt domain.Device) Option {
 	return func(o *Options) {
 		o.Metadata = opt
@@ -98,24 +83,6 @@ func WithMetadata(opt domain.Device) Option {
 func WithLogger(logger zerolog.Logger) Option {
 	return func(o *Options) {
 		o.Logger = logger
-	}
-}
-
-func WithSecret(secret string) Option {
-	return func(options *Options) {
-		options.Secret = secret
-	}
-}
-
-func WithMaxPeers(peers int) Option {
-	return func(options *Options) {
-		options.MaxPeers = peers
-	}
-}
-
-func WithMaxReceiveSize(size uint64) Option {
-	return func(options *Options) {
-		options.MaxReceiveSize = size
 	}
 }
 

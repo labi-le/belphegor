@@ -60,7 +60,7 @@ type bitmapHeader struct {
 	ClrImportant  uint32
 }
 
-func readImage() ([]byte, error) {
+func (w *Clipboard) readImage() ([]byte, error) {
 	hMem, _, err := syscall.SyscallN(getClipboardData.Addr(), cFmtDIBV5)
 	if hMem == 0 {
 		return readImageDib()

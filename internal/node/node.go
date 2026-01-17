@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -59,16 +57,14 @@ func New(
 	clipboard eventful.Eventful,
 	peers *Storage,
 	channel *channel.Channel,
-	opts ...Option,
+	opts Options,
 ) *Node {
-	options := NewOptions(opts...)
-
 	return &Node{
 		transport: tr,
 		clipboard: clipboard,
 		peers:     peers,
 		channel:   channel,
-		opts:      options,
+		opts:      opts,
 	}
 }
 
@@ -127,7 +123,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 			Store:          n.opts.Store,
 			Logger:         n.opts.Logger,
 			Deadline:       n.opts.Deadline,
-			MaxReceiveSize: n.opts.MaxReceiveSize,
+			MaxReceiveSize: n.opts.Clip.MaxFileSize,
 		},
 	)
 
@@ -297,7 +293,7 @@ func (n *Node) Broadcast(ctx context.Context, announce domain.EventAnnounce) {
 func (n *Node) monitor(ctx context.Context) error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.monitor").With().Logger()
 
-	updates, watchErr := make(chan eventful.Update), make(chan error, 1)
+	updates, watchErr := make(chan eventful.Update, n.opts.Clip.MaxClipboardFiles), make(chan error, 1)
 	go func() {
 		defer close(watchErr)
 
@@ -364,7 +360,14 @@ func (n *Node) monitor(ctx context.Context) error {
 
 func messageFromUpdate(update eventful.Update) domain.Message {
 	if update.MimeType.IsPath() {
-		return messageFromPath(update)
+		return domain.Message{
+			ID:            id.New(),
+			Data:          update.Data,
+			Name:          filepath.Base(string(update.Data)),
+			MimeType:      update.MimeType,
+			ContentHash:   update.Hash,
+			ContentLength: update.Size,
+		}
 	}
 
 	return domain.Message{
@@ -374,52 +377,6 @@ func messageFromUpdate(update eventful.Update) domain.Message {
 		ContentHash:   update.Hash,
 		ContentLength: uint64(len(update.Data)),
 	}
-}
-
-func messageFromPath(update eventful.Update) domain.Message {
-	rawPath := string(update.Data)
-
-	cleanPath := sanitizePath(rawPath)
-
-	stat, err := os.Stat(cleanPath)
-	if err != nil {
-		return domain.Message{}
-	}
-
-	if stat.IsDir() {
-		return domain.Message{}
-	}
-
-	return domain.Message{
-		ID:            id.New(),
-		Data:          []byte(cleanPath),
-		Name:          filepath.Base(cleanPath),
-		MimeType:      update.MimeType,
-		ContentHash:   update.Hash,
-		ContentLength: uint64(stat.Size()),
-	}
-}
-
-func sanitizePath(raw string) string {
-	raw = strings.TrimSpace(raw)
-
-	if idx := strings.Index(raw, "://"); idx != -1 {
-		raw = raw[idx+3:]
-	}
-
-	if unescaped, err := url.PathUnescape(raw); err == nil {
-		raw = unescaped
-	}
-
-	raw = filepath.ToSlash(raw)
-
-	clean := filepath.Clean(raw)
-
-	if len(clean) > 2 && clean[0] == '/' && clean[2] == ':' {
-		clean = clean[1:]
-	}
-
-	return clean
 }
 
 func (n *Node) Notify(message string, v ...any) {
@@ -440,9 +397,9 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 	logger.Trace().
 		Msg("received announce")
 
-	if ann.Payload.ContentLength > n.opts.MaxReceiveSize {
+	if ann.Payload.ContentLength > n.opts.Clip.MaxFileSize {
 		logger.Warn().
-			Str("max_size", humanize.Bytes(n.opts.MaxReceiveSize)).
+			Str("max_size", humanize.Bytes(n.opts.Clip.MaxFileSize)).
 			Str("received_size", humanize.Bytes(ann.Payload.ContentLength)).
 			Msg("i cannot accept; size exceeds permitted limits")
 		return

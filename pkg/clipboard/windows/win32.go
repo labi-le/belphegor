@@ -25,10 +25,20 @@ type wndClassEx struct {
 	IconSm     syscall.Handle
 }
 
+type win32FileAttributeData struct {
+	FileAttributes uint32
+	CreationTime   syscall.Filetime
+	LastAccessTime syscall.Filetime
+	LastWriteTime  syscall.Filetime
+	FileSizeHigh   uint32
+	FileSizeLow    uint32
+}
+
 const (
-	cFmtUnicodeText = 13
-	cFmtDIBV5       = 17
-	cFmtHDrop       = 15
+	cFmtUnicodeText       = 13
+	cFmtDIBV5             = 17
+	cFmtHDrop             = 15
+	getFileExInfoStandard = 0
 )
 
 const (
@@ -65,6 +75,8 @@ var (
 	gUnlock = kernel32.NewProc("GlobalUnlock")
 	gAlloc  = kernel32.NewProc("GlobalAlloc")
 	gFree   = kernel32.NewProc("GlobalFree")
+
+	getFileAttributesEx = kernel32.NewProc("GetFileAttributesExW")
 
 	getPriorityClipboardFormat = user32.MustFindProc("GetPriorityClipboardFormat")
 )

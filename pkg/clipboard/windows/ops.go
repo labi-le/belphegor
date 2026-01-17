@@ -12,34 +12,55 @@ import (
 	"github.com/labi-le/belphegor/pkg/mime"
 )
 
-func readDetected(t uintptr) ([]byte, mime.Type, error) {
+type fileInfo struct {
+	Path    string
+	Size    uint64
+	ModTime uint64
+}
+
+type capturedData struct {
+	Bytes []byte
+	Files []fileInfo
+	Type  mime.Type
+}
+
+func (w *Clipboard) readDetected(t uintptr) (capturedData, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
 	closer, err := tryOpenClipboard()
 	defer closer()
 	if err != nil {
-		return nil, mime.TypeUnknown, fmt.Errorf("read detected: %w", err)
+		return capturedData{}, fmt.Errorf("read detected: %w", err)
 	}
 
 	switch t {
 	case cFmtDIBV5:
-		b, err := readImage()
+		b, err := w.readImage()
 		if err != nil {
-			return nil, mime.TypeUnknown, fmt.Errorf("failed to read image: %w", err)
+			return capturedData{}, fmt.Errorf("failed to read image: %w", err)
 		}
-		return b, mime.TypeImage, nil
+		return capturedData{Bytes: b, Type: mime.TypeImage}, nil
 
 	case cFmtHDrop:
-		// todo: in future possible return multiply paths
-		return readFileFirstMime()
+		if !w.opts.AllowCopyFiles {
+			return capturedData{}, fmt.Errorf("read detected file not allowed")
+		}
+
+		files, err := w.readFiles()
+		if err != nil {
+			return capturedData{}, err
+		}
+
+		return capturedData{Files: files, Type: mime.TypePath}, nil
 
 	default:
 		b, err := readText()
 		if err != nil {
-			return nil, mime.TypeUnknown, fmt.Errorf("failed to read text: %w", err)
+			return capturedData{}, fmt.Errorf("failed to read text: %w", err)
 		}
-		return b, mime.TypeText, nil
+
+		return capturedData{Bytes: b, Type: mime.TypeText}, nil
 	}
 }
 

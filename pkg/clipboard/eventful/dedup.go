@@ -6,12 +6,14 @@ import (
 	"github.com/cespare/xxhash"
 )
 
+var Hasher = xxhash.New
+
 type Deduplicator struct {
 	lastHash atomic.Uint64
 }
 
-func (d *Deduplicator) Check(data []byte) (uint64, bool) {
-	h := xxhash.Sum64(data)
+func (d *Deduplicator) Check(data []byte) (hash uint64, isNew bool) {
+	h := d.Hash(data)
 	if h == d.lastHash.Load() {
 		return h, false
 	}
@@ -20,5 +22,9 @@ func (d *Deduplicator) Check(data []byte) (uint64, bool) {
 }
 
 func (d *Deduplicator) Mark(data []byte) {
-	d.lastHash.Store(xxhash.Sum64(data))
+	d.lastHash.Store(d.Hash(data))
+}
+
+func (d *Deduplicator) Hash(data []byte) uint64 {
+	return xxhash.Sum64(data)
 }

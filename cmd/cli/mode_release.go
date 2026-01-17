@@ -2,4 +2,4 @@
 
 package main
 
-func applyTagsOverrides(*config) {}
+func applyTagsOverrides(*action) {}

@@ -7,9 +7,8 @@ import (
 	_ "net/http/pprof"
 )
 
-func applyTagsOverrides(cfg *config) {
+func applyTagsOverrides(cfg *action) {
 	cfg.verbose = true
-	cfg.port = 7777
 	cfg.notify = false
 
 	go func() {

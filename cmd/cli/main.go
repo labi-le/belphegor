@@ -22,17 +22,12 @@ import (
 	"github.com/labi-le/belphegor/internal/store"
 	"github.com/labi-le/belphegor/internal/transport/quic"
 	"github.com/labi-le/belphegor/pkg/clipboard"
-	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/rs/zerolog"
 	flag "github.com/spf13/pflag"
 )
 
-type config struct {
-	addressIP      string
-	secret         string
-	fileSavePath   string
-	maxFileSizeRaw string
-	maxFileSize    uint64
+type action struct {
+	addressIP string
 
 	verbose        bool
 	showVersion    bool
@@ -40,70 +35,76 @@ type config struct {
 	notify         bool
 	hidden         bool
 	installService bool
-	discoverEnable bool
 
-	port          int
-	maxPeers      int
-	discoverDelay time.Duration
-	keepAlive     time.Duration
-	writeTimeout  time.Duration
-	readTimeout   time.Duration
+	fileSavePath string
 }
 
-func parseFlags() *config {
-	cfg := &config{}
+func parseFlags() (node.Options, action) {
+	var (
+		opts = node.DefaultOptions
+		act  action
+	)
 
-	flag.StringVarP(&cfg.addressIP, "connect", "c", "", "Address in ip:port format to connect to the node")
-	flag.IntVarP(&cfg.port, "port", "p", netstack.RandomPort(), "Port to use. Default: random")
-	flag.BoolVar(&cfg.discoverEnable, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.DurationVar(&cfg.discoverDelay, "discover_delay", 5*time.Minute, "Delay between node discovery")
-	flag.DurationVar(&cfg.keepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
-	flag.DurationVar(&cfg.writeTimeout, "write_timeout", time.Minute, "Write timeout")
-	flag.DurationVar(&cfg.readTimeout, "read_timeout", time.Minute, "Read timeout")
-	flag.IntVar(&cfg.maxPeers, "max_peers", 5, "Maximum number of discovered peers")
-	flag.BoolVar(&cfg.verbose, "verbose", false, "Verbose logs")
-	flag.BoolVar(&cfg.notify, "notify", true, "Enable notifications")
-	flag.BoolVarP(&cfg.showVersion, "version", "v", false, "Show version")
-	flag.BoolVarP(&cfg.showHelp, "help", "h", false, "Show help")
-	flag.BoolVar(&cfg.hidden, "hidden", true, "Hide console window (for windows user)")
-	flag.BoolVar(&cfg.installService, "install-service", false, "Install systemd-unit and start the service")
-	flag.StringVar(&cfg.secret, "secret", "", "Key to connect between node (empty=all may connect)")
-	flag.StringVar(&cfg.maxFileSizeRaw, "max_file_size", "500MiB", "Maximum file size to receive")
-	flag.StringVar(&cfg.fileSavePath, "file_save_path", path.Join(os.TempDir(), "bfg_cache"), "Folder where the files sent to us will be saved")
+	flag.IntVarP(&opts.PublicPort, "port", "p", netstack.RandomPort(), "Port to use. Default: random")
+	flag.BoolVar(&opts.Discovering.Enable, "node_discover", true, "Find local nodes on the network and connect to them")
+	flag.DurationVar(&opts.Discovering.Delay, "discover_delay", 5*time.Minute, "Delay between node discovery")
+	flag.DurationVar(&opts.KeepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
+	flag.DurationVar(&opts.Deadline.Write, "write_timeout", time.Minute, "Write timeout")
+	flag.DurationVar(&opts.Deadline.Read, "read_timeout", time.Minute, "Read timeout")
+	flag.IntVar(&opts.MaxPeers, "max_peers", 5, "Maximum number of discovered peers")
+	flag.StringVar(&opts.Secret, "secret", "", "Key to connect between node (empty=all may connect)")
+	flag.BoolVar(&opts.Clip.AllowCopyFiles, "allow_copy_files", true, "Allow to copy files")
+	flag.IntVar(&opts.Clip.MaxClipboardFiles, "max_clipboard_files", 5, "Maximum number of files that can be copied (and announced) in a single copy operation")
+
+	flag.StringVarP(&act.addressIP, "connect", "c", "", "Address in ip:port format to connect to the node")
+	flag.BoolVar(&act.verbose, "verbose", false, "Verbose logs")
+	flag.BoolVar(&act.notify, "notify", true, "Enable notifications")
+	flag.BoolVarP(&act.showVersion, "version", "v", false, "Show version")
+	flag.BoolVarP(&act.showHelp, "help", "h", false, "Show help")
+	flag.BoolVar(&act.hidden, "hidden", true, "Hide console window (for windows user)")
+	flag.BoolVar(&act.installService, "install-service", false, "Install systemd-unit and start the service")
+
+	var maxFileSizeRaw string
+	flag.StringVar(&maxFileSizeRaw, "max_file_size", "500MiB", "Maximum file size to receive")
+	flag.StringVar(&act.fileSavePath, "file_save_path", path.Join(os.TempDir(), "bfg_cache"), "Folder where the files sent to us will be saved")
 
 	flag.Parse()
 
-	if cfg.showHelp {
-		return cfg
+	if act.showHelp {
+		return opts, act
 	}
 
-	size, err := humanize.ParseBytes(cfg.maxFileSizeRaw)
+	size, err := humanize.ParseBytes(maxFileSizeRaw)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "invalid max_file_size format: %v\n", err)
 		flag.Usage()
 		os.Exit(1)
 	}
-	cfg.maxFileSize = size
+	opts.Clip.MaxFileSize = size
 
-	if cfg.maxPeers <= 0 {
-		cfg.maxPeers = 5
+	if opts.MaxPeers <= 0 {
+		opts.MaxPeers = 5
 	}
 
-	return cfg
+	if opts.Clip.MaxClipboardFiles <= 0 {
+		opts.Clip.MaxClipboardFiles = 5
+	}
+
+	return opts, act
 }
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	cfg := parseFlags()
+	opts, cfg := parseFlags()
 
 	if cfg.showHelp {
 		flag.Usage()
 		return
 	}
 
-	applyTagsOverrides(cfg)
+	applyTagsOverrides(&cfg)
 	logger := initLogger(cfg.verbose)
 
 	logger.Info().
@@ -121,6 +122,10 @@ func main() {
 		logger.Info().Msg("verbose mode enabled")
 	}
 
+	if !opts.Clip.AllowCopyFiles {
+		logger.Warn().Msg("copy file not allowed")
+	}
+
 	if cfg.installService {
 		if err := service.InstallService(logger); err != nil {
 			logger.Fatal().Err(err).Msg("failed install service")
@@ -136,38 +141,21 @@ func main() {
 		go console.HideConsoleWindow(cancel)
 	}
 
-	nodeOptions := []node.Option{
-		node.WithLogger(logger),
-		node.WithPublicPort(cfg.port),
-		node.WithKeepAlive(cfg.keepAlive),
-		node.WithDeadline(network.Deadline{Read: cfg.readTimeout, Write: cfg.writeTimeout}),
-		node.WithNotifier(notification.New(cfg.notify)),
-		node.WithDiscovering(node.DiscoverOptions{
-			Enable:   cfg.discoverEnable,
-			Delay:    cfg.discoverDelay,
-			MaxPeers: cfg.maxPeers,
-		}),
-		node.WithSecret(cfg.secret),
-		node.WithMaxPeers(cfg.maxPeers),
-		node.WithMaxReceiveSize(cfg.maxFileSize),
-		node.WithFileStore(store.MustFileStore(cfg.fileSavePath, logger)),
-	}
+	opts.Logger = logger
+	opts.Notifier = notification.New(cfg.notify)
+	opts.Store = store.MustFileStore(cfg.fileSavePath, logger)
 
-	nodeSettings := node.NewOptions(nodeOptions...)
-
-	tlsConfig, err := security.MakeTLSConfig(cfg.secret, logger)
+	tlsConfig, err := security.MakeTLSConfig(opts.Secret, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to generate TLS config")
 	}
 
-	quicTransport := quic.New(tlsConfig, nodeSettings.KeepAlive)
-
 	nd := node.New(
-		quicTransport,
-		clipboard.New(logger),
+		quic.New(tlsConfig, opts.KeepAlive),
+		clipboard.New(opts.Clip, logger),
 		new(node.Storage),
-		channel.New(cfg.maxPeers),
-		nodeOptions...,
+		channel.New(opts.MaxPeers),
+		opts,
 	)
 	defer func(nd *node.Node) {
 		if err := nd.Close(); err != nil {
@@ -183,12 +171,12 @@ func main() {
 		}()
 	}
 
-	if cfg.discoverEnable {
+	if opts.Discovering.Enable {
 		go discovering.New(
 			discovering.WithLogger(logger),
-			discovering.WithMaxPeers(cfg.maxPeers),
-			discovering.WithDelay(cfg.discoverDelay),
-			discovering.WithPort(cfg.port),
+			discovering.WithMaxPeers(opts.MaxPeers),
+			discovering.WithDelay(opts.Discovering.Delay),
+			discovering.WithPort(opts.PublicPort),
 		).Discover(ctx, nd)
 	}
 

@@ -5,60 +5,63 @@ package windows
 import (
 	"syscall"
 	"unicode/utf16"
-	"unicode/utf8"
 	"unsafe"
-
-	"github.com/labi-le/belphegor/pkg/mime"
 )
 
-func readFileFirstMime() ([]byte, mime.Type, error) {
-	det := mime.TypePath
-
+func (w *Clipboard) readFiles() ([]fileInfo, error) {
 	hDrop, _, _ := syscall.SyscallN(getClipboardData.Addr(), cFmtHDrop)
 	if hDrop == 0 {
-		return nil, det, errUnavailable
+		return nil, errUnavailable
 	}
 
-	ln, _, _ := syscall.SyscallN(dragQueryFileW.Addr(), hDrop, 0, 0, 0)
-	if ln == 0 {
-		return nil, det, nil
+	count, _, _ := syscall.SyscallN(dragQueryFileW.Addr(), hDrop, 0xFFFFFFFF, 0, 0)
+	if count == 0 {
+		return nil, nil
 	}
 
-	buf := make([]uint16, ln+1)
-
-	res, _, _ := syscall.SyscallN(dragQueryFileW.Addr(), hDrop, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
-	if res == 0 {
-		return nil, det, nil
+	limit := uintptr(w.opts.MaxClipboardFiles)
+	if count < limit {
+		limit = count
 	}
 
-	out := make([]byte, 0, ln)
+	result := make([]fileInfo, 0, limit)
+	var attr win32FileAttributeData
 
-	slice := buf[:ln]
-
-	for i := 0; i < len(slice); i++ {
-		r := rune(slice[i])
-
-		if r < 128 {
-			out = append(out, byte(r))
+	for i := uintptr(0); i < limit; i++ {
+		ln, _, _ := syscall.SyscallN(dragQueryFileW.Addr(), hDrop, i, 0, 0)
+		if ln == 0 {
 			continue
 		}
 
-		if 0xD800 <= r && r < 0xDC00 && i+1 < len(slice) && 0xDC00 <= slice[i+1] && slice[i+1] < 0xE000 {
-			r = utf16.DecodeRune(r, rune(slice[i+1]))
-			i++
-			out = utf8.AppendRune(out, r)
+		buf := make([]uint16, ln+1)
+		res, _, _ := syscall.SyscallN(dragQueryFileW.Addr(), hDrop, i, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+		if res == 0 {
 			continue
 		}
 
-		if 0xD800 <= r && r < 0xE000 {
-			r = utf8.RuneError
+		r1, _, _ := syscall.SyscallN(
+			getFileAttributesEx.Addr(),
+			uintptr(unsafe.Pointer(&buf[0])),
+			getFileExInfoStandard,
+			uintptr(unsafe.Pointer(&attr)),
+		)
+
+		info := fileInfo{
+			Path: string(utf16.Decode(buf[:ln])),
 		}
-		out = utf8.AppendRune(out, r)
+
+		if r1 != 0 {
+			// skip folders
+			if attr.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0 {
+				continue
+			}
+
+			info.Size = (uint64(attr.FileSizeHigh) << 32) | uint64(attr.FileSizeLow)
+			info.ModTime = (uint64(attr.LastWriteTime.HighDateTime) << 32) | uint64(attr.LastWriteTime.LowDateTime)
+		}
+
+		result = append(result, info)
 	}
 
-	if len(out) == 0 {
-		return nil, det, nil
-	}
-
-	return out, det, nil
+	return result, nil
 }

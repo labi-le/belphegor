@@ -4,6 +4,7 @@ package windows
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/mime"
+	"github.com/rs/zerolog"
 )
 
 var _ eventful.Eventful = &Clipboard{}
@@ -29,13 +31,15 @@ const (
 
 var priorityList = []uint32{cFmtUnicodeText, cFmtDIBV5, cFmtHDrop}
 
-func New() *Clipboard {
-	return new(Clipboard)
+func New(opts eventful.Options, logger zerolog.Logger) *Clipboard {
+	return &Clipboard{opts: opts, logger: logger}
 }
 
 type Clipboard struct {
 	barrier atomic.Int64
 	dedup   eventful.Deduplicator
+	opts    eventful.Options
+	logger  zerolog.Logger
 }
 
 func (w *Clipboard) suppress() {
@@ -73,25 +77,21 @@ func (w *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error
 				return 0
 			}
 
-			r, _, _ := syscall.SyscallN(getPriorityClipboardFormat.Addr(),
+			r, _, _ := syscall.SyscallN(
+				getPriorityClipboardFormat.Addr(),
 				uintptr(unsafe.Pointer(&priorityList[0])),
 				uintptr(len(priorityList)),
 			)
-
 			if r == 0 {
 				return 0
 			}
 
-			data, typ, err := readDetected(r)
-			if err == nil {
-				if h, ok := w.dedup.Check(data); ok {
-					upd <- eventful.Update{
-						Data:     data,
-						MimeType: typ,
-						Hash:     h,
-					}
-				}
+			capture, err := w.readDetected(r)
+			if err != nil {
+				return 0
 			}
+
+			w.signAndSend(capture, upd)
 			return 0
 
 		case wmDestroy:
@@ -99,7 +99,13 @@ func (w *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error
 			return 0
 		}
 
-		ret, _, _ := syscall.SyscallN(defWindowProc.Addr(), uintptr(hwnd), uintptr(msg), wparam, lparam)
+		ret, _, _ := syscall.SyscallN(
+			defWindowProc.Addr(),
+			uintptr(hwnd),
+			uintptr(msg),
+			wparam,
+			lparam,
+		)
 		return ret
 	})
 
@@ -160,6 +166,61 @@ func (w *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error
 	close(done)
 	noCheck(syscall.SyscallN(removeClipboardFormatListener.Addr(), hwnd))
 	return nil
+}
+
+func (w *Clipboard) signAndSend(capture capturedData, upd chan<- eventful.Update) {
+	if capture.Type.IsText() {
+		if h, ok := w.dedup.Check(capture.Bytes); ok {
+			upd <- eventful.Update{
+				Data:     capture.Bytes,
+				MimeType: capture.Type,
+				Hash:     h,
+				Size:     uint64(len(capture.Bytes)),
+			}
+		}
+		return
+	}
+
+	if len(capture.Files) == 0 {
+		return
+	}
+
+	updates, hash := w.prepareUpdates(capture.Files, capture.Type)
+	if _, ok := w.dedup.Check(hash); ok {
+		for i := range updates {
+			upd <- updates[i]
+		}
+	}
+
+}
+
+func (w *Clipboard) prepareUpdates(files []fileInfo, typ mime.Type) ([]eventful.Update, []byte) {
+	updates := make([]eventful.Update, 0, len(files))
+
+	batchDigest := eventful.Hasher()
+
+	buf := make([]byte, 0, 512)
+
+	for _, file := range files {
+		buf = append(buf, file.Path...)
+		buf = binary.LittleEndian.AppendUint64(buf, file.Size)
+		buf = binary.LittleEndian.AppendUint64(buf, file.ModTime)
+
+		fileHash := w.dedup.Hash(buf)
+
+		_, _ = batchDigest.Write(buf)
+
+		updates = append(updates, eventful.Update{
+			Data:     unsafe.Slice(unsafe.StringData(file.Path), len(file.Path)),
+			Size:     file.Size,
+			MimeType: typ,
+			Hash:     fileHash,
+		})
+
+		buf = buf[:0]
+	}
+
+	return updates, batchDigest.Sum(nil)
 }
 
 func (w *Clipboard) Write(t mime.Type, src []byte) (int, error) {

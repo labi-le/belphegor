@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash"
+	"github.com/dustin/go-humanize"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/rs/zerolog"
@@ -29,7 +30,7 @@ type Message struct {
 }
 
 func (m Message) Zero() bool {
-	return m.ID == 0 || m.ContentHash == 0 || len(m.Data) == 0
+	return m.ID == 0 || m.ContentHash == 0 || m.ContentLength == 0
 }
 
 func (m Message) Event() EventMessage {
@@ -122,6 +123,6 @@ func (m Message) MarshalZerologObject(e *zerolog.Event) {
 	e.Int64("id", m.ID)
 	e.Int64("node", id.Author(m.ID))
 	e.Stringer("mime", m.MimeType)
-	//e.Int64("length", m.ContentLength)
+	e.Str("size", humanize.Bytes(m.ContentLength))
 	e.Uint64("hash", m.ContentHash)
 }
