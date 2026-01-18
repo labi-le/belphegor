@@ -3,9 +3,11 @@
 package mac
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 	"unsafe"
@@ -27,6 +29,11 @@ func init() {
 
 type Clipboard struct {
 	dedup eventful.Deduplicator
+	opts  eventful.Options
+}
+
+func New(opts eventful.Options) *Clipboard {
+	return &Clipboard{opts: opts}
 }
 
 func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
@@ -66,71 +73,97 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 			return ctx.Err()
 		case <-ticker.C:
 			currentCount := pb.Send(selChangeCount)
-			if currentCount != lastCount {
-				lastCount = currentCount
+			if currentCount == lastCount {
+				continue
+			}
+			lastCount = currentCount
 
-				nsData := pb.Send(selDataForType, nsTypePNG)
-				if nsData != 0 {
-					length := nsData.Send(selLength)
-					if length > 0 {
-						bytesPtr := nsData.Send(selBytes)
-						data := unsafe.Slice((*byte)(unsafe.Pointer(bytesPtr)), int(length))
+			nsData := pb.Send(selDataForType, nsTypePNG)
+			if nsData != 0 {
+				length := nsData.Send(selLength)
+				if length > 0 {
+					bytesPtr := nsData.Send(selBytes)
+					data := unsafe.Slice((*byte)(unsafe.Pointer(bytesPtr)), int(length))
 
-						if h, ok := m.dedup.Check(data); ok {
-							dataCopy := make([]byte, len(data))
-							copy(dataCopy, data)
+					if h, ok := m.dedup.Check(data); ok {
+						dataCopy := make([]byte, len(data))
+						copy(dataCopy, data)
 
-							update <- eventful.Update{
-								MimeType: mime.TypeImage,
-								Data:     dataCopy,
-								Hash:     h,
+						update <- eventful.Update{
+							MimeType: mime.TypeImage,
+							Data:     dataCopy,
+							Hash:     h,
+						}
+						continue
+					}
+				}
+			}
+
+			nsList := pb.Send(selPropertyListForType, nsTypeFile)
+			if nsList != 0 {
+				count := int(nsList.Send(selCount))
+				if count > 0 && m.opts.AllowCopyFiles {
+					limit := m.opts.MaxClipboardFiles
+					if count < limit {
+						limit = count
+					}
+
+					files := make([]eventful.FileInfo, 0, limit)
+
+					for i := 0; i < limit; i++ {
+						nsStrPath := nsList.Send(selObjectAtIndex, uintptr(i))
+						if nsStrPath == 0 {
+							continue
+						}
+
+						utf8Ptr := nsStrPath.Send(selUTF8String)
+						if utf8Ptr == 0 {
+							continue
+						}
+
+						path := string(cStringToGoBytes(uintptr(utf8Ptr)))
+						info, err := os.Lstat(path)
+						if err != nil {
+							continue
+						}
+
+						if info.IsDir() {
+							continue
+						}
+
+						files = append(files, eventful.FileInfo{
+							Path:    path,
+							Size:    uint64(info.Size()),
+							ModTime: uint64(info.ModTime().UnixNano()),
+						})
+					}
+
+					if len(files) > 0 {
+						updates, hash := eventful.UpdatesFromFileInfo(files)
+						if _, ok := m.dedup.Check(hash); ok {
+							for _, u := range updates {
+								update <- u
 							}
 							continue
 						}
 					}
 				}
+			}
 
-				nsList := pb.Send(selPropertyListForType, nsTypeFile)
-				if nsList != 0 {
-					count := nsList.Send(selCount)
-					if count > 0 {
-						nsStrPath := nsList.Send(selObjectAtIndex, 0)
-						if nsStrPath != 0 {
-							utf8Ptr := nsStrPath.Send(selUTF8String)
-							if utf8Ptr != 0 {
-								data := cStringToGoBytes(uintptr(utf8Ptr))
+			nsStr := pb.Send(selStringForType, nsTypeText)
+			if nsStr != 0 {
+				utf8Ptr := nsStr.Send(selUTF8String)
+				if utf8Ptr != 0 {
+					data := cStringToGoBytes(uintptr(utf8Ptr))
 
-								if h, ok := m.dedup.Check(data); ok {
-									dataCopy := make([]byte, len(data))
-									copy(dataCopy, data)
+					if h, ok := m.dedup.Check(data); ok {
+						dataCopy := make([]byte, len(data))
+						copy(dataCopy, data)
 
-									update <- eventful.Update{
-										MimeType: mime.TypePath,
-										Data:     dataCopy,
-										Hash:     h,
-									}
-									continue
-								}
-							}
-						}
-					}
-				}
-
-				nsStr := pb.Send(selStringForType, nsTypeText)
-				if nsStr != 0 {
-					utf8Ptr := nsStr.Send(selUTF8String)
-					if utf8Ptr != 0 {
-						data := cStringToGoBytes(uintptr(utf8Ptr))
-
-						if h, ok := m.dedup.Check(data); ok {
-							dataCopy := make([]byte, len(data))
-							copy(dataCopy, data)
-
-							update <- eventful.Update{
-								MimeType: mime.TypeText,
-								Data:     dataCopy,
-								Hash:     h,
-							}
+						update <- eventful.Update{
+							MimeType: mime.TypeText,
+							Data:     dataCopy,
+							Hash:     h,
 						}
 					}
 				}
@@ -146,7 +179,7 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	clsNSPasteboard := objc.GetClass("NSPasteboard")
 	clsNSString := objc.GetClass("NSString")
 	clsNSData := objc.GetClass("NSData")
-	clsNSArray := objc.GetClass("NSArray")
+	clsNSMutableArray := objc.GetClass("NSMutableArray")
 
 	selGeneralPasteboard := objc.RegisterName("generalPasteboard")
 	selClearContents := objc.RegisterName("clearContents")
@@ -154,7 +187,8 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	selSetData := objc.RegisterName("setData:forType:")
 	selSetPropertyList := objc.RegisterName("setPropertyList:forType:")
 	selDataWithBytes := objc.RegisterName("dataWithBytes:length:")
-	selArrayWithObject := objc.RegisterName("arrayWithObject:")
+	selNew := objc.RegisterName("new")
+	selAddObject := objc.RegisterName("addObject:")
 
 	pb := objc.ID(clsNSPasteboard).Send(selGeneralPasteboard)
 	pb.Send(selClearContents)
@@ -176,13 +210,31 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	case mime.TypePath:
 		nsTypeFile := makeNSString(clsNSString, "NSFilenamesPboardType")
 		nsTypeText := makeNSString(clsNSString, "public.utf8-plain-text")
-		nsStrPath := makeNSString(clsNSString, string(src))
 
-		nsArray := objc.ID(clsNSArray).Send(selArrayWithObject, nsStrPath)
+		nsArray := objc.ID(clsNSMutableArray).Send(selNew)
+
+		lines := bytes.Split(src, []byte{'\n'})
+		firstPath := ""
+
+		for _, line := range lines {
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				continue
+			}
+			s := string(line)
+			if firstPath == "" {
+				firstPath = s
+			}
+			nsStr := makeNSString(clsNSString, s)
+			nsArray.Send(selAddObject, nsStr)
+		}
 
 		ret = uintptr(pb.Send(selSetPropertyList, nsArray, nsTypeFile))
 
-		pb.Send(selSetString, nsStrPath, nsTypeText)
+		if firstPath != "" {
+			nsStrPath := makeNSString(clsNSString, firstPath)
+			pb.Send(selSetString, nsStrPath, nsTypeText)
+		}
 
 	default:
 		nsStrContent := makeNSString(clsNSString, string(src))

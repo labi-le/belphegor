@@ -9,5 +9,5 @@ import (
 )
 
 func New(opts eventful.Options, logger zerolog.Logger) *mac.Clipboard {
-	return new(mac.Clipboard)
+	return mac.New(opts)
 }
