@@ -184,7 +184,7 @@ func (w *Clipboard) signAndSend(capture capturedData, upd chan<- eventful.Update
 		return
 	}
 
-	updates, hash := eventful.UpdatesFromFileInfo(capture.Files, capture.Type)
+	updates, hash := eventful.UpdatesFromFileInfo(capture.Files)
 	if _, ok := w.dedup.Check(hash); ok {
 		for i := range updates {
 			upd <- updates[i]
