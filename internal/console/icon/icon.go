@@ -7,6 +7,12 @@ var (
 	Red []byte
 	//go:embed "green.ico"
 	Green []byte
+
+	//go:embed "red.png"
+	RedPNG []byte
+	//go:embed "green.png"
+	GreenPNG []byte
+
 	//go:embed "krisa.png"
 	FullSize []byte
 )

@@ -24,9 +24,9 @@ ___
     * XFixes
 
 - macos:
-  * nothing
+  * 12 or newer
 - windows:
-  * nothing (untested windows < 10)
+  * 10 or newer (may work on older versions)
 
 ### Limitations
 
