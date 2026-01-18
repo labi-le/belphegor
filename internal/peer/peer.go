@@ -178,7 +178,14 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 		return nil
 
 	case domain.EventRequest:
-		return p.handleRequest(ctx, p.channel.LastMsg(), payload)
+		msg, ok := p.channel.Get(payload.Payload.ID)
+		if !ok {
+			p.logger.Debug().
+				Int64("req_id", payload.Payload.ID).
+				Msg("peer requested message that i do not have or is expired")
+			return nil
+		}
+		return p.handleRequest(ctx, msg, payload)
 
 	default:
 		return fmt.Errorf("unknown payload type: %T", payload)

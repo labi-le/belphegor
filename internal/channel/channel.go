@@ -14,8 +14,10 @@ type Channel struct {
 	msg     chan domain.EventMessage
 	lastMsg domain.EventMessage
 
-	ann         chan domain.EventAnnounce
-	fileHistory *history
+	ann chan domain.EventAnnounce
+
+	fileHistory *announceHistory
+	servedFiles *servedFilesHistory
 }
 
 func New(peerMaxCount int) *Channel {
@@ -23,6 +25,7 @@ func New(peerMaxCount int) *Channel {
 		msg:         make(chan domain.EventMessage),
 		ann:         make(chan domain.EventAnnounce, peerMaxCount),
 		fileHistory: newHistory(historySize),
+		servedFiles: newServedFilesHistory(historySize),
 	}
 }
 
@@ -37,10 +40,11 @@ func (c *Channel) Get(msgID id.Unique) (domain.EventMessage, bool) {
 	defer c.msgMu.RUnlock()
 
 	if c.lastMsg.Payload.ID == msgID {
-		return c.lastMsg, true
+		msg := c.lastMsg
+		return msg, true
 	}
 
-	return domain.EventMessage{}, false
+	return c.servedFiles.Get(msgID)
 }
 
 func (c *Channel) Send(msg domain.EventMessage) {
@@ -58,6 +62,10 @@ func (c *Channel) updateLastMsg(msg domain.EventMessage) bool {
 	}
 
 	c.lastMsg = msg
+
+	if msg.Payload.MimeType.IsPath() {
+		c.servedFiles.Add(msg.Payload.ID, msg)
+	}
 	return true
 }
 
@@ -72,11 +80,7 @@ func (c *Channel) Announce(ann domain.EventAnnounce) {
 }
 
 func (c *Channel) shouldUpdateAnn(ann domain.EventAnnounce) bool {
-	if c.fileHistory.Add(ann.Payload.ContentHash, ann) {
-		return true
-	}
-
-	return false
+	return c.fileHistory.Add(ann.Payload.ContentHash, ann)
 }
 
 func (c *Channel) Announcements() <-chan domain.EventAnnounce {
