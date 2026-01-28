@@ -119,7 +119,7 @@ func main() {
 	}
 
 	if cfg.verbose {
-		logger.Info().Msg("verbose mode enabled")
+		logger.Trace().Object("opts", opts).Msg("verbose mode enabled")
 	}
 
 	if !opts.Clip.AllowCopyFiles {

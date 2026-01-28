@@ -26,6 +26,40 @@ type Options struct {
 	Clip        eventful.Options
 }
 
+func (o Options) MarshalZerologObject(e *zerolog.Event) {
+	e.Int("public_port", o.PublicPort)
+	e.Str("keep_alive", o.KeepAlive.String())
+	e.Dict(
+		"deadline",
+		zerolog.Dict().
+			Str("read", o.Deadline.Read.String()).
+			Str("write", o.Deadline.Write.String()),
+	)
+	e.Dict(
+		"metadata",
+		zerolog.Dict().
+			Str("arch", o.Metadata.Arch).
+			Int64("id", o.Metadata.ID).
+			Str("name", o.Metadata.Name),
+	)
+	e.Dict(
+		"discovering",
+		zerolog.Dict().
+			Bool("enable", o.Discovering.Enable).
+			Str("delay", o.Discovering.Delay.String()).
+			Int("max_peers", o.Discovering.MaxPeers),
+	)
+	e.Bool("has_secret", o.Secret != "")
+	e.Int("max_peers", o.MaxPeers)
+	e.Dict(
+		"clipboard_options",
+		zerolog.Dict().
+			Bool("allow_copy_files", o.Clip.AllowCopyFiles).
+			Int("max_clipboard_files", o.Clip.MaxClipboardFiles).
+			Int64("max_file_size", int64(o.Clip.MaxFileSize)),
+	)
+}
+
 type DiscoverOptions struct {
 	Enable   bool
 	Delay    time.Duration
