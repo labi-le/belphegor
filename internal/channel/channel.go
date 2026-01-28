@@ -7,7 +7,7 @@ import (
 	"github.com/labi-le/belphegor/pkg/id"
 )
 
-const historySize = 5
+const HistorySize = 5
 
 type Channel struct {
 	msgMu   sync.RWMutex
@@ -24,8 +24,8 @@ func New(peerMaxCount int) *Channel {
 	return &Channel{
 		msg:         make(chan domain.EventMessage),
 		ann:         make(chan domain.EventAnnounce, peerMaxCount),
-		fileHistory: newHistory(historySize),
-		servedFiles: newServedFilesHistory(historySize),
+		fileHistory: newHistory(HistorySize),
+		servedFiles: newServedFilesHistory(HistorySize),
 	}
 }
 

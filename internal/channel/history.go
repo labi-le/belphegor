@@ -28,7 +28,7 @@ func newHistory(limit int) *announceHistory {
 }
 func newServedFilesHistory(limit int) *servedFilesHistory {
 	return &servedFilesHistory{
-		limit: historySize,
+		limit: HistorySize,
 		order: make([]id.Unique, 0, limit),
 		data:  make(map[id.Unique]domain.EventMessage, limit),
 	}
