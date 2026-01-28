@@ -1,0 +1,32 @@
+name: 'Close stale issues'
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 10 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    if: github.event.repository.fork == false
+    permissions:
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-message: 'this issue is automatically closing because there has been no activity'
+          stale-issue-label: 'stale'
+          days-before-stale: 60
+          days-before-close: 14
+          exempt-all-milestones: true
+
+      - uses: actions/stale@v9
+        with:
+          close-issue-message: 'closing this as we have not received a response in 14 days.'
+          stale-issue-label: 'awaiting-reply'
+          days-before-stale: -1
+          days-before-close: 14
+          labels-to-add-when-unstale: 'needs-triage'
