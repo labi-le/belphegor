@@ -45,7 +45,7 @@ var DefaultOptions = Options{
 	Notifier: new(notification.BeepDecorator),
 	Discovering: DiscoverOptions{
 		Enable:   true,
-		Delay:    5 * time.Minute,
+		Delay:    30 * time.Second,
 		MaxPeers: 5,
 	},
 	Metadata: domain.SelfMetaData(),

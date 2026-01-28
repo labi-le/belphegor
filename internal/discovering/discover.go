@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/rs/zerolog"
 	"github.com/schollz/peerdiscovery"
 )
@@ -79,13 +78,7 @@ func (d *Discover) Discover(ctx context.Context, connector Connector) {
 			Delay:     d.delay,
 			AllowSelf: false,
 			Notify: func(d peerdiscovery.Discovered) {
-				peerIP := net.ParseIP(d.Address)
-				// For some reason the library calls Notify ignoring AllowSelf:false
-				if network.IsLocalIP(peerIP) {
-					return
-				}
-
-				go connector.PeerDiscovered(ctx, peerIP, d.Payload)
+				go connector.PeerDiscovered(ctx, net.ParseIP(d.Address), d.Payload)
 			},
 		},
 	)

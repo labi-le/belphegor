@@ -47,7 +47,7 @@ func parseFlags() (node.Options, action) {
 
 	flag.IntVarP(&opts.PublicPort, "port", "p", netstack.RandomPort(), "Port to use. Default: random")
 	flag.BoolVar(&opts.Discovering.Enable, "node_discover", true, "Find local nodes on the network and connect to them")
-	flag.DurationVar(&opts.Discovering.Delay, "discover_delay", 5*time.Minute, "Delay between node discovery")
+	flag.DurationVar(&opts.Discovering.Delay, "discover_delay", 30*time.Second, "Delay between node discovery")
 	flag.DurationVar(&opts.KeepAlive, "keep_alive", 1*time.Minute, "Interval for checking connections between nodes")
 	flag.DurationVar(&opts.Deadline.Write, "write_timeout", time.Minute, "Write timeout")
 	flag.DurationVar(&opts.Deadline.Read, "read_timeout", time.Minute, "Read timeout")
