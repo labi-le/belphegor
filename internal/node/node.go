@@ -19,7 +19,6 @@ import (
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/id"
 )
 
 var (
@@ -42,7 +41,7 @@ func (n *Node) Close() error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Close")
 	ctxLog.Trace().Msg("shutting down")
 
-	n.peers.Tap(func(_ id.Unique, p *peer.Peer) bool {
+	n.peers.Tap(func(_ domain.NodeID, p *peer.Peer) bool {
 		if closeErr := p.Close(); closeErr != nil {
 			ctxLog.Warn().Err(closeErr).Str("peer", p.String()).Msg("failed to close peer")
 		}
@@ -158,7 +157,7 @@ func (n *Node) Start(ctx context.Context) error {
 	n.Notify("started on %s", addr)
 	ctxLog.Info().
 		Str("addr", addr).
-		Int64("my_node_id", n.opts.Metadata.ID).
+		Int64("my_node_id", n.opts.Metadata.ID.Int64()).
 		Type("provider", n.clipboard).
 		Msg("started")
 
@@ -258,10 +257,10 @@ func openOrAcceptStream(ctx context.Context, conn transport.Connection, accept b
 func (n *Node) Broadcast(ctx context.Context, announce domain.EventAnnounce) {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Broadcast")
 
-	n.peers.Tap(func(id id.Unique, peer *peer.Peer) bool {
+	n.peers.Tap(func(id domain.NodeID, peer *peer.Peer) bool {
 		ctxLog := ctxLog.
 			With().
-			Int64("node_id", peer.MetaData().ID).
+			Int64("node_id", peer.MetaData().ID.Int64()).
 			Logger()
 
 		if id == announce.From {
@@ -361,7 +360,7 @@ func (n *Node) monitor(ctx context.Context) error {
 func messageFromUpdate(update eventful.Update) domain.Message {
 	if update.MimeType.IsPath() {
 		return domain.Message{
-			ID:            id.New(),
+			ID:            domain.NewMessageID(),
 			Data:          update.Data,
 			Name:          filepath.Base(string(update.Data)),
 			MimeType:      update.MimeType,
@@ -371,7 +370,7 @@ func messageFromUpdate(update eventful.Update) domain.Message {
 	}
 
 	return domain.Message{
-		ID:            id.New(),
+		ID:            domain.NewMessageID(),
 		Data:          update.Data,
 		MimeType:      update.MimeType,
 		ContentHash:   update.Hash,

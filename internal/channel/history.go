@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/id"
 )
 
 type fifo[K comparable, V any] struct {
@@ -16,7 +15,7 @@ type fifo[K comparable, V any] struct {
 
 type (
 	announceHistory    = fifo[uint64, domain.EventAnnounce]
-	servedFilesHistory = fifo[id.Unique, domain.EventMessage]
+	servedFilesHistory = fifo[domain.MessageID, domain.EventMessage]
 )
 
 func newHistory(limit int) *announceHistory {
@@ -29,8 +28,8 @@ func newHistory(limit int) *announceHistory {
 func newServedFilesHistory(limit int) *servedFilesHistory {
 	return &servedFilesHistory{
 		limit: HistorySize,
-		order: make([]id.Unique, 0, limit),
-		data:  make(map[id.Unique]domain.EventMessage, limit),
+		order: make([]domain.MessageID, 0, limit),
+		data:  make(map[domain.MessageID]domain.EventMessage, limit),
 	}
 }
 

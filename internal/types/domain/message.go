@@ -1,12 +1,9 @@
 package domain
 
 import (
-	"encoding/binary"
-	"hash"
-	"sync"
+	"strconv"
 	"time"
 
-	"github.com/cespare/xxhash"
 	"github.com/dustin/go-humanize"
 	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/mime"
@@ -16,9 +13,31 @@ import (
 type EventMessage = Event[Message]
 
 type (
-	MessageID = id.Unique
-	Data      []byte
+	Data []byte
 )
+
+// MessageID strict type definition
+type MessageID id.Unique
+
+func NewMessageID() MessageID {
+	return MessageID(id.New())
+}
+
+func (m MessageID) String() string {
+	return strconv.FormatInt(int64(m), 10)
+}
+
+func (m MessageID) Int64() int64 {
+	return int64(m)
+}
+
+func (m MessageID) Zero() bool {
+	return m == 0
+}
+
+func (m MessageID) MarshalZerologObject(e *zerolog.Event) {
+	e.Int64("msg_id", int64(m))
+}
 
 type Message struct {
 	ID            MessageID
@@ -35,47 +54,10 @@ func (m Message) Zero() bool {
 
 func (m Message) Event() EventMessage {
 	return EventMessage{
-		From:    id.MyID,
+		From:    NodeID(id.MyID),
 		Created: time.Now(),
 		Payload: m,
 	}
-}
-
-// MessageNew creates a new Message with the provided data.
-// Deprecated: Use MessageFromUpdate instead.
-func MessageNew(data []byte) EventMessage {
-	mt := mime.From(data)
-	return EventMessage{
-		From:    id.MyID,
-		Created: time.Now(),
-		Payload: Message{
-			Data:        data,
-			MimeType:    mt,
-			ID:          id.New(),
-			ContentHash: hashMessage(mt, data),
-		},
-	}
-}
-
-var hasherPool = sync.Pool{
-	New: func() any {
-		return xxhash.New()
-	},
-}
-
-func hashMessage(mt mime.Type, data []byte) uint64 {
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], uint64(mt))
-
-	d := hasherPool.Get().(hash.Hash64)
-	defer func() {
-		d.Reset()
-		hasherPool.Put(d)
-	}()
-
-	_, _ = d.Write(buf[:])
-	_, _ = d.Write(data)
-	return d.Sum64()
 }
 
 func (m Message) Duplicate(msg Message) bool {
@@ -88,18 +70,6 @@ func (m Message) Duplicate(msg Message) bool {
 	}
 
 	return m.ContentHash != 0 && m.ContentHash == msg.ContentHash
-
-	//if m.Mime.IsImage() {
-	//	identical, err := mime.EqualMSE(
-	//		bytes.NewReader(m.Data),
-	//		bytes.NewReader(new.Data),
-	//	)
-	//	if err != nil {
-	//		log.Error().AnErr("image.EqualMSE", err).Msg("failed to compare images")
-	//	}
-	//
-	//	return identical
-	//}
 }
 
 func (m Message) DuplicateByAnnounce(ann Announce) bool {
@@ -120,8 +90,8 @@ func (m Message) Announce() Announce {
 }
 
 func (m Message) MarshalZerologObject(e *zerolog.Event) {
-	e.Int64("id", m.ID)
-	e.Int64("node", id.Author(m.ID))
+	e.Object("id", m.ID)
+	e.Int64("node", id.Author(id.Unique(m.ID)))
 	e.Stringer("mime", m.MimeType)
 	e.Str("size", humanize.Bytes(m.ContentLength))
 	e.Uint64("hash", m.ContentHash)

@@ -11,7 +11,6 @@ import (
 	"github.com/labi-le/belphegor/internal/protocol"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/internal/types/proto"
-	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/mime"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -20,10 +19,10 @@ var (
 	testTime = time.Now()
 
 	fullMsgEvent = domain.EventMessage{
-		From:    id.Unique(101),
+		From:    domain.NodeID(101),
 		Created: testTime,
 		Payload: domain.Message{
-			ID:            id.Unique(102),
+			ID:            domain.MessageID(102),
 			Data:          []byte{0xDE, 0xAD},
 			MimeType:      mime.TypeImage,
 			ContentHash:   0xCAFEBABE,
@@ -33,10 +32,10 @@ var (
 	}
 
 	fullAnnEvent = domain.EventAnnounce{
-		From:    id.Unique(201),
+		From:    domain.NodeID(201),
 		Created: testTime,
 		Payload: domain.Announce{
-			ID:            id.Unique(202),
+			ID:            domain.MessageID(202),
 			MimeType:      mime.TypePath,
 			ContentHash:   0xDEADBEEF,
 			ContentLength: 2048,
@@ -44,10 +43,10 @@ var (
 	}
 
 	fullReqEvent = domain.EventRequest{
-		From:    id.Unique(301),
+		From:    domain.NodeID(301),
 		Created: testTime,
 		Payload: domain.Request{
-			ID: id.Unique(302),
+			ID: domain.MessageID(302),
 		},
 	}
 
@@ -58,7 +57,7 @@ var (
 			Version: "1.2.3",
 			Port:    8080,
 			MetaData: domain.Device{
-				ID:   id.Unique(401),
+				ID:   domain.NodeID(401),
 				Name: "TestNode",
 				Arch: "amd64",
 			},

@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/id"
 )
 
 const HistorySize = 5
@@ -35,7 +34,7 @@ func (c *Channel) LastMsg() domain.EventMessage {
 	return c.lastMsg
 }
 
-func (c *Channel) Get(msgID id.Unique) (domain.EventMessage, bool) {
+func (c *Channel) Get(msgID domain.MessageID) (domain.EventMessage, bool) {
 	c.msgMu.RLock()
 	defer c.msgMu.RUnlock()
 

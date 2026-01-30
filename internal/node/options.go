@@ -39,7 +39,7 @@ func (o Options) MarshalZerologObject(e *zerolog.Event) {
 		"metadata",
 		zerolog.Dict().
 			Str("arch", o.Metadata.Arch).
-			Int64("id", o.Metadata.ID).
+			Int64("id", o.Metadata.ID.Int64()).
 			Str("name", o.Metadata.Name),
 	)
 	e.Dict(

@@ -28,7 +28,7 @@ func MapToProto(v any) *proto.Event {
 		pb.Created = timestamppb.New(e.Created)
 		pb.Payload = &proto.Event_Message{
 			Message: &proto.Message{
-				ID:            e.Payload.ID,
+				ID:            e.Payload.ID.Int64(),
 				ContentLength: e.Payload.ContentLength,
 				MimeType:      toProtoMime(e.Payload.MimeType),
 				ContentHash:   e.Payload.ContentHash,
@@ -41,7 +41,7 @@ func MapToProto(v any) *proto.Event {
 		pb.Created = timestamppb.New(e.Created)
 		pb.Payload = &proto.Event_Announce{
 			Announce: &proto.Announce{
-				ID:            e.Payload.ID,
+				ID:            e.Payload.ID.Int64(),
 				MimeType:      toProtoMime(e.Payload.MimeType),
 				ContentHash:   e.Payload.ContentHash,
 				ContentLength: e.Payload.ContentLength,
@@ -53,7 +53,7 @@ func MapToProto(v any) *proto.Event {
 		pb.Created = timestamppb.New(e.Created)
 		pb.Payload = &proto.Event_Request{
 			Request: &proto.RequestMessage{
-				ID: e.Payload.ID,
+				ID: e.Payload.ID.Int64(),
 			},
 		}
 		return pb
@@ -67,7 +67,7 @@ func MapToProto(v any) *proto.Event {
 				Device: &proto.Device{
 					Name: e.Payload.MetaData.Name,
 					Arch: e.Payload.MetaData.Arch,
-					ID:   e.Payload.MetaData.ID,
+					ID:   e.Payload.MetaData.ID.Int64(),
 				},
 			},
 		}
@@ -80,10 +80,10 @@ func MapToProto(v any) *proto.Event {
 
 func toDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.EventMessage {
 	return domain.EventMessage{
-		From:    id.Author(msg.GetID()),
+		From:    domain.NodeID(id.Author(msg.GetID())),
 		Created: ev.GetCreated().AsTime(),
 		Payload: domain.Message{
-			ID:            msg.GetID(),
+			ID:            domain.MessageID(msg.GetID()),
 			Data:          data,
 			MimeType:      toDomainMime(msg.GetMimeType()),
 			ContentHash:   msg.GetContentHash(),
@@ -95,10 +95,10 @@ func toDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.Ev
 
 func toDomainAnnounce(ev *proto.Event, ann *proto.Announce) domain.EventAnnounce {
 	return domain.EventAnnounce{
-		From:    id.Author(ann.GetID()),
+		From:    domain.NodeID(id.Author(ann.GetID())),
 		Created: ev.GetCreated().AsTime(),
 		Payload: domain.Announce{
-			ID:            ann.GetID(),
+			ID:            domain.MessageID(ann.GetID()),
 			MimeType:      toDomainMime(ann.GetMimeType()),
 			ContentHash:   ann.GetContentHash(),
 			ContentLength: ann.GetContentLength(),
@@ -108,10 +108,10 @@ func toDomainAnnounce(ev *proto.Event, ann *proto.Announce) domain.EventAnnounce
 
 func toDomainRequest(ev *proto.Event, req *proto.RequestMessage) domain.EventRequest {
 	return domain.EventRequest{
-		From:    id.Author(req.GetID()),
+		From:    domain.NodeID(id.Author(req.GetID())),
 		Created: ev.GetCreated().AsTime(),
 		Payload: domain.Request{
-			ID: req.GetID(),
+			ID: domain.MessageID(req.GetID()),
 		},
 	}
 }
@@ -132,7 +132,7 @@ func toDomainDevice(d *proto.Device) domain.Device {
 		return domain.Device{Name: "unknown", Arch: "unknown"}
 	}
 	return domain.Device{
-		ID:   d.GetID(),
+		ID:   domain.NodeID(d.GetID()),
 		Name: d.GetName(),
 		Arch: d.GetArch(),
 	}

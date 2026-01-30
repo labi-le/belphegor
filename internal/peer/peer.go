@@ -16,7 +16,6 @@ import (
 	"github.com/labi-le/belphegor/internal/transport"
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
-	"github.com/labi-le/belphegor/pkg/id"
 	"github.com/labi-le/belphegor/pkg/network"
 	"github.com/rs/zerolog"
 )
@@ -181,7 +180,7 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 		msg, ok := p.channel.Get(payload.Payload.ID)
 		if !ok {
 			p.logger.Debug().
-				Int64("req_id", payload.Payload.ID).
+				Int64("req_id", payload.Payload.ID.Int64()).
 				Msg("peer requested message that i do not have or is expired")
 			return nil
 		}
@@ -230,9 +229,9 @@ func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) e
 	return nil
 }
 
-func (p *Peer) Request(ctx context.Context, messageID id.Unique) error {
+func (p *Peer) Request(ctx context.Context, messageID domain.MessageID) error {
 	req := domain.NewRequest(messageID)
-	p.logger.Trace().Int64("msg_id", messageID).Msg("sending request packet")
+	p.logger.Trace().Int64("msg_id", messageID.Int64()).Msg("sending request packet")
 
 	return p.WriteContext(ctx, req, nil)
 }

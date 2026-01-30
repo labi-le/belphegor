@@ -1,153 +1,90 @@
 package domain_test
 
 import (
-	"bytes"
-	"image"
-	"image/color"
-	"image/png"
 	"testing"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
-	"github.com/labi-le/belphegor/pkg/id"
+	"github.com/labi-le/belphegor/pkg/mime"
 )
 
 func TestMessage_Duplicate(t *testing.T) {
-
-	img1 := createTestImage(t, 50, 50, color.RGBA{R: 255, G: 0, B: 0, A: 255})
-	img2 := createTestImage(t, 50, 50, color.RGBA{R: 0, G: 255, B: 0, A: 255})
-
 	tests := []struct {
 		name string
-		msg  domain.EventMessage
-		new  domain.EventMessage
+		msg  domain.Message
+		new  domain.Message
 		want bool
 	}{
 		{
 			name: "same message reference",
-			msg:  domain.MessageNew([]byte(", 1test"), 1),
-			new:  domain.MessageNew([]byte(", 1test"), 1),
+			msg:  domain.Message{ID: 1},
+			new:  domain.Message{ID: 1},
 			want: true,
 		},
 		{
 			name: "same text content",
-			msg:  domain.MessageNew([]byte(", 1test"), 1),
-			new:  domain.MessageNew([]byte(", 1test"), 2),
+			msg:  domain.Message{ID: 1, ContentHash: 100, MimeType: mime.Type(1)},
+			new:  domain.Message{ID: 2, ContentHash: 100, MimeType: mime.Type(1)},
 			want: true,
 		},
 		{
 			name: "different text content",
-			msg:  domain.MessageNew([]byte(", 1test1"), 1),
-			new:  domain.MessageNew([]byte(", 1test2"), 2),
+			msg:  domain.Message{ID: 1, ContentHash: 100, MimeType: mime.Type(1)},
+			new:  domain.Message{ID: 2, ContentHash: 200, MimeType: mime.Type(1)},
 			want: false,
 		},
 		{
 			name: "same image different source",
-			msg:  domain.MessageNew(img1, 1),
-			new:  domain.MessageNew(img1, 2),
+			msg:  domain.Message{ID: 1, ContentHash: 500, MimeType: mime.Type(2)},
+			new:  domain.Message{ID: 2, ContentHash: 500, MimeType: mime.Type(2)},
 			want: true,
 		},
 		{
 			name: "different images",
-			msg:  domain.MessageNew(img1, 1),
-			new:  domain.MessageNew(img2, 1),
+			msg:  domain.Message{ID: 1, ContentHash: 500, MimeType: mime.Type(2)},
+			new:  domain.Message{ID: 2, ContentHash: 600, MimeType: mime.Type(2)},
 			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.name == "same message reference" {
-				tt.new = tt.msg
-			}
-
-			if got := tt.msg.Payload.Duplicate(tt.new.Payload); got != tt.want {
+			if got := tt.msg.Duplicate(tt.new); got != tt.want {
 				t.Errorf("%s: Content.Duplicate() = %v, want %v", tt.name, got, tt.want)
 			}
 		})
 	}
 }
 
-func createTestImage(t *testing.T, width, height int, c color.Color) []byte {
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			img.Set(x, y, c)
-		}
-	}
-
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatal("failed to encode png:", err)
-	}
-
-	return buf.Bytes()
-}
-
 func BenchmarkMessage_Duplicate(b *testing.B) {
-	type raw struct {
-		data []byte
-		id   id.Unique
-	}
 	benchmarks := []struct {
 		name     string
-		msg, new raw
+		msg, new domain.Message
 	}{
 		{
-			name: "small_text_same",
-			msg:  raw{data: []byte("test")},
-			new:  raw{data: []byte("test")},
+			name: "same_id",
+			msg:  domain.Message{ID: 1},
+			new:  domain.Message{ID: 1},
 		},
 		{
-			name: "small_text_different",
-			msg:  raw{data: []byte("test")},
-			new:  raw{data: []byte("different")},
+			name: "different_id_same_hash",
+			msg:  domain.Message{ID: 1, ContentHash: 123456789, MimeType: mime.Type(1)},
+			new:  domain.Message{ID: 2, ContentHash: 123456789, MimeType: mime.Type(1)},
 		},
 		{
-			name: "large_text_different",
-			msg:  raw{data: []byte("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.")},
-			new:  raw{data: []byte("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat")},
-		},
-		{
-			name: "small_image_different",
-			msg:  raw{data: makeImageMsg(100, 100, color.RGBA{R: 255})},
-			new:  raw{data: makeImageMsg(100, 100, color.RGBA{G: 255})},
-		},
-		{
-			name: "medium_image_different",
-			msg:  raw{data: makeImageMsg(800, 600, color.RGBA{R: 255})},
-			new:  raw{data: makeImageMsg(800, 600, color.RGBA{G: 255})},
-		},
-		{
-			name: "large_image_different",
-			msg:  raw{data: makeImageMsg(1920, 1080, color.RGBA{R: 255})},
-			new:  raw{data: makeImageMsg(1920, 1080, color.RGBA{G: 255})},
+			name: "different_id_different_hash",
+			msg:  domain.Message{ID: 1, ContentHash: 111111111, MimeType: mime.Type(1)},
+			new:  domain.Message{ID: 2, ContentHash: 222222222, MimeType: mime.Type(1)},
 		},
 	}
 
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
-			b.ResetTimer()
 			b.ReportAllocs()
+			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				msg := domain.MessageNew(bm.msg.data, 1)
-				msg.Payload.Duplicate(domain.MessageNew(bm.new.data, 1).Payload)
+				bm.msg.Duplicate(bm.new)
 			}
 		})
 	}
-}
-
-func makeImageMsg(width, height int, c color.Color) []byte {
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			img.Set(x, y, c)
-		}
-	}
-
-	var buf bytes.Buffer
-	_ = png.Encode(&buf, img)
-
-	return buf.Bytes()
 }

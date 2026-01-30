@@ -9,15 +9,15 @@ import (
 type EventAnnounce = Event[Announce]
 
 type Announce struct {
-	ID            id.Unique
+	ID            MessageID
 	MimeType      mime.Type
 	ContentHash   uint64
 	ContentLength uint64
 }
 
 func (an Announce) MarshalZerologObject(e *zerolog.Event) {
-	e.Int64("id", an.ID)
-	e.Int64("node", id.Author(an.ID))
+	e.Object("id", an.ID)
+	e.Int64("node", id.Author(id.Unique(an.ID)))
 	e.Stringer("mime", an.MimeType)
 	e.Uint64("length", an.ContentLength)
 	e.Uint64("hash", an.ContentHash)

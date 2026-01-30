@@ -10,7 +10,7 @@ import (
 )
 
 type Device struct {
-	ID   id.Unique
+	ID   NodeID
 	Name string
 	Arch string
 }
@@ -28,7 +28,7 @@ func initDefaultMetadata() Device {
 	return Device{
 		Name: name,
 		Arch: runtime.GOARCH,
-		ID:   id.MyID,
+		ID:   NodeID(id.MyID),
 	}
 }
 
@@ -36,7 +36,7 @@ func SelfMetaData() Device {
 	return defaultMetadata
 }
 
-func (meta Device) UniqueID() id.Unique {
+func (meta Device) UniqueID() NodeID {
 	return meta.ID
 }
 

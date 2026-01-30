@@ -14,7 +14,7 @@ type payloadConstraint interface {
 	Handshake | Message | Announce | Request
 }
 
-type OwnerID = id.Unique
+type OwnerID = NodeID
 
 type Event[T payloadConstraint] struct {
 	From    OwnerID
@@ -28,6 +28,6 @@ func NewEvent[concrete payloadConstraint](payload concrete) Event[concrete] {
 	return Event[concrete]{
 		Created: time.Now(),
 		Payload: payload,
-		From:    id.MyID,
+		From:    NodeID(id.MyID),
 	}
 }
