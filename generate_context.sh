@@ -4,6 +4,7 @@ set -euo pipefail
 
 SOURCE_DIRS=()
 USER_EXCLUDES=()
+SUMMARY_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -15,6 +16,10 @@ while [[ $# -gt 0 ]]; do
                 echo "Error: -e requires an argument" >&2
                 exit 1
             fi
+            ;;
+        -s)
+            SUMMARY_MODE=true
+            shift
             ;;
         *)
             SOURCE_DIRS+=("$1")
@@ -32,16 +37,17 @@ get_syntax() {
     local filename="$1"
     case "$filename" in
         *.go) echo "go" ;;
+        *.txt) echo "txt" ;;
         *.yaml|*.yml) echo "yaml" ;;
         *.proto) echo "protobuf" ;;
         *.nix) echo "nix" ;;
         *Makefile) echo "makefile" ;;
         *.php) echo "php" ;;
         *.xml) echo "xml" ;;
+        Dockerfile) echo "dockerfile" ;;
         *.ps1) echo "powershell" ;;
         *.c|*.h) echo "c" ;;
         *.rs) echo "rs" ;;
-        *.sum) echo "text" ;;
         *) echo "text" ;;
     esac
 }
@@ -58,8 +64,6 @@ print_tree() {
     echo '```text'
     if command -v tree &> /dev/null; then
         tree "${SOURCE_DIRS[@]}" -I "$ignore_list"
-    elif command -v nix &> /dev/null; then
-        nix run nixpkgs#tree -- "${SOURCE_DIRS[@]}" -I "$ignore_list"
     else
         find "${SOURCE_DIRS[@]}" -maxdepth 3 -not -path '*/.*'
     fi
@@ -71,7 +75,7 @@ print_files() {
     local find_cmd=(find "${SOURCE_DIRS[@]}")
 
     local is_first=true
-    local base_excludes=(".git" "node_modules" "vendor")
+    local base_excludes=(".git" "node_modules" "vendor" ".idea")
 
     find_cmd+=( \( )
 
@@ -82,9 +86,7 @@ print_files() {
 
     for excl in "${USER_EXCLUDES[@]}"; do
         if [ "$is_first" = true ]; then is_first=false; else find_cmd+=( -o ); fi
-
         local clean_excl="${excl%/}"
-
         if [[ "$clean_excl" == *"/"* ]]; then
              find_cmd+=( -path "$clean_excl" )
         else
@@ -96,6 +98,7 @@ print_files() {
 
     find_cmd+=( -type f \( \
         -name "*.go" -o \
+        -name "*.txt" -o \
         -name "*.yml" -o \
         -name "*.php" -o \
         -name "*.c" -o \
@@ -105,8 +108,8 @@ print_files() {
         -name "*.rs" -o \
         -name "*.yaml" -o \
         -name "*.proto" -o \
-        -name "*.sum" -o \
         -name "*.nix" -o \
+        -name "Dockerfile" -o \
         -name "Makefile" \
     \) -print )
 
@@ -114,9 +117,44 @@ print_files() {
         local lang
         lang=$(get_syntax "$file")
 
-        echo "## File: $file"
+        echo "### File: $file"
         echo "\`\`\`$lang"
-        cat "$file"
+
+        if [ "$SUMMARY_MODE" = true ] && [[ "$lang" == "go" ]]; then
+             awk '
+                BEGIN { depth = 0; hiding = 0 }
+                {
+                    line = $0
+                    gsub(/\/\/.*$/, "", line)
+
+                    n_open = gsub(/{/, "{", line)
+                    n_close = gsub(/}/, "}", line)
+
+                    is_func_start = ($0 ~ /^[[:space:]]*func/ && n_open > 0)
+
+                    if (depth == 0 && is_func_start) {
+                        hiding = 1
+                        out = $0
+                        sub(/[[:space:]]*{/, "", out)
+                        print out
+                    }
+                    else if (hiding == 0) {
+                        print $0
+                    }
+                    else if (hiding == 1) {
+                        if ((depth + n_open - n_close) == 0) {
+                            hiding = 0
+                        }
+                    }
+
+                    depth = depth + n_open - n_close
+                }
+            ' "$file"
+
+        else
+            cat "$file"
+        fi
+
         echo ""
         echo "\`\`\`"
         echo ""
