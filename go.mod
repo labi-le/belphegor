@@ -1,9 +1,9 @@
 module github.com/labi-le/belphegor
 
-go 1.25.5
+go 1.26
 
 require (
-	deedles.dev/wl v0.0.0-20260105203525-c30fdae16bdf
+	deedles.dev/wl v0.0.0-20260216032335-64a434ab53c9
 	fyne.io/systray v1.12.0
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cespare/xxhash v1.1.0
@@ -23,7 +23,7 @@ require (
 )
 
 require (
-	deedles.dev/ximage v0.0.0-20250321223218-e433919886dd // indirect
+	deedles.dev/ximage v0.0.0-20260216031900-83cce02ab70f // indirect
 	deedles.dev/xsync v0.0.0-20250321154350-4e8049be7ced // indirect
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
@@ -36,6 +36,6 @@ require (
 	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
 	github.com/sergeymakinen/go-ico v1.0.0 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
-	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/net v0.50.0 // indirect
 )

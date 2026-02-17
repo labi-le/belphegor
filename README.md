@@ -74,7 +74,7 @@ ___
 
 ### Build from source
 
-- Go 1.25.5
+- Go 1.26
 - git
 - makefile
 
