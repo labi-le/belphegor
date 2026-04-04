@@ -205,15 +205,20 @@ func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) e
 		if err != nil {
 			if errors.Is(err, store.ErrFileExists) {
 				_ = stream.Reset()
-				// File already cached — still update clipboard with its path
-				msg.Payload.Data = []byte("file://" + filePath)
+				// File already cached — still update clipboard with its path.
+				// Store the bare filesystem path; the file:// URI prefix is added
+				// at clipboard-write time in node.monitor so handleRequest can
+				// still os.Open this value directly.
+				msg.Payload.Data = []byte(filePath)
 				p.channel.Send(msg)
 				return nil
 			}
 
 			return err
 		}
-		msg.Payload.Data = []byte("file://" + filePath)
+		// Store bare filesystem path — not a file:// URI.
+		// node.monitor prepends "file://" when writing to clipboard.
+		msg.Payload.Data = []byte(filePath)
 	} else {
 		data := make([]byte, msg.Payload.ContentLength)
 

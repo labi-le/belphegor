@@ -49,9 +49,17 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 	defer byteslice.Put(buf)
 
 	if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
-		if uint64(info.Size()) == msg.ContentLength && readHashFile(fullPath) == msg.ContentHash {
-			fs.logger.Trace().Str("path", fullPath).Msg("file already exists, skipping download")
-			return fullPath, ErrFileExists
+		// Only treat as a cache hit when we have a non-zero hash to compare.
+		// ContentHash == 0 is the unset sentinel in domain.Message; matching it
+		// against a missing/corrupt sidecar (which also returns 0) would
+		// incorrectly skip a needed download.
+		if msg.ContentHash != 0 {
+			if storedHash, ok := readHashFile(fullPath); ok &&
+				uint64(info.Size()) == msg.ContentLength &&
+				storedHash == msg.ContentHash {
+				fs.logger.Trace().Str("path", fullPath).Msg("file already exists, skipping download")
+				return fullPath, ErrFileExists
+			}
 		}
 	}
 
@@ -72,7 +80,14 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 		return "", fmt.Errorf("filestore incomplete write: expected %d, got %d", msg.ContentLength, n)
 	}
 
-	_ = writeHashFile(fullPath, msg.ContentHash)
+	// Persist the hash sidecar so future cache lookups can detect updated
+	// files that share the same name and size.  If the write fails, remove
+	// the downloaded file too — a file without a sidecar would bypass the
+	// hash check on every subsequent receive, causing repeated re-downloads.
+	if err := writeHashFile(fullPath, msg.ContentHash); err != nil {
+		_ = os.Remove(fullPath)
+		return "", fmt.Errorf("filestore write hash sidecar: %w", err)
+	}
 	fs.logger.Trace().Str("path", fullPath).Msg("file saved")
 	return fullPath, nil
 }
@@ -89,11 +104,12 @@ func writeHashFile(filePath string, hash uint64) error {
 	return os.WriteFile(hashFilePath(filePath), b[:], 0600)
 }
 
-// readHashFile reads back the stored hash. Returns 0 if the sidecar is absent or corrupt.
-func readHashFile(filePath string) uint64 {
+// readHashFile reads back the stored hash.
+// Returns (hash, true) on success, (0, false) if the sidecar is absent or corrupt.
+func readHashFile(filePath string) (uint64, bool) {
 	b, err := os.ReadFile(hashFilePath(filePath))
 	if err != nil || len(b) != 8 {
-		return 0
+		return 0, false
 	}
-	return binary.LittleEndian.Uint64(b)
+	return binary.LittleEndian.Uint64(b), true
 }

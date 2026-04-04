@@ -338,9 +338,13 @@ func (n *Node) monitor(ctx context.Context) error {
 		if len(pendingFiles) == 0 {
 			return
 		}
+		// Payload.Data holds bare filesystem paths; prepend file:// here so
+		// the clipboard receives properly-formed text/uri-list URIs, while
+		// handleRequest can still os.Open the raw path without stripping the
+		// scheme.
 		uris := make([]string, 0, len(pendingFiles))
 		for _, m := range pendingFiles {
-			uris = append(uris, string(m.Payload.Data))
+			uris = append(uris, "file://"+string(m.Payload.Data))
 		}
 		combined := []byte(strings.Join(uris, "\r\n"))
 		if _, err := n.clipboard.Write(mime.TypePath, combined); err != nil {
@@ -360,6 +364,12 @@ func (n *Node) monitor(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			// Stop the batch timer and flush any queued files before exiting
+			// so files collected within the 50ms window aren't silently lost.
+			if fileTimer != nil {
+				fileTimer.Stop()
+			}
+			flushFiles()
 			return nil
 		case err := <-watchErr:
 			if err != nil {
