@@ -70,30 +70,52 @@ type listenerAdapter struct {
 	keepAlive time.Duration
 }
 
-func (a *listenerAdapter) Accept(_ context.Context) (transport.Connection, error) {
-	rawConn, err := a.l.Accept()
-	if err != nil {
-		return nil, err
+func (a *listenerAdapter) Accept(ctx context.Context) (transport.Connection, error) {
+	// net.Listener.Accept doesn't take context, so use a goroutine to
+	// respect cancellation.
+	type result struct {
+		conn net.Conn
+		err  error
 	}
+	ch := make(chan result, 1)
+	go func() {
+		conn, err := a.l.Accept()
+		ch <- result{conn, err}
+	}()
 
-	// Configure TCP keepalive on accepted connections (symmetric with Dial).
-	if tlsConn, ok := rawConn.(*tls.Conn); ok {
-		if tcpConn, ok := tlsConn.NetConn().(*net.TCPConn); ok {
-			_ = tcpConn.SetKeepAlive(true)
-			_ = tcpConn.SetKeepAlivePeriod(a.keepAlive)
+	select {
+	case <-ctx.Done():
+		// Close the listener to unblock the goroutine, then drain.
+		_ = a.l.Close()
+		r := <-ch
+		if r.conn != nil {
+			_ = r.conn.Close()
 		}
-	}
+		return nil, ctx.Err()
+	case r := <-ch:
+		if r.err != nil {
+			return nil, r.err
+		}
 
-	sess, err := yamux.Server(rawConn, yamuxConfig(a.keepAlive))
-	if err != nil {
-		_ = rawConn.Close()
-		return nil, err
-	}
+		// Configure TCP keepalive on accepted connections (symmetric with Dial).
+		if tlsConn, ok := r.conn.(*tls.Conn); ok {
+			if tcpConn, ok := tlsConn.NetConn().(*net.TCPConn); ok {
+				_ = tcpConn.SetKeepAlive(true)
+				_ = tcpConn.SetKeepAlivePeriod(a.keepAlive)
+			}
+		}
 
-	return &connAdapter{
-		conn: rawConn,
-		sess: sess,
-	}, nil
+		sess, err := yamux.Server(r.conn, yamuxConfig(a.keepAlive))
+		if err != nil {
+			_ = r.conn.Close()
+			return nil, err
+		}
+
+		return &connAdapter{
+			conn: r.conn,
+			sess: sess,
+		}, nil
+	}
 }
 
 func (a *listenerAdapter) Close() error   { return a.l.Close() }
@@ -105,7 +127,11 @@ type connAdapter struct {
 	sess *yamux.Session
 }
 
-func (c *connAdapter) OpenStream(_ context.Context) (transport.Stream, error) {
+func (c *connAdapter) OpenStream(ctx context.Context) (transport.Stream, error) {
+	// yamux OpenStream doesn't accept context, so check before calling.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s, err := c.sess.OpenStream()
 	if err != nil {
 		return nil, mapError(err)
@@ -113,8 +139,8 @@ func (c *connAdapter) OpenStream(_ context.Context) (transport.Stream, error) {
 	return &streamAdapter{s}, nil
 }
 
-func (c *connAdapter) AcceptStream(_ context.Context) (transport.Stream, error) {
-	s, err := c.sess.AcceptStream()
+func (c *connAdapter) AcceptStream(ctx context.Context) (transport.Stream, error) {
+	s, err := c.sess.AcceptStreamWithContext(ctx)
 	if err != nil {
 		return nil, mapError(err)
 	}

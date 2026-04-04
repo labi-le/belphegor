@@ -80,6 +80,14 @@ func parseFlags() (node.Options, action) {
 		return opts, act
 	}
 
+	switch act.transport {
+	case "auto", "quic", "tcp":
+	default:
+		_, _ = fmt.Fprintf(os.Stderr, "invalid transport %q: must be auto, quic, or tcp\n", act.transport)
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	size, err := humanize.ParseBytes(maxFileSizeRaw)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "invalid max_file_size format: %v\n", err)
