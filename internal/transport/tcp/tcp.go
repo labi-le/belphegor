@@ -59,7 +59,6 @@ func (t *Transport) Dial(ctx context.Context, addr string) (transport.Connection
 	}
 
 	return &connAdapter{
-		conn: rawConn,
 		sess: sess,
 	}, nil
 }
@@ -72,7 +71,8 @@ type listenerAdapter struct {
 
 func (a *listenerAdapter) Accept(ctx context.Context) (transport.Connection, error) {
 	// net.Listener.Accept doesn't take context, so use a goroutine to
-	// respect cancellation.
+	// respect cancellation. The caller (multiListener.Close) owns the
+	// listener lifecycle — we do NOT close the listener here on ctx cancel.
 	type result struct {
 		conn net.Conn
 		err  error
@@ -85,12 +85,15 @@ func (a *listenerAdapter) Accept(ctx context.Context) (transport.Connection, err
 
 	select {
 	case <-ctx.Done():
-		// Close the listener to unblock the goroutine, then drain.
-		_ = a.l.Close()
-		r := <-ch
-		if r.conn != nil {
-			_ = r.conn.Close()
-		}
+		// Don't close the listener — let the owner (multiListener.Close) do it.
+		// The goroutine will be unblocked when the listener is eventually closed.
+		// Drain the result to avoid leaking the goroutine if a conn arrived.
+		go func() {
+			r := <-ch
+			if r.conn != nil {
+				_ = r.conn.Close()
+			}
+		}()
 		return nil, ctx.Err()
 	case r := <-ch:
 		if r.err != nil {
@@ -112,7 +115,6 @@ func (a *listenerAdapter) Accept(ctx context.Context) (transport.Connection, err
 		}
 
 		return &connAdapter{
-			conn: r.conn,
 			sess: sess,
 		}, nil
 	}
@@ -122,13 +124,16 @@ func (a *listenerAdapter) Close() error   { return a.l.Close() }
 func (a *listenerAdapter) Addr() net.Addr { return a.l.Addr() }
 
 // connAdapter wraps a yamux session over a TLS TCP connection.
+// The yamux session owns the underlying net.Conn and closes it
+// when the session is closed.
 type connAdapter struct {
-	conn net.Conn
 	sess *yamux.Session
 }
 
 func (c *connAdapter) OpenStream(ctx context.Context) (transport.Stream, error) {
-	// yamux OpenStream doesn't accept context, so check before calling.
+	// yamux's OpenStream doesn't accept context. Pre-check is a best-effort
+	// fast path; there is a TOCTOU window between this check and the call.
+	// This is a known yamux limitation — it does not offer OpenStreamWithContext.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -147,10 +152,11 @@ func (c *connAdapter) AcceptStream(ctx context.Context) (transport.Stream, error
 	return &streamAdapter{s}, nil
 }
 
-func (c *connAdapter) RemoteAddr() net.Addr { return c.conn.RemoteAddr() }
+func (c *connAdapter) RemoteAddr() net.Addr { return c.sess.RemoteAddr() }
 
+// Close shuts down the yamux session, which also closes the underlying connection.
 func (c *connAdapter) Close() error {
-	return errors.Join(c.sess.Close(), c.conn.Close())
+	return c.sess.Close()
 }
 
 // streamAdapter wraps a yamux stream.
@@ -166,6 +172,10 @@ func (s *streamAdapter) SetWriteDeadline(t time.Time) error {
 	return s.Stream.SetWriteDeadline(t)
 }
 
+// Reset aborts the stream. yamux v0.1.2 has no separate Reset API on *Stream —
+// Close() is the only public method to terminate a stream. Unlike QUIC which
+// has CancelRead/CancelWrite for abortive cancellation, yamux's stream model
+// only supports graceful close.
 func (s *streamAdapter) Reset() error {
 	return s.Stream.Close()
 }
@@ -186,12 +196,12 @@ func mapError(err error) error {
 	}
 
 	if errors.Is(err, yamux.ErrSessionShutdown) ||
-		errors.Is(err, yamux.ErrStreamsExhausted) {
+		errors.Is(err, yamux.ErrStreamsExhausted) ||
+		errors.Is(err, yamux.ErrConnectionReset) {
 		return transport.ErrConnectionClosed
 	}
 
-	if errors.Is(err, yamux.ErrConnectionReset) ||
-		errors.Is(err, yamux.ErrStreamClosed) {
+	if errors.Is(err, yamux.ErrStreamClosed) {
 		return transport.ErrStreamCanceled
 	}
 

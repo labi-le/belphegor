@@ -201,6 +201,9 @@ func main() {
 	}
 }
 
+// selectTransport returns the transport for the given mode.
+// The mode is already validated in parseFlags(), so the default branch
+// is unreachable — it exists only as a safety net.
 func selectTransport(mode string, tlsConf *tls.Config, keepAlive time.Duration, logger zerolog.Logger) transport.Transport {
 	switch mode {
 	case "quic":
@@ -209,12 +212,9 @@ func selectTransport(mode string, tlsConf *tls.Config, keepAlive time.Duration, 
 	case "tcp":
 		logger.Info().Msg("transport: TCP only")
 		return tcp.New(tlsConf, keepAlive)
-	case "auto":
+	default:
 		logger.Info().Msg("transport: auto (QUIC with TCP fallback)")
 		return auto.New(tlsConf, keepAlive, logger)
-	default:
-		logger.Fatal().Str("transport", mode).Msg("unknown transport, use: auto, quic, tcp")
-		return nil
 	}
 }
 

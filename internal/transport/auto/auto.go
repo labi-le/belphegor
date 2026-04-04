@@ -120,17 +120,31 @@ func newMultiListener(quicL, tcpL transport.Listener) *multiListener {
 // acceptLoop continuously accepts connections from a single listener and
 // sends them to the shared channel. It exits when the context is canceled
 // or the listener returns a fatal error.
+//
+// When a successful connection is received, it is always delivered to connCh
+// before checking ctx — this prevents silently dropping valid connections
+// when cancellation races with a successful accept.
 func (m *multiListener) acceptLoop(ctx context.Context, l transport.Listener) {
 	for {
 		conn, err := l.Accept(ctx)
-		select {
-		case m.connCh <- acceptResult{conn, err}:
-		case <-ctx.Done():
-			if conn != nil {
+
+		// If we got a valid connection, always try to deliver it first.
+		// Only discard on ctx cancel if we have no connection to deliver.
+		if conn != nil {
+			select {
+			case m.connCh <- acceptResult{conn, err}:
+			case <-ctx.Done():
 				_ = conn.Close()
+				return
 			}
-			return
+		} else {
+			select {
+			case m.connCh <- acceptResult{nil, err}:
+			case <-ctx.Done():
+				return
+			}
 		}
+
 		if err != nil {
 			return // Listener closed or fatal error
 		}
