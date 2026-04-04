@@ -81,12 +81,16 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 	}
 
 	// Persist the hash sidecar so future cache lookups can detect updated
-	// files that share the same name and size.  If the write fails, remove
-	// the downloaded file too — a file without a sidecar would bypass the
-	// hash check on every subsequent receive, causing repeated re-downloads.
+	// files that share the same name and size. On failure we keep the
+	// downloaded file — it is valid — and log a warning. The missing sidecar
+	// means readHashFile returns (0, false), the msg.ContentHash != 0 guard
+	// prevents a false cache hit, and the file will be re-downloaded on the
+	// next receive to get a fresh sidecar. Removing the file on sidecar
+	// failure would create a TOCTOU race with concurrent ErrFileExists cache
+	// hits that may already hold the path.
 	if err := writeHashFile(fullPath, msg.ContentHash); err != nil {
-		_ = os.Remove(fullPath)
-		return "", fmt.Errorf("filestore write hash sidecar: %w", err)
+		fs.logger.Warn().Err(err).Str("path", fullPath).
+			Msg("filestore: failed to write hash sidecar; file kept, will re-verify on next receive")
 	}
 	fs.logger.Trace().Str("path", fullPath).Msg("file saved")
 	return fullPath, nil
