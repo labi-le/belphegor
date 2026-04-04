@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/labi-le/belphegor/internal/transport"
@@ -58,7 +59,7 @@ func (t *Transport) Listen(ctx context.Context, addr string) (transport.Listener
 		t.logger.Warn().Err(tcpErr).Msg("auto: TCP listener failed, QUIC only")
 	}
 
-	return newMultiListener(quicL, tcpL), nil
+	return newMultiListener(quicL, tcpL, t.logger), nil
 }
 
 // Dial tries QUIC first with a short timeout. If QUIC fails (common behind
@@ -93,26 +94,31 @@ type acceptResult struct {
 // multiListener accepts connections from both QUIC and TCP listeners using
 // persistent accept goroutines to avoid goroutine leaks.
 type multiListener struct {
-	quicL  transport.Listener
-	tcpL   transport.Listener
-	connCh chan acceptResult
-	cancel context.CancelFunc
+	quicL       transport.Listener
+	tcpL        transport.Listener
+	connCh      chan acceptResult
+	cancel      context.CancelFunc
+	activeCount atomic.Int32
+	logger      zerolog.Logger
 }
 
 // newMultiListener creates a multiListener and starts persistent accept loops.
-func newMultiListener(quicL, tcpL transport.Listener) *multiListener {
+func newMultiListener(quicL, tcpL transport.Listener, logger zerolog.Logger) *multiListener {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &multiListener{
 		quicL:  quicL,
 		tcpL:   tcpL,
-		connCh: make(chan acceptResult),
+		connCh: make(chan acceptResult, 1),
 		cancel: cancel,
+		logger: logger,
 	}
 	if quicL != nil {
-		go m.acceptLoop(ctx, quicL)
+		m.activeCount.Add(1)
+		go m.acceptLoop(ctx, quicL, "quic")
 	}
 	if tcpL != nil {
-		go m.acceptLoop(ctx, tcpL)
+		m.activeCount.Add(1)
+		go m.acceptLoop(ctx, tcpL, "tcp")
 	}
 	return m
 }
@@ -124,29 +130,41 @@ func newMultiListener(quicL, tcpL transport.Listener) *multiListener {
 // When a successful connection is received, it is always delivered to connCh
 // before checking ctx — this prevents silently dropping valid connections
 // when cancellation races with a successful accept.
-func (m *multiListener) acceptLoop(ctx context.Context, l transport.Listener) {
+//
+// When this loop exits due to an error, it decrements activeCount. Only the
+// last loop to exit forwards the error to connCh — if the other transport is
+// still healthy we log a warning and let it keep accepting.
+func (m *multiListener) acceptLoop(ctx context.Context, l transport.Listener, name string) {
 	for {
 		conn, err := l.Accept(ctx)
 
-		// If we got a valid connection, always try to deliver it first.
-		// Only discard on ctx cancel if we have no connection to deliver.
-		if conn != nil {
-			select {
-			case m.connCh <- acceptResult{conn, err}:
-			case <-ctx.Done():
-				_ = conn.Close()
+		if err != nil {
+			// This listener is dead. Decide whether to surface the error
+			// BEFORE writing to connCh, so we never forward a per-transport
+			// error when the other transport is still healthy.
+			remaining := m.activeCount.Add(-1)
+			if remaining > 0 {
+				// At least one other transport is still alive — log and exit
+				// quietly so node.Start keeps accepting from the survivor.
+				m.logger.Warn().Err(err).Str("transport", name).
+					Msg("auto: listener failed, continuing on remaining transport(s)")
 				return
 			}
-		} else {
+			// Last listener gone — signal Accept() that the multiListener is done.
 			select {
-			case m.connCh <- acceptResult{nil, err}:
+			case m.connCh <- acceptResult{nil, fmt.Errorf("auto: all listeners failed: %w", err)}:
 			case <-ctx.Done():
-				return
 			}
+			return
 		}
 
-		if err != nil {
-			return // Listener closed or fatal error
+		// No error: deliver the connection. If ctx is already canceled, close
+		// the connection and exit rather than block forever.
+		select {
+		case m.connCh <- acceptResult{conn, nil}:
+		case <-ctx.Done():
+			_ = conn.Close()
+			return
 		}
 	}
 }
