@@ -364,12 +364,13 @@ func (n *Node) monitor(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			// Stop the batch timer and flush any queued files before exiting
-			// so files collected within the 50ms window aren't silently lost.
+			// Stop the batch timer. We intentionally do NOT call flushFiles()
+			// here: clipboard.Write() would race with Watch() tearing down the
+			// Wayland socket, which is unsafe. Files in the 50ms batch window
+			// are an acceptable loss on clean shutdown.
 			if fileTimer != nil {
 				fileTimer.Stop()
 			}
-			flushFiles()
 			return nil
 		case err := <-watchErr:
 			if err != nil {

@@ -160,10 +160,13 @@ func (m *multiListener) acceptLoop(ctx context.Context, l transport.Listener, na
 
 		// No error: deliver the connection. If ctx is already canceled, close
 		// the connection and exit rather than block forever.
+		// Decrement activeCount on ctx.Done() so the last-listener logic in
+		// the error path remains accurate even when shutdown races an accept.
 		select {
 		case m.connCh <- acceptResult{conn, nil}:
 		case <-ctx.Done():
 			_ = conn.Close()
+			m.activeCount.Add(-1)
 			return
 		}
 	}
