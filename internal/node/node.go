@@ -8,6 +8,7 @@ import (
 	"net"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/labi-le/belphegor/internal/channel"
@@ -19,6 +20,7 @@ import (
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/ctxlog"
+	"github.com/labi-le/belphegor/pkg/mime"
 )
 
 var (
@@ -324,6 +326,37 @@ func (n *Node) monitor(ctx context.Context) error {
 		}
 	}()
 
+	const fileBatchWindow = 50 * time.Millisecond
+
+	var (
+		pendingFiles []domain.EventMessage
+		fileTimer    *time.Timer
+		fileFlush    = make(chan struct{}, 1)
+	)
+
+	flushFiles := func() {
+		if len(pendingFiles) == 0 {
+			return
+		}
+		uris := make([]string, 0, len(pendingFiles))
+		for _, m := range pendingFiles {
+			uris = append(uris, string(m.Payload.Data))
+		}
+		combined := []byte(strings.Join(uris, "\r\n"))
+		if _, err := n.clipboard.Write(mime.TypePath, combined); err != nil {
+			ctxLog.Error().Err(err).Msg("failed to write file batch to clipboard")
+		}
+		// Broadcast each file announce
+		for _, m := range pendingFiles {
+			go n.Broadcast(ctx, domain.EventAnnounce{
+				From:    m.From,
+				Created: m.Created,
+				Payload: m.Payload.Announce(),
+			})
+		}
+		pendingFiles = pendingFiles[:0]
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -333,23 +366,39 @@ func (n *Node) monitor(ctx context.Context) error {
 				return fmt.Errorf("node.monitor: %w", err)
 			}
 			return nil
+		case <-fileFlush:
+			flushFiles()
 		case msg, ok := <-n.channel.Messages():
 			if !ok {
 				return nil
 			}
 			if msg.From != n.opts.Metadata.UniqueID() {
-				ctxLog.Trace().Object("msg", msg.Payload).Msg("set clipboard data")
-
-				if _, err := n.clipboard.Write(msg.Payload.MimeType, msg.Payload.Data); err != nil {
-					ctxLog.Error().Err(err).Object("msg", msg.Payload).Send()
+				if msg.Payload.MimeType.IsPath() {
+					pendingFiles = append(pendingFiles, msg)
+					if fileTimer != nil {
+						fileTimer.Stop()
+					}
+					fileTimer = time.AfterFunc(fileBatchWindow, func() {
+						fileFlush <- struct{}{}
+					})
+				} else {
+					ctxLog.Trace().Object("msg", msg.Payload).Msg("set clipboard data")
+					if _, err := n.clipboard.Write(msg.Payload.MimeType, msg.Payload.Data); err != nil {
+						ctxLog.Error().Err(err).Object("msg", msg.Payload).Send()
+					}
+					go n.Broadcast(ctx, domain.EventAnnounce{
+						From:    msg.From,
+						Created: msg.Created,
+						Payload: msg.Payload.Announce(),
+					})
 				}
+			} else {
+				go n.Broadcast(ctx, domain.EventAnnounce{
+					From:    msg.From,
+					Created: msg.Created,
+					Payload: msg.Payload.Announce(),
+				})
 			}
-
-			go n.Broadcast(ctx, domain.EventAnnounce{
-				From:    msg.From,
-				Created: msg.Created,
-				Payload: msg.Payload.Announce(),
-			})
 
 		case ann := <-n.channel.Announcements():
 			go n.handleAnnounce(ctx, ann)

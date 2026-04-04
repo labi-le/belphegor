@@ -209,7 +209,7 @@ func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) e
 
 			return err
 		}
-		msg.Payload.Data = []byte(filePath)
+		msg.Payload.Data = []byte("file://" + filePath)
 	} else {
 		data := make([]byte, msg.Payload.ContentLength)
 
