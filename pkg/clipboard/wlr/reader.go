@@ -88,20 +88,14 @@ func (r *reader) Selection(offer *controlOffer) {
 	go r.readPipeData(selectedMime, p)
 }
 
-// allowed sliding window debounce
+// allowed checks whether the read is allowed based on the suppress barrier.
+// The barrier is only set by Suppress() (when belphegor writes to clipboard)
+// to prevent immediately re-reading back what we just wrote.
+// Unlike the original sliding-window approach, we do NOT extend the barrier
+// here — only Suppress() sets it.
 func (r *reader) allowed() bool {
 	now := time.Now().UnixNano()
-	deadline := r.barrier.Load()
-	newDeadline := now + int64(debounce)
-
-	if now < deadline {
-		r.barrier.Store(newDeadline)
-		//r.logger.Trace().Msg("debounce: selection ignored")
-		return false
-	}
-
-	r.barrier.Store(newDeadline)
-	return true
+	return now >= r.barrier.Load()
 }
 
 func (r *reader) selectBestMimeType() string {
