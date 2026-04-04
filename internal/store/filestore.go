@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -48,9 +49,8 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 	defer byteslice.Put(buf)
 
 	if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
-		if uint64(info.Size()) == msg.ContentLength {
+		if uint64(info.Size()) == msg.ContentLength && readHashFile(fullPath) == msg.ContentHash {
 			fs.logger.Trace().Str("path", fullPath).Msg("file already exists, skipping download")
-			//_, _ = io.CopyBuffer(io.Discard, io.LimitReader(r, int64(msg.ContentLength)), buf)
 			return fullPath, ErrFileExists
 		}
 	}
@@ -72,6 +72,28 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 		return "", fmt.Errorf("filestore incomplete write: expected %d, got %d", msg.ContentLength, n)
 	}
 
+	_ = writeHashFile(fullPath, msg.ContentHash)
 	fs.logger.Trace().Str("path", fullPath).Msg("file saved")
 	return fullPath, nil
+}
+
+// hashFilePath returns the sidecar file path used to store the content hash.
+func hashFilePath(filePath string) string {
+	return filePath + ".bfghash"
+}
+
+// writeHashFile persists the 8-byte little-endian hash alongside the cached file.
+func writeHashFile(filePath string, hash uint64) error {
+	var b [8]byte
+	binary.LittleEndian.PutUint64(b[:], hash)
+	return os.WriteFile(hashFilePath(filePath), b[:], 0600)
+}
+
+// readHashFile reads back the stored hash. Returns 0 if the sidecar is absent or corrupt.
+func readHashFile(filePath string) uint64 {
+	b, err := os.ReadFile(hashFilePath(filePath))
+	if err != nil || len(b) != 8 {
+		return 0
+	}
+	return binary.LittleEndian.Uint64(b)
 }
