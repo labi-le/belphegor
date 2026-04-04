@@ -203,7 +203,11 @@ func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) e
 	if msg.Payload.MimeType.IsPath() {
 		filePath, err := p.fileWriter.Write(stream, msg.Payload)
 		if err != nil {
-			if errors.Is(err, store.ErrFileExists) && stream.Reset() == nil {
+			if errors.Is(err, store.ErrFileExists) {
+				_ = stream.Reset()
+				// File already cached — still update clipboard with its path
+				msg.Payload.Data = []byte("file://" + filePath)
+				p.channel.Send(msg)
 				return nil
 			}
 
