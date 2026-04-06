@@ -202,13 +202,12 @@ func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) e
 
 	if msg.Payload.MimeType.IsPath() {
 		filePath, err := p.fileWriter.Write(stream, msg.Payload)
-		if err != nil {
-			if errors.Is(err, store.ErrFileExists) && stream.Reset() == nil {
-				return nil
-			}
-
+		if errors.Is(err, store.ErrFileExists) {
+			_ = stream.Reset()
+		} else if err != nil {
 			return err
 		}
+
 		msg.Payload.Data = []byte(filePath)
 	} else {
 		data := make([]byte, msg.Payload.ContentLength)
