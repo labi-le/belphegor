@@ -1,6 +1,7 @@
 package wlr
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"sync"
@@ -12,7 +13,9 @@ import (
 )
 
 const (
-	writeTimeout = 5 * time.Second
+	writeTimeout        = 5 * time.Second
+	fileSchemePrefix    = "file://"
+	fileSchemePrefixLen = len(fileSchemePrefix)
 )
 
 type writer struct {
@@ -98,6 +101,10 @@ func (s *sourceListener) Cancelled() {
 }
 
 func (w *writer) Write(t mime.Type, p []byte) (n int, err error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -113,8 +120,16 @@ func (w *writer) Write(t mime.Type, p []byte) (n int, err error) {
 
 	source := w.deviceManager.CreateDataSource()
 
-	dataCopy := make([]byte, len(p))
-	copy(dataCopy, p)
+	var dataCopy []byte
+	if t == mime.TypePath && !bytes.HasPrefix(p, []byte(fileSchemePrefix)) {
+		dataCopy = make([]byte, fileSchemePrefixLen+len(p))
+		copy(dataCopy, fileSchemePrefix)
+		copy(dataCopy[fileSchemePrefixLen:], p)
+	} else {
+		dataCopy = make([]byte, len(p))
+		copy(dataCopy, p)
+	}
+
 	listener := &sourceListener{
 		data:   dataCopy,
 		source: source,
