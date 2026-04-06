@@ -93,6 +93,13 @@
               description = "Enable verbose logging";
             };
 
+            transport = mkOption {
+              type = types.nullOr (types.enum [ "quic" "tcp" ]);
+              default = null;
+              example = "tcp";
+              description = "Transport protocol: quic, tcp. By default: quic";
+            };
+
             connect = mkOption {
               type = types.nullOr types.str;
               default = null;
@@ -169,7 +176,7 @@
             notify = mkOption {
               type = types.nullOr types.bool;
               default = null;
-              description = "Enable notifications. App default: true";
+              description = "Enable notifications. By default: true";
             };
           };
 
@@ -207,6 +214,10 @@
                     args = lib.flatten [
                       (lib.optional cfg.verbose "--verbose")
 
+                      (lib.optional (cfg.transport != null) [
+                        "--transport"
+                        cfg.transport
+                      ])
                       (lib.optional (cfg.connect != null) [
                         "--connect"
                         cfg.connect

@@ -27,12 +27,22 @@ func New(tlsConf *tls.Config, keepAlive time.Duration) *Transport {
 
 var _ transport.Transport = (*Transport)(nil)
 
-func (t *Transport) Listen(_ context.Context, addr string) (transport.Listener, error) {
+func (t *Transport) Listen(ctx context.Context, addr string) (transport.Listener, error) {
 	l, err := quic.ListenAddr(addr, t.tlsConf, t.quicConf)
 	if err != nil {
 		return nil, mapQuicError(err)
 	}
-	return &listenerAdapter{l}, nil
+
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		<-ctx.Done()
+		_ = l.Close()
+	}()
+
+	return &listenerAdapter{
+		l:      l,
+		cancel: cancel,
+	}, nil
 }
 
 func (t *Transport) Dial(ctx context.Context, addr string) (transport.Connection, error) {
@@ -44,7 +54,8 @@ func (t *Transport) Dial(ctx context.Context, addr string) (transport.Connection
 }
 
 type listenerAdapter struct {
-	l *quic.Listener
+	l      *quic.Listener
+	cancel context.CancelFunc
 }
 
 func (a *listenerAdapter) Accept(ctx context.Context) (transport.Connection, error) {
@@ -55,7 +66,11 @@ func (a *listenerAdapter) Accept(ctx context.Context) (transport.Connection, err
 	return &connAdapter{conn: conn}, nil
 }
 
-func (a *listenerAdapter) Close() error   { return mapQuicError(a.l.Close()) }
+func (a *listenerAdapter) Close() error {
+	a.cancel()
+	return mapQuicError(a.l.Close())
+}
+
 func (a *listenerAdapter) Addr() net.Addr { return a.l.Addr() }
 
 type connAdapter struct {

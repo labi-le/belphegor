@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"os"
 	"os/signal"
@@ -20,7 +21,9 @@ import (
 	"github.com/labi-le/belphegor/internal/security"
 	"github.com/labi-le/belphegor/internal/service"
 	"github.com/labi-le/belphegor/internal/store"
+	"github.com/labi-le/belphegor/internal/transport"
 	"github.com/labi-le/belphegor/internal/transport/quic"
+	"github.com/labi-le/belphegor/internal/transport/tcp"
 	"github.com/labi-le/belphegor/pkg/clipboard"
 	"github.com/rs/zerolog"
 	flag "github.com/spf13/pflag"
@@ -28,6 +31,7 @@ import (
 
 type action struct {
 	addressIP string
+	transport string
 
 	verbose        bool
 	showVersion    bool
@@ -57,6 +61,7 @@ func parseFlags() (node.Options, action) {
 	flag.IntVar(&opts.Clip.MaxClipboardFiles, "max_clipboard_files", 15, "Maximum number of files that can be copied (and announced) in a single copy operation")
 
 	flag.StringVarP(&act.addressIP, "connect", "c", "", "Address in ip:port format to connect to the node")
+	flag.StringVar(&act.transport, "transport", "quic", "Transport protocol: quic, tcp")
 	flag.BoolVar(&act.verbose, "verbose", false, "Verbose logs")
 	flag.BoolVar(&act.notify, "notify", true, "Enable notifications")
 	flag.BoolVarP(&act.showVersion, "version", "v", false, "Show version")
@@ -72,6 +77,14 @@ func parseFlags() (node.Options, action) {
 
 	if act.showHelp {
 		return opts, act
+	}
+
+	switch act.transport {
+	case "quic", "tcp":
+	default:
+		_, _ = fmt.Fprintf(os.Stderr, "invalid transport %q: must be quic or tcp\n", act.transport)
+		flag.Usage()
+		os.Exit(1)
 	}
 
 	size, err := humanize.ParseBytes(maxFileSizeRaw)
@@ -151,7 +164,7 @@ func main() {
 	}
 
 	nd := node.New(
-		quic.New(tlsConfig, opts.KeepAlive),
+		selectTransport(cfg.transport, tlsConfig, opts.KeepAlive, logger),
 		clipboard.New(opts.Clip, logger),
 		new(node.Storage),
 		channel.New(opts.MaxPeers),
@@ -183,6 +196,22 @@ func main() {
 	if err := nd.Start(ctx); err != nil {
 		logger.Fatal().Err(err).Msg("failed to start node")
 	}
+}
+
+func selectTransport(
+	mode string,
+	tlsConf *tls.Config,
+	keepAlive time.Duration,
+	logger zerolog.Logger,
+) transport.Transport {
+	ctxLog := logger.With().Str("op", "selectTransport").Logger()
+	if mode == "tcp" {
+		ctxLog.Info().Msg("selected tcp")
+		return tcp.New(tlsConf, keepAlive)
+	}
+
+	ctxLog.Info().Msg("selected quic")
+	return quic.New(tlsConf, keepAlive)
 }
 
 func initLogger(verbose bool) zerolog.Logger {

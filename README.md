@@ -101,6 +101,7 @@ make build
   -p, --port int                  Port to use. Default: random
       --read_timeout duration     Write timeout (default 1m0s)
       --secret string             Key to connect between node (empty=all may connect)
+      --transport string          Transport protocol: quic, tcp (default "quic")
       --verbose                   Verbose logs
   -v, --version                   Show version
       --write_timeout duration    Write timeout (default 1m0s)
