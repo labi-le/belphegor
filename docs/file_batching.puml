@@ -1,0 +1,125 @@
+@startuml
+skinparam maxMessageSize 250
+skinparam ParticipantPadding 10
+skinparam BoxPadding 10
+skinparam NoteBackgroundColor #fbfbfb
+
+box "Sender (Node A)" #LightCyan
+participant "Clipboard\n(eventful)" as S_Clip
+participant "Channel\n(internal)" as S_Chan
+participant "Node" as S_Node
+participant "Peer\n(network)" as S_Peer
+end box
+
+box "Receiver (Node B)" #LightYellow
+participant "Peer\n(network)" as R_Peer
+participant "FileStore\n(store)" as R_Store
+participant "BatchCollector\n(channel)" as R_Batch
+participant "Node" as R_Node
+end box
+
+== 1. File Watch & Update Generation ==
+S_Clip -> S_Clip: Watch()\nDetects files copy
+note over S_Clip
+  <b>UpdatesFromFileInfo()</b> generates:
+  batchHashBytes = xxhash(...)
+  batchID = batchHashBytes & 0x7FFFFFFFFFFFFFFF
+end note
+
+S_Clip -> S_Node: <b>chan eventful.Update</b>
+note over S_Node
+  <b>Update 1:</b> Size: 1024, Hash: 0xA1, BatchID: 888, Total: 2
+  <b>Update 2:</b> Size: 2048, Hash: 0xC3, BatchID: 888, Total: 2
+end note
+
+== 2. Domain Mapping & Broadcast ==
+S_Node -> S_Node: <b>messageFromUpdate()</b>\nMap to domain.Message
+S_Node -> S_Chan: <b>channel.Send()</b>
+S_Chan -> S_Node: <b><-channel.Messages()</b>
+
+S_Node -> S_Peer: <b>Broadcast(domain.EventAnnounce)</b>
+S_Peer -> R_Peer: <b>protocol.WriteEvent()</b> over QUIC/TCP
+
+note over S_Peer, R_Peer
+  <b>proto.Event</b> {
+    Payload: <b>*proto.Event_Announce</b> {
+      Announce: <b>*proto.Announce</b> {
+        ID: 111, ContentLength: 1024, MimeType: Mime_PATH,
+        ContentHash: 0xA1, BatchID: 888, BatchTotal: 2
+      }
+    }
+  }
+end note
+
+== 3. Announce Handling & Request ==
+R_Peer -> R_Node: <b>channel.Announce()</b>
+R_Node -> R_Node: <b>handleAnnounce()</b>
+
+alt ContentLength > MaxFileSize
+    note over R_Node
+      <b>CRITICAL:</b> Prevent Batch Hang
+      If file is too large, send dummy to batch
+    end note
+    R_Node -> R_Batch: <b>Add(Message{ID: 111, BatchID: 888, Data: nil})</b>
+else Valid Size & Not Duplicate
+    R_Node -> R_Peer: <b>Peer.Request(ctx, 111)</b>
+    R_Peer -> S_Peer: <b>proto.Event</b> { Payload: <b>*proto.Event_Request</b> }
+end
+
+== 4. Stream Data Transfer ==
+S_Peer -> S_Peer: <b>handleRequest()</b>
+S_Peer -> R_Peer: <b>proto.Event_Message</b> metadata
+S_Peer -> R_Peer: <b>io.Copy()</b> (raw bytes stream)
+
+== 5. Receiving & Storage ==
+R_Peer -> R_Peer: <b>handleMessage(domain.EventMessage)</b>
+
+alt Stream Error OR MaxReceiveSize Exceeded
+    note over R_Peer
+      <b>sendNack()</b>
+      Push nil data to avoid batch deadlock
+    end note
+    R_Peer -> R_Batch: <b>Add(Message{ID: 111, BatchID: 888, Data: nil})</b>
+else Success
+    R_Peer -> R_Store: <b>FileStore.Write(stream, msg)</b>
+    note over R_Store
+      isolateDir = filepath.Join(baseDir, msg.BatchID.String())
+      -> <i>/tmp/bfg_cache/888/file1.txt</i>
+    end note
+    R_Store --> R_Peer: string (fullPath)
+
+    note over R_Peer
+      msg.Payload.Data = []byte(fullPath)
+    end note
+    R_Peer -> R_Node: <b>channel.Send(domain.EventMessage)</b>
+end
+
+== 6. Batch Aggregation ==
+R_Node -> R_Batch: <b>BatchCollector.Add(msg.Payload)</b>
+note over R_Batch
+  state := batches[msg.BatchID]
+  state.items[111] = "/tmp/bfg_cache/888/file1.txt"
+  len(items) == total ? -> <b>False</b>
+end note
+R_Batch --> R_Node: ([]byte(nil), false)
+
+== 7. Second File Processed (Fast Forward) ==
+note over S_Peer, R_Node: (Steps 2-5 repeat for file2.txt, ID: 222, BatchID: 888)
+R_Node -> R_Batch: <b>BatchCollector.Add(msg.Payload)</b>
+note over R_Batch
+  state.items[222] = "/tmp/bfg_cache/888/file2.txt"
+  len(items) == total ? -> <b>True</b>
+  sort.Strings(paths) (Drops nil/empty paths from NACKs)
+  strings.Join(paths, "\\n")
+end note
+R_Batch --> R_Node: (batchData, true)
+
+== 8. OS Clipboard Injection ==
+R_Node -> R_Node: <b>monitor()</b> receives ready batch
+R_Node -> R_Node: <b>Eventful.Write(mime.TypePath, batchData)</b>
+note over R_Node
+  Underlying OS clipboard impl (wlr/x11/native)
+  converts raw paths via <b>rfc8089.FormatURIList</b>:
+  "file:///tmp/bfg_cache/888/file1.txt\r\n..."
+end note
+@enduml

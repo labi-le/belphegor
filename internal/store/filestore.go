@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/pkg/pool/byteslice"
@@ -42,7 +43,31 @@ func MustFileStore(baseDir string, logger zerolog.Logger) *FileStore {
 }
 
 func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
-	fullPath := filepath.Join(fs.baseDir, msg.Name)
+	if msg.Name == "" {
+		return "", fmt.Errorf("invalid filename: name is empty")
+	}
+
+	var isolateDir string
+	if msg.BatchID != 0 {
+		isolateDir = filepath.Join(fs.baseDir, msg.BatchID.String())
+	} else {
+		isolateDir = filepath.Join(fs.baseDir, msg.ID.String())
+	}
+
+	isolateDirClean := filepath.Clean(isolateDir)
+	if err := os.MkdirAll(isolateDirClean, 0755); err != nil {
+		return "", fmt.Errorf("filestore mkdir isolated: %w", err)
+	}
+
+	fullPath := filepath.Join(isolateDirClean, msg.Name)
+
+	if !strings.HasPrefix(fullPath, isolateDirClean+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid filename: path traversal attempt detected (%q)", msg.Name)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return "", fmt.Errorf("filestore mkdir tree: %w", err)
+	}
 
 	buf := byteslice.Get(bufSize)
 	defer byteslice.Put(buf)
@@ -50,7 +75,6 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 	if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
 		if uint64(info.Size()) == msg.ContentLength {
 			fs.logger.Trace().Str("path", fullPath).Msg("file already exists, skipping download")
-			//_, _ = io.CopyBuffer(io.Discard, io.LimitReader(r, int64(msg.ContentLength)), buf)
 			return fullPath, ErrFileExists
 		}
 	}

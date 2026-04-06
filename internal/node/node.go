@@ -35,6 +35,7 @@ type Node struct {
 	channel   *channel.Channel
 	transport transport.Transport
 	opts      Options
+	batches   *channel.BatchCollector
 }
 
 func (n *Node) Close() error {
@@ -55,15 +56,16 @@ func New(
 	tr transport.Transport,
 	clipboard eventful.Eventful,
 	peers *Storage,
-	channel *channel.Channel,
+	ch *channel.Channel,
 	opts Options,
 ) *Node {
 	return &Node{
 		transport: tr,
 		clipboard: clipboard,
 		peers:     peers,
-		channel:   channel,
+		channel:   ch,
 		opts:      opts,
+		batches:   channel.NewBatchCollector(),
 	}
 }
 
@@ -123,6 +125,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 			Logger:         n.opts.Logger,
 			Deadline:       n.opts.Deadline,
 			MaxReceiveSize: n.opts.Clip.MaxFileSize,
+			Batches:        n.batches,
 		},
 	)
 
@@ -132,8 +135,6 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 	)
 
 	cleanup := func() {
-		// too many notifications
-		//n.Notify("Node disconnected %s", metadata.Name)
 		if current, ok := n.peers.Get(metadata.UniqueID()); ok && current == pr {
 			n.peers.Delete(metadata.UniqueID())
 		}
@@ -340,8 +341,17 @@ func (n *Node) monitor(ctx context.Context) error {
 			if msg.From != n.opts.Metadata.UniqueID() {
 				ctxLog.Trace().Object("msg", msg.Payload).Msg("set clipboard data")
 
-				if _, err := n.clipboard.Write(msg.Payload.MimeType, msg.Payload.Data); err != nil {
-					ctxLog.Error().Err(err).Object("msg", msg.Payload).Send()
+				if msg.Payload.BatchID != 0 && msg.Payload.BatchTotal > 1 {
+					batchData, ready := n.batches.Add(msg.Payload)
+					if ready {
+						if _, err := n.clipboard.Write(msg.Payload.MimeType, batchData); err != nil {
+							ctxLog.Error().Err(err).Msg("failed to write batch to clipboard")
+						}
+					}
+				} else {
+					if _, err := n.clipboard.Write(msg.Payload.MimeType, msg.Payload.Data); err != nil {
+						ctxLog.Error().Err(err).Object("msg", msg.Payload).Send()
+					}
 				}
 			}
 
@@ -366,6 +376,8 @@ func messageFromUpdate(update eventful.Update) domain.Message {
 			MimeType:      update.MimeType,
 			ContentHash:   update.Hash,
 			ContentLength: update.Size,
+			BatchID:       domain.MessageID(update.BatchID),
+			BatchTotal:    update.BatchTotal,
 		}
 	}
 
@@ -375,6 +387,8 @@ func messageFromUpdate(update eventful.Update) domain.Message {
 		MimeType:      update.MimeType,
 		ContentHash:   update.Hash,
 		ContentLength: uint64(len(update.Data)),
+		BatchID:       domain.MessageID(update.BatchID),
+		BatchTotal:    update.BatchTotal,
 	}
 }
 
@@ -401,6 +415,14 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 			Str("max_size", humanize.Bytes(n.opts.Clip.MaxFileSize)).
 			Str("received_size", humanize.Bytes(ann.Payload.ContentLength)).
 			Msg("i cannot accept; size exceeds permitted limits")
+
+		if ann.Payload.BatchID != 0 {
+			n.batches.Add(domain.Message{
+				ID:         ann.Payload.ID,
+				BatchID:    ann.Payload.BatchID,
+				BatchTotal: ann.Payload.BatchTotal,
+			})
+		}
 		return
 	}
 

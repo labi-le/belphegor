@@ -13,6 +13,7 @@ import (
 	"github.com/jezek/xgb/xproto"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/mime"
+	"github.com/labi-le/belphegor/pkg/rfc8089"
 	"github.com/rs/zerolog"
 )
 
@@ -142,25 +143,34 @@ func (c *Clipboard) handleEvent(ev xgb.Event, upd chan<- eventful.Update) {
 }
 
 func (c *Clipboard) Write(t mime.Type, src []byte) (int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if len(src) == 0 {
+		return 0, nil
+	}
 
 	if c.conn == nil {
 		return 0, errors.New("x11 not initialized")
 	}
 
-	c.serving = make([]byte, len(src))
-	copy(c.serving, src)
-	c.dedup.Mark(src)
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	switch t {
-	case mime.TypeImage:
-		c.serveTyp = c.atoms.ImagePng
-	case mime.TypePath:
+	var dataCopy []byte
+
+	if t == mime.TypePath {
+		dataCopy = rfc8089.FormatURIList(src)
 		c.serveTyp = c.atoms.UriList
-	default:
-		c.serveTyp = c.atoms.Utf8String
+	} else {
+		dataCopy = make([]byte, len(src))
+		copy(dataCopy, src)
+		if t == mime.TypeImage {
+			c.serveTyp = c.atoms.ImagePng
+		} else {
+			c.serveTyp = c.atoms.Utf8String
+		}
 	}
+
+	c.serving = dataCopy
+	c.dedup.Mark(src)
 
 	err := xproto.SetSelectionOwnerChecked(c.conn, c.win, c.atoms.Clipboard, xproto.TimeCurrentTime).Check()
 	if err != nil {

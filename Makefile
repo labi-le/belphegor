@@ -57,12 +57,8 @@ lint:
 	golangci-lint run
 
 .PHONY: gen-proto
-gen-proto: install-proto
+gen-proto:
 	@protoc --proto_path=proto --go_out=. proto/*
-
-.PHONY: install-proto
-install-proto:
-	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
 define create_tag
 	@echo "Current version: $(CURRENT_VERSION)"

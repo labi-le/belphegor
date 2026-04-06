@@ -16,7 +16,6 @@ type (
 	Data []byte
 )
 
-// MessageID strict type definition
 type MessageID id.Unique
 
 func NewMessageID() MessageID {
@@ -46,6 +45,8 @@ type Message struct {
 	ContentHash   uint64
 	ContentLength uint64
 	Name          string
+	BatchID       MessageID
+	BatchTotal    uint32
 }
 
 func (m Message) Zero() bool {
@@ -86,6 +87,8 @@ func (m Message) Announce() Announce {
 		MimeType:      m.MimeType,
 		ContentHash:   m.ContentHash,
 		ContentLength: m.ContentLength,
+		BatchID:       m.BatchID,
+		BatchTotal:    m.BatchTotal,
 	}
 }
 
@@ -95,4 +98,6 @@ func (m Message) MarshalZerologObject(e *zerolog.Event) {
 	e.Stringer("mime", m.MimeType)
 	e.Str("size", humanize.Bytes(m.ContentLength))
 	e.Uint64("hash", m.ContentHash)
+	e.Int64("batch_id", m.BatchID.Int64())
+	e.Uint32("batch_total", m.BatchTotal)
 }

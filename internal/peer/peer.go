@@ -26,6 +26,7 @@ type Options struct {
 	Logger         zerolog.Logger
 	Deadline       network.Deadline
 	MaxReceiveSize uint64
+	Batches        *channel.BatchCollector
 }
 
 type Peer struct {
@@ -38,6 +39,7 @@ type Peer struct {
 
 	fileWriter     store.FileWriter
 	maxReceiveSize uint64
+	batches        *channel.BatchCollector
 }
 
 func New(
@@ -54,6 +56,7 @@ func New(
 		deadline:       opts.Deadline,
 		stringRepr:     fmt.Sprintf("%s -> %s", metadata.Name, conn.RemoteAddr().String()),
 		maxReceiveSize: opts.MaxReceiveSize,
+		batches:        opts.Batches,
 	}
 }
 
@@ -191,8 +194,16 @@ func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error 
 	}
 }
 
+func (p *Peer) sendNack(msg domain.Message) {
+	if msg.BatchID != 0 && p.batches != nil {
+		msg.Data = nil
+		p.batches.Add(msg)
+	}
+}
+
 func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) error {
 	if msg.Payload.ContentLength > p.maxReceiveSize {
+		p.sendNack(msg.Payload)
 		return fmt.Errorf(
 			"message size exceeds limit: %d > %d",
 			msg.Payload.ContentLength,
@@ -205,6 +216,7 @@ func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) e
 		if errors.Is(err, store.ErrFileExists) {
 			_ = stream.Reset()
 		} else if err != nil {
+			p.sendNack(msg.Payload)
 			return err
 		}
 
@@ -213,6 +225,7 @@ func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) e
 		data := make([]byte, msg.Payload.ContentLength)
 
 		if _, err := io.ReadFull(stream, data); err != nil {
+			p.sendNack(msg.Payload)
 			return fmt.Errorf("read raw data: %w", err)
 		}
 

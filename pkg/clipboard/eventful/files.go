@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"net/url"
 	"os"
-	"unsafe"
 
 	"github.com/cespare/xxhash"
 	"github.com/labi-le/belphegor/pkg/mime"
@@ -29,20 +28,34 @@ func UpdatesFromFileInfo(files []FileInfo) ([]Update, []byte) {
 		buf = append(buf, file.Path...)
 		buf = binary.LittleEndian.AppendUint64(buf, file.Size)
 		buf = binary.LittleEndian.AppendUint64(buf, file.ModTime)
+	}
 
-		_, _ = batchDigest.Write(buf)
+	_, _ = batchDigest.Write(buf)
+
+	batchHashBytes := batchDigest.Sum(nil)
+	batchID := batchDigest.Sum64() & 0x7FFFFFFFFFFFFFFF
+	batchTotal := uint32(len(files))
+
+	buf = buf[:0]
+
+	for _, file := range files {
+		buf = append(buf, file.Path...)
+		buf = binary.LittleEndian.AppendUint64(buf, file.Size)
+		buf = binary.LittleEndian.AppendUint64(buf, file.ModTime)
 
 		updates = append(updates, Update{
-			Data:     unsafe.Slice(unsafe.StringData(file.Path), len(file.Path)),
-			Size:     file.Size,
-			MimeType: mime.TypePath,
-			Hash:     xxhash.Sum64(buf),
+			Data:       strutil.StringToBytes(file.Path),
+			Size:       file.Size,
+			MimeType:   mime.TypePath,
+			Hash:       xxhash.Sum64(buf),
+			BatchID:    batchID,
+			BatchTotal: batchTotal,
 		})
 
 		buf = buf[:0]
 	}
 
-	return updates, batchDigest.Sum(nil)
+	return updates, batchHashBytes
 }
 
 func fileInfoFromRaw(data []byte, limit int) []FileInfo {
@@ -76,7 +89,6 @@ func fileInfoFromRaw(data []byte, limit int) []FileInfo {
 		}
 
 		pathBytes := line[7:]
-
 		path := strutil.BytesToString(pathBytes)
 
 		if bytes.IndexByte(pathBytes, '%') >= 0 {

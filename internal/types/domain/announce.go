@@ -13,6 +13,8 @@ type Announce struct {
 	MimeType      mime.Type
 	ContentHash   uint64
 	ContentLength uint64
+	BatchID       MessageID
+	BatchTotal    uint32
 }
 
 func (an Announce) MarshalZerologObject(e *zerolog.Event) {
@@ -21,6 +23,8 @@ func (an Announce) MarshalZerologObject(e *zerolog.Event) {
 	e.Stringer("mime", an.MimeType)
 	e.Uint64("length", an.ContentLength)
 	e.Uint64("hash", an.ContentHash)
+	e.Int64("batch_id", an.BatchID.Int64())
+	e.Uint32("batch_total", an.BatchTotal)
 }
 
 func (an Announce) Zero() bool {

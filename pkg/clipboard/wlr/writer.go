@@ -1,7 +1,6 @@
 package wlr
 
 import (
-	"bytes"
 	"errors"
 	"os"
 	"sync"
@@ -9,13 +8,12 @@ import (
 	"time"
 
 	"github.com/labi-le/belphegor/pkg/mime"
+	"github.com/labi-le/belphegor/pkg/rfc8089"
 	"github.com/rs/zerolog"
 )
 
 const (
-	writeTimeout        = 5 * time.Second
-	fileSchemePrefix    = "file://"
-	fileSchemePrefixLen = len(fileSchemePrefix)
+	writeTimeout = 5 * time.Second
 )
 
 type writer struct {
@@ -121,10 +119,8 @@ func (w *writer) Write(t mime.Type, p []byte) (n int, err error) {
 	source := w.deviceManager.CreateDataSource()
 
 	var dataCopy []byte
-	if t == mime.TypePath && !bytes.HasPrefix(p, []byte(fileSchemePrefix)) {
-		dataCopy = make([]byte, fileSchemePrefixLen+len(p))
-		copy(dataCopy, fileSchemePrefix)
-		copy(dataCopy[fileSchemePrefixLen:], p)
+	if t == mime.TypePath {
+		dataCopy = rfc8089.FormatURIList(p)
 	} else {
 		dataCopy = make([]byte, len(p))
 		copy(dataCopy, p)

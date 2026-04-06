@@ -33,6 +33,8 @@ func MapToProto(v any) *proto.Event {
 				MimeType:      toProtoMime(e.Payload.MimeType),
 				ContentHash:   e.Payload.ContentHash,
 				Name:          e.Payload.Name,
+				BatchID:       e.Payload.BatchID.Int64(),
+				BatchTotal:    e.Payload.BatchTotal,
 			},
 		}
 		return pb
@@ -45,6 +47,8 @@ func MapToProto(v any) *proto.Event {
 				MimeType:      toProtoMime(e.Payload.MimeType),
 				ContentHash:   e.Payload.ContentHash,
 				ContentLength: e.Payload.ContentLength,
+				BatchID:       e.Payload.BatchID.Int64(),
+				BatchTotal:    e.Payload.BatchTotal,
 			},
 		}
 		return pb
@@ -89,6 +93,8 @@ func toDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.Ev
 			ContentHash:   msg.GetContentHash(),
 			ContentLength: msg.GetContentLength(),
 			Name:          msg.Name,
+			BatchID:       domain.MessageID(msg.GetBatchID()),
+			BatchTotal:    msg.GetBatchTotal(),
 		},
 	}
 }
@@ -102,6 +108,8 @@ func toDomainAnnounce(ev *proto.Event, ann *proto.Announce) domain.EventAnnounce
 			MimeType:      toDomainMime(ann.GetMimeType()),
 			ContentHash:   ann.GetContentHash(),
 			ContentLength: ann.GetContentLength(),
+			BatchID:       domain.MessageID(ann.GetBatchID()),
+			BatchTotal:    ann.GetBatchTotal(),
 		},
 	}
 }
