@@ -493,3 +493,10 @@ func TestDefaultOptions(t *testing.T) {
 		t.Error("Clip.MaxFileSize should be set")
 	}
 }
+
+func FuzzTransport_Set(f *testing.F) {
+	f.Fuzz(func(t *testing.T, s string) {
+		var tr node.Transport
+		_ = tr.Set(s)
+	})
+}

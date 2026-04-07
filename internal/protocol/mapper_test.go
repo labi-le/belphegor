@@ -28,6 +28,8 @@ var (
 			ContentHash:   0xCAFEBABE,
 			ContentLength: 1024,
 			Name:          "image.png",
+			BatchID:       domain.MessageID(1),
+			BatchTotal:    1,
 		},
 	}
 
@@ -39,6 +41,8 @@ var (
 			MimeType:      mime.TypePath,
 			ContentHash:   0xDEADBEEF,
 			ContentLength: 2048,
+			BatchID:       domain.MessageID(1),
+			BatchTotal:    1,
 		},
 	}
 
