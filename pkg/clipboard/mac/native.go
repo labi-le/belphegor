@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -20,6 +21,8 @@ import (
 
 var _ eventful.Eventful = &Clipboard{}
 
+const debounce = 500 * time.Millisecond
+
 func init() {
 	_, err := purego.Dlopen("/System/Library/Frameworks/AppKit.framework/AppKit", purego.RTLD_GLOBAL|purego.RTLD_LAZY)
 	if err != nil {
@@ -28,12 +31,21 @@ func init() {
 }
 
 type Clipboard struct {
-	dedup eventful.Deduplicator
-	opts  eventful.Options
+	barrier atomic.Int64
+	dedup   eventful.Deduplicator
+	opts    eventful.Options
 }
 
 func New(opts eventful.Options) *Clipboard {
 	return &Clipboard{opts: opts}
+}
+
+func (m *Clipboard) suppress() {
+	m.barrier.Store(time.Now().Add(debounce).UnixNano())
+}
+
+func (m *Clipboard) allowed() bool {
+	return time.Now().UnixNano() >= m.barrier.Load()
 }
 
 func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) error {
@@ -44,6 +56,7 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 
 	clsNSPasteboard := objc.GetClass("NSPasteboard")
 	clsNSString := objc.GetClass("NSString")
+	clsNSAutoreleasePool := objc.GetClass("NSAutoreleasePool")
 
 	selGeneralPasteboard := objc.RegisterName("generalPasteboard")
 	selChangeCount := objc.RegisterName("changeCount")
@@ -55,16 +68,17 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	selLength := objc.RegisterName("length")
 	selObjectAtIndex := objc.RegisterName("objectAtIndex:")
 	selCount := objc.RegisterName("count")
+	selNew := objc.RegisterName("new")
+	selRelease := objc.RegisterName("release")
 
 	nsTypeText := makeNSString(clsNSString, "public.utf8-plain-text")
 	nsTypePNG := makeNSString(clsNSString, "public.png")
 	nsTypeFile := makeNSString(clsNSString, "NSFilenamesPboardType")
 
 	pb := objc.ID(clsNSPasteboard).Send(selGeneralPasteboard)
-
 	lastCount := pb.Send(selChangeCount)
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(debounce)
 	defer ticker.Stop()
 
 	for {
@@ -76,7 +90,14 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 			if currentCount == lastCount {
 				continue
 			}
+
+			if !m.allowed() {
+				lastCount = currentCount
+				continue
+			}
 			lastCount = currentCount
+
+			pool := objc.ID(clsNSAutoreleasePool).Send(selNew)
 
 			nsData := pb.Send(selDataForType, nsTypePNG)
 			if nsData != 0 {
@@ -94,6 +115,7 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 							Data:     dataCopy,
 							Hash:     h,
 						}
+						pool.Send(selRelease)
 						continue
 					}
 				}
@@ -144,6 +166,7 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 							for _, u := range updates {
 								update <- u
 							}
+							pool.Send(selRelease)
 							continue
 						}
 					}
@@ -168,11 +191,15 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 					}
 				}
 			}
+
+			pool.Send(selRelease)
 		}
 	}
 }
 
 func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
+	m.suppress()
+
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -180,6 +207,7 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	clsNSString := objc.GetClass("NSString")
 	clsNSData := objc.GetClass("NSData")
 	clsNSMutableArray := objc.GetClass("NSMutableArray")
+	clsNSAutoreleasePool := objc.GetClass("NSAutoreleasePool")
 
 	selGeneralPasteboard := objc.RegisterName("generalPasteboard")
 	selClearContents := objc.RegisterName("clearContents")
@@ -188,7 +216,11 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	selSetPropertyList := objc.RegisterName("setPropertyList:forType:")
 	selDataWithBytes := objc.RegisterName("dataWithBytes:length:")
 	selNew := objc.RegisterName("new")
+	selRelease := objc.RegisterName("release")
 	selAddObject := objc.RegisterName("addObject:")
+
+	pool := objc.ID(clsNSAutoreleasePool).Send(selNew)
+	defer pool.Send(selRelease)
 
 	pb := objc.ID(clsNSPasteboard).Send(selGeneralPasteboard)
 	pb.Send(selClearContents)
@@ -235,6 +267,8 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 			nsStrPath := makeNSString(clsNSString, firstPath)
 			pb.Send(selSetString, nsStrPath, nsTypeText)
 		}
+
+		nsArray.Send(selRelease)
 
 	default:
 		nsStrContent := makeNSString(clsNSString, string(src))
