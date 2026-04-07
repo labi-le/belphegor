@@ -28,10 +28,6 @@ ___
 - windows:
   * 10 or newer (may work on older versions)
 
-### Limitations
-
-- [the app can't work properly on gnome](https://github.com/labi-le/belphegor/issues/119#issuecomment-3749681212)
-
 ### Installation
 
 - [Prebuilt binaries](https://github.com/labi-le/belphegor/releases)
@@ -130,6 +126,12 @@ to install service, you need to have PATH in current ENV, otherwise the notifica
   ```
 
   </details>
+
+### Limitations
+
+- [the app can't work properly on gnome](https://github.com/labi-le/belphegor/issues/119#issuecomment-3749681212)
+- when files are copied to the windows clipboard, the file paths aren't copied; the files themselves are downloaded
+  successfully, but they cannot be pasted
 
 ### Todo
 
