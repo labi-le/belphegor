@@ -5,11 +5,13 @@ package main
 import (
 	"net/http"
 	_ "net/http/pprof"
+
+	"github.com/labi-le/belphegor/internal/node"
 )
 
-func applyTagsOverrides(cfg *action) {
-	cfg.verbose = true
-	cfg.notify = false
+func applyTagsOverrides(opts *node.Options) {
+	opts.Verbose = true
+	opts.Notify = false
 
 	go func() {
 		addr := "0.0.0.0:6060"

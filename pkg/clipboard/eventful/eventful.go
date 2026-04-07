@@ -2,7 +2,9 @@ package eventful
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/dustin/go-humanize"
 	"github.com/labi-le/belphegor/pkg/mime"
 	"github.com/rs/zerolog"
 )
@@ -35,6 +37,25 @@ func (u Update) MarshalZerologObject(e *zerolog.Event) {
 
 type Options struct {
 	AllowCopyFiles    bool
-	MaxFileSize       uint64
+	MaxFileSize       MaxFileSize
 	MaxClipboardFiles int
+}
+
+type MaxFileSize uint64
+
+func (m MaxFileSize) String() string {
+	return humanize.Bytes(uint64(m))
+}
+
+func (m *MaxFileSize) Set(s string) error {
+	size, err := humanize.ParseBytes(s)
+	if err != nil {
+		return fmt.Errorf("invalid max_file_size: %w", err)
+	}
+	*m = MaxFileSize(size)
+	return nil
+}
+
+func (m *MaxFileSize) Type() string {
+	return "uint64"
 }

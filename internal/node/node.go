@@ -124,7 +124,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 			Store:          n.opts.Store,
 			Logger:         n.opts.Logger,
 			Deadline:       n.opts.Deadline,
-			MaxReceiveSize: n.opts.Clip.MaxFileSize,
+			MaxReceiveSize: uint64(n.opts.Clip.MaxFileSize),
 			Batches:        n.batches,
 		},
 	)
@@ -148,7 +148,7 @@ func (n *Node) addPeer(hisHand domain.Handshake, conn transport.Connection) (*pe
 func (n *Node) Start(ctx context.Context) error {
 	ctxLog := ctxlog.Op(n.opts.Logger, "node.Start")
 
-	l, err := n.transport.Listen(ctx, fmt.Sprintf(":%d", n.opts.PublicPort))
+	l, err := n.transport.Listen(ctx, fmt.Sprintf(":%d", n.opts.ListenPort))
 	if err != nil {
 		ctxLog.Err(err).Msg("failed to listen")
 		return fmt.Errorf("node.Start: %w", err)
@@ -218,7 +218,7 @@ func (n *Node) handleConnection(ctx context.Context, conn transport.Connection, 
 		Str("node", n.Metadata().String()).
 		Logger()
 
-	hs := newHandshake(n.Metadata(), n.opts.PublicPort, n.opts.Logger)
+	hs := newHandshake(n.Metadata(), int(n.opts.ListenPort), n.opts.Logger)
 	hisHand, greetErr := hs.exchange(ctx, conn, accept)
 	if greetErr != nil {
 		if errors.Is(greetErr, ErrVersionMismatch) {
@@ -410,9 +410,9 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 	logger.Trace().
 		Msg("received announce")
 
-	if ann.Payload.ContentLength > n.opts.Clip.MaxFileSize {
+	if ann.Payload.ContentLength > uint64(n.opts.Clip.MaxFileSize) {
 		logger.Warn().
-			Str("max_size", humanize.Bytes(n.opts.Clip.MaxFileSize)).
+			Str("max_size", n.opts.Clip.MaxFileSize.String()).
 			Str("received_size", humanize.Bytes(ann.Payload.ContentLength)).
 			Msg("i cannot accept; size exceeds permitted limits")
 
@@ -440,7 +440,7 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 func (n *Node) DiscoveryPayload() []byte {
 	greet := domain.NewGreet(
 		domain.WithMetadata(n.Metadata()),
-		domain.WithPort(uint16(n.opts.PublicPort)),
+		domain.WithPort(uint16(n.opts.ListenPort)),
 	)
 	return protocol.MustEncode(greet)
 }

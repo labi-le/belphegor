@@ -14,7 +14,7 @@ import (
 
 func TestChannel_Send_Deduplication(t *testing.T) {
 	ch := channel.New(1)
-	msgID := id.New()
+	msgID := domain.MessageID(id.New())
 
 	payload := domain.Message{
 		ID:            msgID,
@@ -62,7 +62,7 @@ func TestChannel_History_Eviction(t *testing.T) {
 
 	for i := 0; i < channel.HistorySize+1; i++ {
 		msg := domain.Message{
-			ID:            id.Unique(i + 1),
+			ID:            domain.MessageID(id.Unique(i + 1)),
 			Data:          []byte(fmt.Sprintf("file_%d", i)),
 			MimeType:      mime.TypePath,
 			ContentHash:   uint64(i + 1),
@@ -186,7 +186,7 @@ func TestChannel_Concurrency_Race(t *testing.T) {
 			for j := 0; j < iterations; j++ {
 				ch.Send(domain.EventMessage{
 					Payload: domain.Message{
-						ID:            id.Unique(j),
+						ID:            domain.MessageID(id.Unique(j)),
 						MimeType:      mime.TypePath,
 						ContentHash:   uint64(j),
 						ContentLength: 10,
@@ -214,7 +214,7 @@ func TestChannel_Concurrency_Race(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				ch.LastMsg()
-				ch.Get(id.Unique(j))
+				ch.Get(domain.MessageID(id.Unique(j)))
 			}
 		}()
 	}

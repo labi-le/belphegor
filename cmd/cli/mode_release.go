@@ -2,4 +2,6 @@
 
 package main
 
-func applyTagsOverrides(*action) {}
+import "github.com/labi-le/belphegor/internal/node"
+
+func applyTagsOverrides(*node.Options) {}

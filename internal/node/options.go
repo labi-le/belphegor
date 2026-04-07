@@ -1,6 +1,9 @@
 package node
 
 import (
+	"fmt"
+	"os"
+	"path"
 	"time"
 
 	"github.com/labi-le/belphegor/internal/netstack"
@@ -12,8 +15,40 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type Transport string
+
+const (
+	TransportQUIC Transport = "quic"
+	TransportTCP  Transport = "tcp"
+)
+
+func (t Transport) String() string {
+	return string(t)
+}
+
+func (t *Transport) Set(s string) error {
+	*t = Transport(s)
+	if !t.valid() {
+		return fmt.Errorf(
+			"available %s, %s",
+			TransportTCP,
+			TransportQUIC,
+		)
+	}
+	return nil
+}
+
+func (t *Transport) Type() string {
+	return "string"
+}
+
+func (t *Transport) valid() bool {
+	return *t == TransportTCP || *t == TransportQUIC
+}
+
 type Options struct {
-	PublicPort  int
+	ListenPort  int
+	Transport   Transport
 	KeepAlive   time.Duration
 	Deadline    network.Deadline
 	Notifier    notification.Notifier
@@ -24,10 +59,18 @@ type Options struct {
 	MaxPeers    int
 	Store       store.FileWriter
 	Clip        eventful.Options
+
+	FileSavePath   string
+	Verbose        bool
+	Notify         bool
+	ShowVersion    bool
+	ShowHelp       bool
+	Hidden         bool
+	InstallService bool
 }
 
 func (o Options) MarshalZerologObject(e *zerolog.Event) {
-	e.Int("public_port", o.PublicPort)
+	e.Int("public_port", int(o.ListenPort))
 	e.Str("keep_alive", o.KeepAlive.String())
 	e.Dict(
 		"deadline",
@@ -66,62 +109,82 @@ type DiscoverOptions struct {
 	MaxPeers int
 }
 
-type Option func(*Options)
-
-//nolint:mnd //shut up
-var DefaultOptions = Options{
-	PublicPort: netstack.RandomPort(),
-	KeepAlive:  time.Minute,
-	Deadline: network.Deadline{
-		Read:  5 * time.Second,
-		Write: 5 * time.Second,
-	},
-	Notifier: new(notification.BeepDecorator),
-	Discovering: DiscoverOptions{
-		Enable:   true,
-		Delay:    30 * time.Second,
-		MaxPeers: 5,
-	},
-	Metadata: domain.SelfMetaData(),
-	MaxPeers: 4,
-}
-
-func NewOptions(opts ...Option) Options {
-	options := DefaultOptions
-
-	for _, opt := range opts {
-		opt(&options)
-	}
-
-	return options
-}
-
-func WithPublicPort(port int) Option {
-	return func(o *Options) {
-		o.PublicPort = port
+func DefaultOptions() Options {
+	return Options{
+		ListenPort: netstack.RandomPort(),
+		Transport:  TransportQUIC,
+		KeepAlive:  time.Minute,
+		Deadline: network.Deadline{
+			Read:  time.Minute,
+			Write: time.Minute,
+		},
+		Notifier: new(notification.BeepDecorator),
+		Discovering: DiscoverOptions{
+			Enable:   true,
+			Delay:    30 * time.Second,
+			MaxPeers: 10,
+		},
+		Metadata:     domain.SelfMetaData(),
+		MaxPeers:     10,
+		FileSavePath: path.Join(os.TempDir(), "bfg_cache"),
+		Clip: eventful.Options{
+			AllowCopyFiles: true,
+			// 512 mb
+			MaxFileSize:       1 << 29,
+			MaxClipboardFiles: 15,
+		},
 	}
 }
 
-func WithNotifier(notifier notification.Notifier) Option {
-	return func(o *Options) {
-		o.Notifier = notifier
+func (o Options) Validated() Options {
+	var defaults = DefaultOptions()
+	if o.ListenPort <= 0 || o.ListenPort > 65535 {
+		o.ListenPort = defaults.ListenPort
 	}
-}
 
-func WithMetadata(opt domain.Device) Option {
-	return func(o *Options) {
-		o.Metadata = opt
+	if !o.Transport.valid() {
+		o.Transport = defaults.Transport
 	}
-}
 
-func WithLogger(logger zerolog.Logger) Option {
-	return func(o *Options) {
-		o.Logger = logger
+	if o.KeepAlive <= 0 {
+		o.KeepAlive = defaults.KeepAlive
 	}
-}
 
-func WithFileStore(store store.FileWriter) Option {
-	return func(options *Options) {
-		options.Store = store
+	if o.Deadline.Write <= 0 {
+		o.Deadline.Write = defaults.Deadline.Write
 	}
+
+	if o.Deadline.Read <= 0 {
+		o.Deadline.Read = defaults.Deadline.Read
+	}
+
+	if o.Notifier == nil {
+		o.Notifier = defaults.Notifier
+	}
+
+	if o.Discovering.MaxPeers <= 0 {
+		o.Discovering.MaxPeers = defaults.Discovering.MaxPeers
+	}
+
+	if o.Discovering.Delay <= 0 {
+		o.Discovering.Delay = defaults.Discovering.Delay
+	}
+
+	if o.Metadata == (domain.Device{}) {
+		o.Metadata = defaults.Metadata
+	}
+
+	if o.MaxPeers <= 0 {
+		o.MaxPeers = defaults.MaxPeers
+	}
+
+	if o.Clip.MaxClipboardFiles <= 0 {
+		o.Clip.MaxClipboardFiles = defaults.Clip.MaxClipboardFiles
+	}
+
+	if o.Clip.MaxClipboardFiles <= 0 {
+		o.Clip.MaxClipboardFiles = defaults.Clip.MaxClipboardFiles
+	}
+
+	return o
 }
