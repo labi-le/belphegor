@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/labi-le/belphegor/internal/channel"
 	"github.com/labi-le/belphegor/internal/protocol"
@@ -136,16 +137,17 @@ func isConnClosed(err error) bool {
 }
 
 func (p *Peer) WriteContext(ctx context.Context, meta domain.AnyEvent, raw io.Reader) error {
-	stream, err := p.conn.OpenStream(ctx)
+	rawStream, err := p.conn.OpenStream(ctx)
 	if err != nil {
 		return fmt.Errorf("open stream: %w", err)
 	}
 
-	defer func(stream transport.Stream) { _ = stream.Close() }(stream)
-
-	if err := network.SetWriteDeadline(stream, p.deadline); err != nil {
-		return err
+	stream := &deadlineStream{
+		stream: rawStream,
+		read:   p.deadline.Read,
+		write:  p.deadline.Write,
 	}
+	defer stream.Close()
 
 	if err := protocol.WriteEvent(stream, meta); err != nil {
 		return fmt.Errorf("write event: %w", err)
@@ -160,12 +162,13 @@ func (p *Peer) WriteContext(ctx context.Context, meta domain.AnyEvent, raw io.Re
 	return nil
 }
 
-func (p *Peer) handleStream(ctx context.Context, stream transport.Stream) error {
-	defer stream.Close()
-
-	if err := network.SetReadDeadline(stream, p.deadline); err != nil {
-		return err
+func (p *Peer) handleStream(ctx context.Context, rawStream transport.Stream) error {
+	stream := &deadlineStream{
+		stream: rawStream,
+		read:   p.deadline.Read,
+		write:  p.deadline.Write,
 	}
+	defer stream.Close()
 
 	event, err := protocol.DecodeEvent(stream)
 	if err != nil {
@@ -241,11 +244,8 @@ func (p *Peer) handleMessage(msg domain.EventMessage, stream transport.Stream) e
 	return nil
 }
 
-func (p *Peer) Request(ctx context.Context, messageID domain.MessageID) error {
-	req := domain.NewRequest(messageID)
-	p.logger.Trace().Int64("msg_id", messageID.Int64()).Msg("sending request packet")
-
-	return p.WriteContext(ctx, req, nil)
+func (p *Peer) RequestMessage(ctx context.Context, id domain.MessageID) error {
+	return p.WriteContext(ctx, domain.NewRequest(id), nil)
 }
 
 func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req domain.EventRequest) error {
@@ -279,4 +279,50 @@ func (p *Peer) handleRequest(ctx context.Context, ev domain.EventMessage, req do
 	}
 
 	return err
+}
+
+type deadlineStream struct {
+	stream    transport.Stream
+	read      time.Duration
+	write     time.Duration
+	lastRead  time.Time
+	lastWrite time.Time
+}
+
+func (s *deadlineStream) Read(p []byte) (int, error) {
+	if s.read > 0 {
+		now := time.Now()
+		if now.Sub(s.lastRead) > s.read/4 {
+			_ = s.stream.SetReadDeadline(now.Add(s.read))
+			s.lastRead = now
+		}
+	}
+	return s.stream.Read(p)
+}
+
+func (s *deadlineStream) Write(p []byte) (int, error) {
+	if s.write > 0 {
+		now := time.Now()
+		if now.Sub(s.lastWrite) > s.write/4 {
+			_ = s.stream.SetWriteDeadline(now.Add(s.write))
+			s.lastWrite = now
+		}
+	}
+	return s.stream.Write(p)
+}
+
+func (s *deadlineStream) Close() error {
+	return s.stream.Close()
+}
+
+func (s *deadlineStream) SetReadDeadline(t time.Time) error {
+	return s.stream.SetReadDeadline(t)
+}
+
+func (s *deadlineStream) SetWriteDeadline(t time.Time) error {
+	return s.stream.SetWriteDeadline(t)
+}
+
+func (s *deadlineStream) Reset() error {
+	return s.stream.Reset()
 }

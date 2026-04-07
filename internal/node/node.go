@@ -432,7 +432,7 @@ func (n *Node) handleAnnounce(ctx context.Context, ann domain.EventAnnounce) {
 	}
 	logger.Trace().Msg("requesting message")
 
-	if err := p.Request(ctx, ann.Payload.ID); err != nil {
+	if err := p.RequestMessage(ctx, ann.Payload.ID); err != nil {
 		logger.Err(err).Str("peer", p.String()).Msg("failed to request")
 	}
 }
