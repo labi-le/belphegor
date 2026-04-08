@@ -84,23 +84,25 @@ make build
 
 ```
   -c, --connect string            Address in ip:port format to connect to the node
-      --discover_delay duration   Delay between node discovery (default 5m0s)
-      --file_save_path string     Folder where the files sent to us will be saved (default: Tmp dir)
-  -h, --help                      Show help
-      --hidden                    Hide console window (for windows user) (default true)
-      --install-service           Install systemd-unit and start the service
-      --keep_alive duration       Interval for checking connections between nodes (default 1m0s)
-      --max_file_size string      Maximum number of discovered peers (default "500MiB")
-      --max_peers int             Maximum number of discovered peers (default 5)
-      --node_discover             Find local nodes on the network and connect to them (default true)
-      --notify                    Enable notifications (default true)
-  -p, --port int                  Port to use. Default: random
-      --read_timeout duration     Write timeout (default 1m0s)
-      --secret string             Key to connect between node (empty=all may connect)
-      --transport string          Transport protocol: quic, tcp (default "quic")
-      --verbose                   Verbose logs
-  -v, --version                   Show version
-      --write_timeout duration    Write timeout (default 1m0s)
+       --discover_delay duration   Delay between node discovery (default 5m0s)
+       --file_save_path string     Folder where the files sent to us will be saved (default: Tmp dir)
+   -h, --help                      Show help
+       --hidden                    Hide console window (for windows user) (default true)
+       --install_service           Install systemd-unit and start the service
+       --keep_alive duration       Interval for checking connections between nodes (default 1m0s)
+       --allow_copy_files          Allow to copy files (default true)
+       --max_clipboard_files int   Maximum number of files that can be copied (and announced) in a single copy operation (default 10)
+       --max_file_size string      Maximum file size to receive (default "500MiB")
+       --max_peers int             Maximum number of discovered peers (default 5)
+       --node_discover             Find local nodes on the network and connect to them (default true)
+       --notify                    Enable notifications (default true)
+   -p, --port int                  Port to use. Default: random
+       --read_timeout duration     Write timeout (default 1m0s)
+       --secret string             Key to connect between node (empty=all may connect)
+       --transport string          Transport protocol: quic, tcp (default "quic")
+       --verbose                   Verbose logs
+   -v, --version                   Show version
+       --write_timeout duration    Write timeout (default 1m0s)
 ```
 
 
