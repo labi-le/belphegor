@@ -35,10 +35,10 @@ func Must(log zerolog.Logger, opts eventful.Options) *Clipboard {
 	if err != nil {
 		panic(err)
 	}
-	return New(client, log, opts)
+	return New(log, opts, client)
 }
 
-func New(client *wl.Client, log zerolog.Logger, opts eventful.Options) *Clipboard {
+func New(log zerolog.Logger, opts eventful.Options, client *wl.Client) *Clipboard {
 	preset := newPreset(client, log, opts)
 
 	wlr := &Clipboard{
@@ -62,7 +62,7 @@ func (w *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error
 	return w.run(ctx)
 }
 
-func (w *Clipboard) Write(t mime.Type, src []byte) (int, error) {
+func (w *Clipboard) Write(t mime.Type, data []byte) (int, error) {
 	log := w.logger.With().Str("op", "wlr.Write").Logger()
 
 	if w.closed.Load() {
@@ -72,7 +72,7 @@ func (w *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 		return 0, errors.New("clipboard is closed")
 	}
 
-	return w.writer.Write(t, src)
+	return w.writer.Write(t, data)
 }
 
 func (w *Clipboard) run(ctx context.Context) error {

@@ -120,7 +120,7 @@ func main() {
 
 	nd := node.New(
 		selectTransport(opts.Transport, tlsConfig, opts.KeepAlive, logger),
-		clipboard.New(opts.Clip, logger),
+		clipboard.New(logger, opts.Clip),
 		new(node.Storage),
 		channel.New(opts.MaxPeers),
 		opts,

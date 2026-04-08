@@ -30,7 +30,7 @@ const (
 
 var priorityList = []uint32{cFmtUnicodeText, cFmtDIBV5, cFmtHDrop}
 
-func New(opts eventful.Options, logger zerolog.Logger) *Clipboard {
+func New(logger zerolog.Logger, opts eventful.Options) *Clipboard {
 	return &Clipboard{opts: opts, logger: logger}
 }
 
@@ -193,12 +193,12 @@ func (w *Clipboard) signAndSend(capture capturedData, upd chan<- eventful.Update
 
 }
 
-func (w *Clipboard) Write(t mime.Type, src []byte) (int, error) {
+func (w *Clipboard) Write(t mime.Type, data []byte) (int, error) {
 	w.suppress()
 
-	if err := write(t, src); err != nil {
+	if err := write(t, data); err != nil {
 		return 0, err
 	}
 
-	return len(src), nil
+	return len(data), nil
 }

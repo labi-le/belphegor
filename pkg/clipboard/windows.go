@@ -8,6 +8,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func New(opts eventful.Options, logger zerolog.Logger) *windows.Clipboard {
-	return windows.New(opts, logger)
+func New(logger zerolog.Logger, opts eventful.Options) *windows.Clipboard {
+	return windows.New(logger, opts)
 }

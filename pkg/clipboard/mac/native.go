@@ -17,6 +17,7 @@ import (
 	"github.com/ebitengine/purego/objc"
 	"github.com/labi-le/belphegor/pkg/clipboard/eventful"
 	"github.com/labi-le/belphegor/pkg/mime"
+	"github.com/rs/zerolog"
 )
 
 var _ eventful.Eventful = &Clipboard{}
@@ -36,7 +37,7 @@ type Clipboard struct {
 	opts    eventful.Options
 }
 
-func New(opts eventful.Options) *Clipboard {
+func New(logger zerolog.Logger, opts eventful.Options) *Clipboard {
 	return &Clipboard{opts: opts}
 }
 
@@ -197,7 +198,7 @@ func (m *Clipboard) Watch(ctx context.Context, update chan<- eventful.Update) er
 	}
 }
 
-func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
+func (m *Clipboard) Write(t mime.Type, data []byte) (int, error) {
 	m.suppress()
 
 	runtime.LockOSThread()
@@ -232,10 +233,10 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 		nsTypePNG := makeNSString(clsNSString, "public.png")
 
 		var bytesPtr unsafe.Pointer
-		if len(src) > 0 {
-			bytesPtr = unsafe.Pointer(&src[0])
+		if len(data) > 0 {
+			bytesPtr = unsafe.Pointer(&data[0])
 		}
-		nsData := objc.ID(clsNSData).Send(selDataWithBytes, uintptr(bytesPtr), uintptr(len(src)))
+		nsData := objc.ID(clsNSData).Send(selDataWithBytes, uintptr(bytesPtr), uintptr(len(data)))
 
 		ret = uintptr(pb.Send(selSetData, nsData, nsTypePNG))
 
@@ -245,7 +246,7 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 
 		nsArray := objc.ID(clsNSMutableArray).Send(selNew)
 
-		lines := bytes.Split(src, []byte{'\n'})
+		lines := bytes.Split(data, []byte{'\n'})
 		firstPath := ""
 
 		for _, line := range lines {
@@ -271,7 +272,7 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 		nsArray.Send(selRelease)
 
 	default:
-		nsStrContent := makeNSString(clsNSString, string(src))
+		nsStrContent := makeNSString(clsNSString, string(data))
 		nsTypeText := makeNSString(clsNSString, "public.utf8-plain-text")
 
 		ret = uintptr(pb.Send(selSetString, nsStrContent, nsTypeText))
@@ -281,9 +282,9 @@ func (m *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 		return 0, errors.New("failed to set clipboard content")
 	}
 
-	m.dedup.Mark(src)
+	m.dedup.Mark(data)
 
-	return len(src), nil
+	return len(data), nil
 }
 
 func makeNSString(clsNSString objc.Class, str string) objc.ID {

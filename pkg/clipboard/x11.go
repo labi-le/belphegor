@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func New(opts eventful.Options, logger zerolog.Logger) *x11.Clipboard {
+func New(logger zerolog.Logger, opts eventful.Options) *x11.Clipboard {
 	if _, ok := os.LookupEnv("DISPLAY"); !ok {
 		logger.Fatal().Msg("x11 display not found")
 	}

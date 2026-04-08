@@ -142,8 +142,8 @@ func (c *Clipboard) handleEvent(ev xgb.Event, upd chan<- eventful.Update) {
 	}
 }
 
-func (c *Clipboard) Write(t mime.Type, src []byte) (int, error) {
-	if len(src) == 0 {
+func (c *Clipboard) Write(t mime.Type, data []byte) (int, error) {
+	if len(data) == 0 {
 		return 0, nil
 	}
 
@@ -157,11 +157,11 @@ func (c *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	var dataCopy []byte
 
 	if t == mime.TypePath {
-		dataCopy = rfc8089.FormatURIList(src)
+		dataCopy = rfc8089.FormatURIList(data)
 		c.serveTyp = c.atoms.UriList
 	} else {
-		dataCopy = make([]byte, len(src))
-		copy(dataCopy, src)
+		dataCopy = make([]byte, len(data))
+		copy(dataCopy, data)
 		if t == mime.TypeImage {
 			c.serveTyp = c.atoms.ImagePng
 		} else {
@@ -170,14 +170,14 @@ func (c *Clipboard) Write(t mime.Type, src []byte) (int, error) {
 	}
 
 	c.serving = dataCopy
-	c.dedup.Mark(src)
+	c.dedup.Mark(data)
 
 	err := xproto.SetSelectionOwnerChecked(c.conn, c.win, c.atoms.Clipboard, xproto.TimeCurrentTime).Check()
 	if err != nil {
 		return 0, fmt.Errorf("set selection owner: %w", err)
 	}
 
-	return len(src), nil
+	return len(data), nil
 }
 
 func (c *Clipboard) handleRequest(e xproto.SelectionRequestEvent) {

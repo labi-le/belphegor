@@ -8,6 +8,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func New(opts eventful.Options, logger zerolog.Logger) *mac.Clipboard {
-	return mac.New(opts)
+func New(logger zerolog.Logger, opts eventful.Options) *mac.Clipboard {
+	return mac.New(logger, opts)
 }

@@ -98,8 +98,8 @@ func (s *sourceListener) Cancelled() {
 	})
 }
 
-func (w *writer) Write(t mime.Type, p []byte) (n int, err error) {
-	if len(p) == 0 {
+func (w *writer) Write(t mime.Type, data []byte) (n int, err error) {
+	if len(data) == 0 {
 		return 0, nil
 	}
 
@@ -120,10 +120,10 @@ func (w *writer) Write(t mime.Type, p []byte) (n int, err error) {
 
 	var dataCopy []byte
 	if t == mime.TypePath {
-		dataCopy = rfc8089.FormatURIList(p)
+		dataCopy = rfc8089.FormatURIList(data)
 	} else {
-		dataCopy = make([]byte, len(p))
-		copy(dataCopy, p)
+		dataCopy = make([]byte, len(data))
+		copy(dataCopy, data)
 	}
 
 	listener := &sourceListener{
@@ -144,7 +144,7 @@ func (w *writer) Write(t mime.Type, p []byte) (n int, err error) {
 	w.device.SetSelection(source)
 	w.activeSource = source
 
-	return len(p), nil
+	return len(data), nil
 }
 
 func (w *writer) Close() error {

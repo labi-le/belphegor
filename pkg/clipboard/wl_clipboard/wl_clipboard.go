@@ -36,7 +36,7 @@ type Clipboard struct {
 	dedup  eventful.Deduplicator
 }
 
-func New(log zerolog.Logger) *Clipboard {
+func New(log zerolog.Logger, _ eventful.Options) *Clipboard {
 	return &Clipboard{
 		logger: log.With().Str("component", "wl_clipboard").Logger(),
 	}
@@ -79,15 +79,15 @@ func (c *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error
 	}
 }
 
-func (c *Clipboard) Write(_ mime.Type, src []byte) (int, error) {
-	c.dedup.Mark(src)
+func (c *Clipboard) Write(t mime.Type, data []byte) (int, error) {
+	c.dedup.Mark(data)
 
-	if err := clipboardSet(src, exec.Command("wl-copy")); err != nil {
+	if err := clipboardSet(data, exec.Command("wl-copy")); err != nil {
 		c.logger.Error().Err(err).Msg("failed to write to wl-clipboard")
 		return 0, err
 	}
 
-	return len(src), nil
+	return len(data), nil
 }
 
 func clipboardGet(cmd *exec.Cmd) ([]byte, error) {
