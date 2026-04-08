@@ -1,3 +1,5 @@
+//go:build unix
+
 package wlr_test
 
 import (
@@ -37,7 +39,7 @@ func TestWriteAndWatchTwoClients(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	upd := make(chan eventful.Update, 1)
+	upd := make(chan eventful.Update, 10)
 	go func() { _ = reader.Watch(ctx, upd) }()
 	go func() { _ = writer.Watch(ctx, make(chan eventful.Update, 10)) }()
 

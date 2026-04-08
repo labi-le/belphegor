@@ -50,12 +50,15 @@ func New(client *wl.Client, log zerolog.Logger, opts eventful.Options) *Clipboar
 }
 
 func (w *Clipboard) Watch(ctx context.Context, upd chan<- eventful.Update) error {
-	defer close(upd)
 	log := w.logger.With().Str("op", "wlr.Watch").Logger()
 
 	w.reader = newReader(w.preset, upd, log)
 	w.writer = newWriter(w.preset, w.reader, log)
 
+	defer func() {
+		w.reader.closed.Store(true)
+		close(upd)
+	}()
 	return w.run(ctx)
 }
 

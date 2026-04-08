@@ -29,6 +29,7 @@ type reader struct {
 
 	dedup   eventful.Deduplicator
 	barrier atomic.Int64
+	closed  atomic.Bool
 }
 
 func newReader(preset *preset, dataChan chan<- eventful.Update, log zerolog.Logger) *reader {
@@ -152,17 +153,21 @@ func (r *reader) readPipeData(mimeType string, p *pipe.Pipe) {
 
 		if _, ok := r.dedup.Check(batchHash); ok {
 			for _, u := range updates {
-				r.dataChan <- u
+				if !r.closed.Load() {
+					r.dataChan <- u
+				}
 			}
 		}
 		return
 	}
 
 	if h, ok := r.dedup.Check(data); ok {
-		r.dataChan <- eventful.Update{
-			Data:     data,
-			MimeType: typ,
-			Hash:     h,
+		if !r.closed.Load() {
+			r.dataChan <- eventful.Update{
+				Data:     data,
+				MimeType: typ,
+				Hash:     h,
+			}
 		}
 	}
 }
@@ -183,6 +188,7 @@ func (r *reader) Offer(mimeType string) {
 }
 
 func (r *reader) Close() error {
+	r.closed.Store(true)
 	if r.currentOffer != nil {
 		r.currentOffer.Destroy()
 	}
