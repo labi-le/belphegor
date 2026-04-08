@@ -23,6 +23,7 @@ import (
 
 var (
 	ErrAlreadyConnected = errors.New("already connected")
+	ErrMaxPeersReached  = errors.New("max peers reached")
 )
 
 var _ discovering.Connector = (*Node)(nil)
@@ -77,7 +78,7 @@ func (n *Node) ConnectTo(ctx context.Context, addr string) error {
 
 	if n.peers.Len() >= n.opts.MaxPeers {
 		ctxLog.Warn().Int("max_peers", n.opts.MaxPeers).Msg("peer limit")
-		return nil
+		return ErrMaxPeersReached
 	}
 
 	conn, err := n.transport.Dial(ctx, addr)
@@ -470,5 +471,11 @@ func (n *Node) PeerDiscovered(ctx context.Context, peerIP net.IP, payload []byte
 	}
 
 	addr := fmt.Sprintf("%s:%d", peerIP.String(), greet.Payload.Port)
-	_ = n.ConnectTo(ctx, addr)
+	if err := n.ConnectTo(ctx, addr); err != nil {
+		if errors.Is(err, ErrMaxPeersReached) {
+			ctxLog.Warn().Str("peer", greet.Payload.MetaData.String()).Msg("discovered but rejected: max peers reached")
+		} else {
+			ctxLog.Warn().Err(err).Str("peer", greet.Payload.MetaData.String()).Msg("discovered but failed to connect")
+		}
+	}
 }

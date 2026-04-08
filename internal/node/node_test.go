@@ -25,7 +25,7 @@ func TestConnectTo_MaxPeers(t *testing.T) {
 
 	ctx := context.Background()
 	err := n.ConnectTo(ctx, "localhost:1234")
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+	if !errors.Is(err, ErrMaxPeersReached) {
+		t.Errorf("expected ErrMaxPeersReached, got %v", err)
 	}
 }
