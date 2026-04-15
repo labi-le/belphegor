@@ -144,3 +144,5 @@ to install service, you need to have PATH in current ENV, otherwise the notifica
 [x] Add x11 support
 
 [] Upnp (?)
+
+[] Android app or magisk module (?)
