@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	deedles.dev/wl v0.0.0-20260216032335-64a434ab53c9
-	fyne.io/systray v1.12.0
+	fyne.io/systray v1.12.1
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cespare/xxhash v1.1.0
 	github.com/dustin/go-humanize v1.0.1
