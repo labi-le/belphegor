@@ -14,7 +14,7 @@ require (
 	github.com/hashicorp/yamux v0.1.2
 	github.com/jezek/xgb v1.3.1
 	github.com/nightlyone/lockfile v1.0.0
-	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/quic-go v0.59.1
 	github.com/rs/zerolog v1.35.1
 	github.com/schollz/peerdiscovery v1.7.6
 	github.com/spf13/pflag v1.0.10
