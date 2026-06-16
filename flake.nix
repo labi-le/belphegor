@@ -13,7 +13,7 @@
       flake-utils,
     }:
     let
-      version = "3.7.1";
+      version = "3.7.2";
       pname = "belphegor";
       supportedSystems = [
         "x86_64-linux"
@@ -23,11 +23,11 @@
       systemConfigs = {
         x86_64-linux = {
           arch = "linux_amd64";
-          hash = "sha256-it2ZKNx9cGMpa8gDj3gzolJ+Jn5/vofIe6dHQSIq22o="; # x86_64-linux
+          hash = "sha256-6VTIGq0EsV19Of+rFZ7jOGE7JtjoY13hValOCCzXuxM="; # x86_64-linux
         };
         aarch64-linux = {
           arch = "linux_armv6";
-          hash = "sha256-0NFjuxy4fiBLwC5Z6yt+z9Y8FeOg63WyGF5b6p8sZY8="; # aarch64-linux
+          hash = "sha256-L7p3O8c/23evM+BPhfT/eKK3FHTrDm0rHikkzkxUHNo="; # aarch64-linux
         };
       };
     in
