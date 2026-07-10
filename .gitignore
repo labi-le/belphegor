@@ -48,3 +48,6 @@ go.work
 
 context.md
 .desloppify
+
+# transient benchstat comparison output (baseline.txt is tracked)
+benchmarks/

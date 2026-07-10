@@ -10,20 +10,22 @@ import (
 )
 
 func DecodeEvent(r io.Reader) (any, error) {
-	var pb proto.Event
-	if err := protoutil.DecodeReader(r, &pb); err != nil {
+	pb := eventProtoPool.Get().(*proto.Event)
+	defer releaseEvent(pb)
+
+	if err := protoutil.DecodeReader(r, pb); err != nil {
 		return nil, err
 	}
 
 	switch p := pb.Payload.(type) {
 	case *proto.Event_Message:
-		return toDomainMessage(&pb, p.Message, nil), nil
+		return toDomainMessage(pb, p.Message, nil), nil
 	case *proto.Event_Announce:
-		return toDomainAnnounce(&pb, p.Announce), nil
+		return toDomainAnnounce(pb, p.Announce), nil
 	case *proto.Event_Request:
-		return toDomainRequest(&pb, p.Request), nil
+		return toDomainRequest(pb, p.Request), nil
 	case *proto.Event_Handshake:
-		return toDomainHandshake(&pb, p.Handshake), nil
+		return toDomainHandshake(pb, p.Handshake), nil
 	default:
 		return nil, fmt.Errorf("unknown event type %T", p)
 	}

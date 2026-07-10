@@ -1,13 +1,15 @@
 package channel
 
 import (
-	"sort"
-	"strings"
+	"bytes"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
 )
+
+var batchSeparator = []byte("\n")
 
 const threshold = 3 * time.Minute
 
@@ -59,12 +61,12 @@ func (c *BatchCollector) Add(msg domain.Message) ([]byte, bool) {
 }
 
 func (c *BatchCollector) join(items map[domain.MessageID][]byte) []byte {
-	paths := make([]string, 0, len(items))
+	parts := make([][]byte, 0, len(items))
 	for _, data := range items {
 		if len(data) > 0 {
-			paths = append(paths, string(data))
+			parts = append(parts, data)
 		}
 	}
-	sort.Strings(paths)
-	return []byte(strings.Join(paths, "\n"))
+	slices.SortFunc(parts, bytes.Compare)
+	return bytes.Join(parts, batchSeparator)
 }

@@ -52,13 +52,33 @@ clean:
 tests:
 	go test ./...
 
+.PHONY: bench
+bench:
+	go test -run='^$$' -bench=. -benchmem ./...
+
+# regenerate the committed baseline (benchmarks/baseline.txt) and summarize it
+.PHONY: bench-baseline
+bench-baseline:
+	@mkdir -p benchmarks
+	go test -run='^$$' -bench=. -benchmem -count=10 -benchtime=200ms ./... > benchmarks/baseline.txt
+	benchstat benchmarks/baseline.txt
+
+# compare current tree against the committed baseline
+.PHONY: bench-cmp
+bench-cmp:
+	@mkdir -p benchmarks
+	go test -run='^$$' -bench=. -benchmem -count=10 -benchtime=200ms ./... > benchmarks/current.txt
+	benchstat benchmarks/baseline.txt benchmarks/current.txt
+
 .PHONY: lint
 lint:
 	golangci-lint run
 
 .PHONY: gen-proto
 gen-proto:
-	@protoc --proto_path=proto --go_out=. proto/*
+	@protoc --proto_path=proto --go_out=. \
+		--go-vtproto_out=. --go-vtproto_opt=features=marshal+unmarshal+size \
+		proto/*
 
 define create_tag
 	@echo "Current version: $(CURRENT_VERSION)"

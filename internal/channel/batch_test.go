@@ -1,6 +1,7 @@
 package channel_test
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/labi-le/belphegor/internal/channel"
@@ -101,4 +102,32 @@ func TestBatchCollector_MultipleBatches(t *testing.T) {
 	_, _ = bc.Add(batch2[0])
 	_, _ = bc.Add(batch1[1])
 	_, _ = bc.Add(batch2[1])
+}
+
+// BenchmarkBatchCollector_Add measures assembling a complete file batch:
+// N part inserts into the batch map followed by the sort+join on completion.
+func BenchmarkBatchCollector_Add(b *testing.B) {
+	for _, n := range []int{2, 10, 50} {
+		parts := make([]domain.Message, n)
+		for i := range parts {
+			parts[i] = domain.Message{
+				ID:         domain.MessageID(i + 1),
+				BatchID:    domain.MessageID(9999),
+				BatchTotal: uint32(n),
+				Data:       []byte("/tmp/clipboard/file_" + strconv.Itoa(i)),
+			}
+		}
+
+		b.Run(strconv.Itoa(n)+"_parts", func(b *testing.B) {
+			bc := channel.NewBatchCollector()
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for range b.N {
+				for _, p := range parts {
+					bc.Add(p)
+				}
+			}
+		})
+	}
 }

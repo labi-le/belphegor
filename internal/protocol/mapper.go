@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"sync"
+	"time"
 
 	"github.com/labi-le/belphegor/internal/types/domain"
 	"github.com/labi-le/belphegor/internal/types/proto"
@@ -14,9 +15,28 @@ var eventProtoPool = sync.Pool{
 	New: func() any { return &proto.Event{} },
 }
 
+// timestampPool recycles the *timestamppb.Timestamp attached to a pooled Event,
+// removing one heap allocation per encoded/decoded message.
+var timestampPool = sync.Pool{
+	New: func() any { return &timestamppb.Timestamp{} },
+}
+
 func releaseEvent(pb *proto.Event) {
+	ts := pb.Created
 	pb.Reset()
+	if ts != nil {
+		ts.Reset()
+		timestampPool.Put(ts)
+	}
 	eventProtoPool.Put(pb)
+}
+
+// setCreated fills pb.Created from a pooled Timestamp instead of allocating one.
+func setCreated(pb *proto.Event, t time.Time) {
+	ts := timestampPool.Get().(*timestamppb.Timestamp)
+	ts.Seconds = t.Unix()
+	ts.Nanos = int32(t.Nanosecond())
+	pb.Created = ts
 }
 
 func MapToProto(v any) *proto.Event {
@@ -25,7 +45,7 @@ func MapToProto(v any) *proto.Event {
 
 	switch e := v.(type) {
 	case domain.EventMessage:
-		pb.Created = timestamppb.New(e.Created)
+		setCreated(pb, e.Created)
 		pb.Payload = &proto.Event_Message{
 			Message: &proto.Message{
 				ID:            e.Payload.ID.Int64(),
@@ -40,7 +60,7 @@ func MapToProto(v any) *proto.Event {
 		return pb
 
 	case domain.EventAnnounce:
-		pb.Created = timestamppb.New(e.Created)
+		setCreated(pb, e.Created)
 		pb.Payload = &proto.Event_Announce{
 			Announce: &proto.Announce{
 				ID:            e.Payload.ID.Int64(),
@@ -54,7 +74,7 @@ func MapToProto(v any) *proto.Event {
 		return pb
 
 	case domain.EventRequest:
-		pb.Created = timestamppb.New(e.Created)
+		setCreated(pb, e.Created)
 		pb.Payload = &proto.Event_Request{
 			Request: &proto.RequestMessage{
 				ID: e.Payload.ID.Int64(),
@@ -63,7 +83,7 @@ func MapToProto(v any) *proto.Event {
 		return pb
 
 	case domain.EventHandshake:
-		pb.Created = timestamppb.New(e.Created)
+		setCreated(pb, e.Created)
 		pb.Payload = &proto.Event_Handshake{
 			Handshake: &proto.Handshake{
 				Version: e.Payload.Version,
