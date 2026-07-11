@@ -93,7 +93,7 @@ var encodePool = sync.Pool{
 }
 
 func EncodeToWriter(w io.Writer, src proto.Message) error {
-	bufPtr := encodePool.Get().(*[]byte)
+	bufPtr, _ := encodePool.Get().(*[]byte)
 	defer encodePool.Put(bufPtr)
 
 	if vt, ok := src.(vtMarshaler); ok {

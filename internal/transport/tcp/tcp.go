@@ -55,10 +55,11 @@ func (t *Transport) Dial(ctx context.Context, addr string) (transport.Connection
 		return nil, err
 	}
 
-	tcpConn := rawConn.(*tls.Conn).NetConn()
-	if tc, ok := tcpConn.(*net.TCPConn); ok {
-		_ = tc.SetKeepAlive(true)
-		_ = tc.SetKeepAlivePeriod(t.keepAlive)
+	if tlsConn, isTLS := rawConn.(*tls.Conn); isTLS {
+		if tc, ok := tlsConn.NetConn().(*net.TCPConn); ok {
+			_ = tc.SetKeepAlive(true)
+			_ = tc.SetKeepAlivePeriod(t.keepAlive)
+		}
 	}
 
 	sess, err := yamux.Client(rawConn, yamuxConfig(t.keepAlive))

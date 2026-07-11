@@ -52,6 +52,21 @@ clean:
 tests:
 	go test ./...
 
+# every Go test in the repo, including the build-tagged suites
+# (null headless backend + e2e loopback harness)
+.PHONY: test-all
+test-all:
+	go test ./...
+	go test -tags null ./pkg/clipboard/null/
+	go test -tags e2e ./e2e/
+
+# real multi-VM end-to-end tests via QEMU/KVM (needs nix + /dev/kvm)
+.PHONY: test-vm
+test-vm:
+	CGO_ENABLED=0 go build -tags null -ldflags='-s -w' -o /tmp/belphegor-null-static $(MAIN_PATH)
+	nix build --impure -f e2e/vm-test.nix -L --no-link
+	nix build --impure -f e2e/vm-mesh.nix -L --no-link
+
 .PHONY: bench
 bench:
 	go test -run='^$$' -bench=. -benchmem ./...

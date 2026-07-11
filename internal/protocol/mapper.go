@@ -22,7 +22,7 @@ var timestampPool = sync.Pool{
 }
 
 func releaseEvent(pb *proto.Event) {
-	ts := pb.Created
+	ts := pb.GetCreated()
 	pb.Reset()
 	if ts != nil {
 		ts.Reset()
@@ -33,14 +33,14 @@ func releaseEvent(pb *proto.Event) {
 
 // setCreated fills pb.Created from a pooled Timestamp instead of allocating one.
 func setCreated(pb *proto.Event, t time.Time) {
-	ts := timestampPool.Get().(*timestamppb.Timestamp)
+	ts, _ := timestampPool.Get().(*timestamppb.Timestamp)
 	ts.Seconds = t.Unix()
 	ts.Nanos = int32(t.Nanosecond())
 	pb.Created = ts
 }
 
 func MapToProto(v any) *proto.Event {
-	pb := eventProtoPool.Get().(*proto.Event)
+	pb, _ := eventProtoPool.Get().(*proto.Event)
 	pb.Reset()
 
 	switch e := v.(type) {
@@ -112,7 +112,7 @@ func toDomainMessage(ev *proto.Event, msg *proto.Message, data []byte) domain.Ev
 			MimeType:      toDomainMime(msg.GetMimeType()),
 			ContentHash:   msg.GetContentHash(),
 			ContentLength: msg.GetContentLength(),
-			Name:          msg.Name,
+			Name:          msg.GetName(),
 			BatchID:       domain.MessageID(msg.GetBatchID()),
 			BatchTotal:    msg.GetBatchTotal(),
 		},
@@ -174,6 +174,9 @@ func toProtoMime(t mime.Type) proto.Mime {
 		return proto.Mime_IMAGE
 	case mime.TypePath:
 		return proto.Mime_PATH
+
+	case mime.TypeUnknown:
+		return proto.Mime_TEXT
 
 	case mime.TypeAudio, mime.TypeVideo, mime.TypeBinary:
 		return proto.Mime_PATH

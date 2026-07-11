@@ -3,6 +3,7 @@ package protocol_test
 import (
 	"bytes"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,9 +136,9 @@ func TestProto_Completeness(t *testing.T) {
 	}
 }
 
-func assertNonZero(t *testing.T, v interface{}, parentPath []string) {
+func assertNonZero(t *testing.T, v any, parentPath []string) {
 	val := reflect.ValueOf(v)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return
 		}
@@ -149,7 +150,6 @@ func assertNonZero(t *testing.T, v interface{}, parentPath []string) {
 
 	typ := val.Type()
 	for i := 0; i < val.NumField(); i++ {
-		field := val.Field(i)
 		structField := typ.Field(i)
 		fieldName := structField.Name
 
@@ -157,28 +157,35 @@ func assertNonZero(t *testing.T, v interface{}, parentPath []string) {
 			continue
 		}
 
-		currentPath := append(parentPath, fieldName)
-		pathStr := joinPath(currentPath)
+		currentPath := make([]string, 0, len(parentPath)+1)
+		currentPath = append(currentPath, parentPath...)
+		currentPath = append(currentPath, fieldName)
 
-		if field.Kind() == reflect.Ptr && !field.IsNil() && field.Elem().Kind() == reflect.Struct {
-			if ts, ok := field.Interface().(*timestamppb.Timestamp); ok {
-				if ts.Seconds == 0 && ts.Nanos == 0 {
-					t.Errorf("Field '%s' is zero (Timestamp)", pathStr)
-				}
-				continue
-			}
-			assertNonZero(t, field.Interface(), currentPath)
-			continue
-		}
-
-		if isZero(field) {
-			t.Errorf("Field '%s' is zero/empty. Missing mapping in MapToProto?", pathStr)
-		}
+		assertField(t, val.Field(i), currentPath)
 	}
 }
 
-func getProtoPayload(event *proto.Event) interface{} {
-	switch p := event.Payload.(type) {
+func assertField(t *testing.T, field reflect.Value, path []string) {
+	pathStr := joinPath(path)
+
+	if field.Kind() == reflect.Pointer && !field.IsNil() && field.Elem().Kind() == reflect.Struct {
+		if ts, ok := field.Interface().(*timestamppb.Timestamp); ok {
+			if ts.GetSeconds() == 0 && ts.GetNanos() == 0 {
+				t.Errorf("Field '%s' is zero (Timestamp)", pathStr)
+			}
+			return
+		}
+		assertNonZero(t, field.Interface(), path)
+		return
+	}
+
+	if isZero(field) {
+		t.Errorf("Field '%s' is zero/empty. Missing mapping in MapToProto?", pathStr)
+	}
+}
+
+func getProtoPayload(event *proto.Event) any {
+	switch p := event.GetPayload().(type) {
 	case *proto.Event_Message:
 		return p.Message
 	case *proto.Event_Announce:
@@ -193,8 +200,8 @@ func getProtoPayload(event *proto.Event) interface{} {
 }
 
 func isZero(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface:
+	switch v.Kind() { //nolint:exhaustive // default branch covers the remaining reflect kinds
+	case reflect.Pointer, reflect.Interface:
 		return v.IsNil()
 	case reflect.Slice, reflect.Map:
 		return v.Len() == 0
@@ -206,12 +213,5 @@ func isZero(v reflect.Value) bool {
 }
 
 func joinPath(p []string) string {
-	res := ""
-	for i, s := range p {
-		if i > 0 {
-			res += "."
-		}
-		res += s
-	}
-	return res
+	return strings.Join(p, ".")
 }

@@ -126,15 +126,15 @@ func main() {
 		opts,
 	)
 	defer func(nd *node.Node) {
-		if err := nd.Close(); err != nil {
-			logger.Warn().Err(err).Msg("close self node")
+		if closeErr := nd.Close(); closeErr != nil {
+			logger.Warn().Err(closeErr).Msg("close self node")
 		}
 	}(nd)
 
 	if addressIP != "" {
 		go func() {
-			if err := nd.ConnectTo(ctx, addressIP); err != nil {
-				logger.Fatal().AnErr("node.ConnectTo", err).Msg("failed to connect to the node")
+			if connErr := nd.ConnectTo(ctx, addressIP); connErr != nil {
+				logger.Fatal().AnErr("node.ConnectTo", connErr).Msg("failed to connect to the node")
 			}
 		}()
 	}
@@ -148,8 +148,8 @@ func main() {
 		).Discover(ctx, nd)
 	}
 
-	if err := nd.Start(ctx); err != nil {
-		logger.Fatal().Err(err).Msg("failed to start node")
+	if startErr := nd.Start(ctx); startErr != nil {
+		logger.Fatal().Err(startErr).Msg("failed to start node")
 	}
 }
 

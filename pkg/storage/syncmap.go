@@ -29,13 +29,14 @@ func (s *SyncMap[key, val]) Delete(k key) {
 	}
 }
 
-func (s *SyncMap[key, val]) Get(k key) (val, bool) {
+func (s *SyncMap[key, val]) Get(k key) (val, bool) { //nolint:ireturn // generic getter returns the stored value type
 	v, ok := s.m.Load(k)
 	if !ok {
 		var zeroVal val
 		return zeroVal, false
 	}
-	return v.(val), true
+	tv, _ := v.(val)
+	return tv, true
 }
 
 func (s *SyncMap[key, val]) Exist(k key) bool {

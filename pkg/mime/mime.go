@@ -22,6 +22,8 @@ const (
 	TypeBinary
 )
 
+const typeTextLabel = "text"
+
 func (t Type) IsImage() bool { return t == TypeImage }
 func (t Type) IsText() bool  { return t == TypeText }
 func (t Type) IsPath() bool  { return t == TypePath }
@@ -29,7 +31,7 @@ func (t Type) IsPath() bool  { return t == TypePath }
 func (t Type) String() string {
 	switch t {
 	case TypeText:
-		return "text"
+		return typeTextLabel
 	case TypeImage:
 		return "image"
 	case TypePath:
@@ -40,6 +42,8 @@ func (t Type) String() string {
 		return "video"
 	case TypeBinary:
 		return "binary"
+	case TypeUnknown:
+		return "unknown"
 	default:
 		return "unknown"
 	}
@@ -59,7 +63,7 @@ var (
 		"text/plain":               TypeText,
 		"text/plain;charset=utf-8": TypeText,
 		"utf8_string":              TypeText,
-		"text":                     TypeText,
+		typeTextLabel:              TypeText,
 		"string":                   TypeText,
 	}
 
@@ -156,7 +160,7 @@ func fromBytesSniff(data []byte) string {
 	case len(data) >= 2 && bytes.Equal(data[:2], []byte{0x1F, 0x8B}):
 		return "application/gzip"
 	default:
-		return "text"
+		return typeTextLabel
 	}
 }
 

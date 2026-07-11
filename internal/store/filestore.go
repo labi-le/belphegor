@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,7 +24,7 @@ func NewFileStore(baseDir string, logger zerolog.Logger) (*FileStore, error) {
 	with := logger.With().Str("component", "filestore").Logger()
 	with.Trace().Str("baseDir", baseDir).Msg("file save path")
 
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
+	if err := os.MkdirAll(baseDir, 0750); err != nil {
 		return nil, fmt.Errorf("filestore mkdir: %w", err)
 	}
 
@@ -44,7 +45,7 @@ func MustFileStore(baseDir string, logger zerolog.Logger) *FileStore {
 
 func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 	if msg.Name == "" {
-		return "", fmt.Errorf("invalid filename: name is empty")
+		return "", errors.New("invalid filename: name is empty")
 	}
 
 	var isolateDir string
@@ -55,7 +56,7 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 	}
 
 	isolateDirClean := filepath.Clean(isolateDir)
-	if err := os.MkdirAll(isolateDirClean, 0755); err != nil {
+	if err := os.MkdirAll(isolateDirClean, 0750); err != nil {
 		return "", fmt.Errorf("filestore mkdir isolated: %w", err)
 	}
 
@@ -65,7 +66,7 @@ func (fs *FileStore) Write(r io.Reader, msg domain.Message) (string, error) {
 		return "", fmt.Errorf("invalid filename: path traversal attempt detected (%q)", msg.Name)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0750); err != nil {
 		return "", fmt.Errorf("filestore mkdir tree: %w", err)
 	}
 

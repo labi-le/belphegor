@@ -1,6 +1,9 @@
 package network
 
-import "net"
+import (
+	"maps"
+	"net"
+)
 
 var localIPs = map[string]struct{}{
 	"localhost": {},
@@ -20,14 +23,14 @@ func LocalIPs() map[string]struct{} {
 	}
 
 	for _, iface := range ifaces {
-		addrs, err := iface.Addrs()
-		if err != nil {
+		addrs, addrErr := iface.Addrs()
+		if addrErr != nil {
 			continue
 		}
 
 		for _, address := range addrs {
-			ip, _, err := net.ParseCIDR(address.String())
-			if err != nil {
+			ip, _, parseErr := net.ParseCIDR(address.String())
+			if parseErr != nil {
 				continue
 			}
 
@@ -44,9 +47,7 @@ func IsLocalIP(ip net.IP) bool {
 }
 
 func copyMap[T comparable, V comparable](m map[T]V) map[T]V {
-	cp := make(map[T]V)
-	for k, v := range m {
-		cp[k] = v
-	}
+	cp := make(map[T]V, len(m))
+	maps.Copy(cp, m)
 	return cp
 }

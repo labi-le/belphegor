@@ -10,14 +10,14 @@ import (
 )
 
 func DecodeEvent(r io.Reader) (any, error) {
-	pb := eventProtoPool.Get().(*proto.Event)
+	pb, _ := eventProtoPool.Get().(*proto.Event)
 	defer releaseEvent(pb)
 
 	if err := protoutil.DecodeReader(r, pb); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode event: %w", err)
 	}
 
-	switch p := pb.Payload.(type) {
+	switch p := pb.GetPayload().(type) {
 	case *proto.Event_Message:
 		return toDomainMessage(pb, p.Message, nil), nil
 	case *proto.Event_Announce:
@@ -38,7 +38,11 @@ func Encode(v any) ([]byte, error) {
 	}
 	defer releaseEvent(pb)
 
-	return protoutil.EncodeBytes(pb)
+	b, err := protoutil.EncodeBytes(pb)
+	if err != nil {
+		return nil, fmt.Errorf("encode event: %w", err)
+	}
+	return b, nil
 }
 
 func MustEncode(v any) []byte {
@@ -50,7 +54,7 @@ func MustEncode(v any) []byte {
 	return encode
 }
 
-func DecodeExpect[T domain.AnyEvent](r io.Reader) (T, error) {
+func DecodeExpect[T domain.AnyEvent](r io.Reader) (T, error) { //nolint:ireturn // generic decoder returns the caller-specified event type T
 	var empty T
 	event, err := DecodeEvent(r)
 	if err != nil {
@@ -73,5 +77,8 @@ func WriteEvent(w io.Writer, v any) error {
 
 	defer releaseEvent(pb)
 
-	return protoutil.EncodeToWriter(w, pb)
+	if err := protoutil.EncodeToWriter(w, pb); err != nil {
+		return fmt.Errorf("write event: %w", err)
+	}
+	return nil
 }

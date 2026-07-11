@@ -70,50 +70,50 @@ func fileInfoFromRaw(data []byte, limit int) []FileInfo {
 			break
 		}
 
-		idx := bytes.IndexByte(data, '\n')
 		var line []byte
-		if idx >= 0 {
-			line = data[:idx]
-			data = data[idx+1:]
-		} else {
-			line = data
-			data = nil
+		line, data = nextLine(data)
+
+		if info, ok := parseFileURI(line); ok {
+			res = append(res, info)
 		}
-
-		if len(line) > 0 && line[len(line)-1] == '\r' {
-			line = line[:len(line)-1]
-		}
-
-		if len(line) == 0 || !bytes.HasPrefix(line, []byte("file://")) {
-			continue
-		}
-
-		pathBytes := line[7:]
-		path := strutil.BytesToString(pathBytes)
-
-		if bytes.IndexByte(pathBytes, '%') >= 0 {
-			if unescaped, err := url.PathUnescape(path); err == nil {
-				path = unescaped
-			}
-		}
-
-		info, err := os.Lstat(path)
-		if err != nil {
-			continue
-		}
-
-		if info.IsDir() {
-			continue
-		}
-
-		res = append(res, FileInfo{
-			Path:    path,
-			Size:    uint64(info.Size()),
-			ModTime: uint64(info.ModTime().UnixNano()),
-		})
 	}
 
 	return res
+}
+
+func nextLine(data []byte) (line, rest []byte) {
+	line, rest, _ = bytes.Cut(data, []byte{'\n'})
+
+	if len(line) > 0 && line[len(line)-1] == '\r' {
+		line = line[:len(line)-1]
+	}
+
+	return line, rest
+}
+
+func parseFileURI(line []byte) (FileInfo, bool) {
+	if len(line) == 0 || !bytes.HasPrefix(line, []byte("file://")) {
+		return FileInfo{}, false
+	}
+
+	pathBytes := line[7:]
+	path := strutil.BytesToString(pathBytes)
+	if bytes.IndexByte(pathBytes, '%') >= 0 {
+		if unescaped, err := url.PathUnescape(path); err == nil {
+			path = unescaped
+		}
+	}
+
+	info, err := os.Lstat(path)
+	if err != nil || info.IsDir() {
+		return FileInfo{}, false
+	}
+
+	return FileInfo{
+		Path:    path,
+		Size:    uint64(info.Size()),
+		ModTime: uint64(info.ModTime().UnixNano()),
+	}, true
 }
 
 func UpdatesFromRawPath(data []byte, limit int) ([]Update, []byte) {

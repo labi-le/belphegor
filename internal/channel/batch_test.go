@@ -45,24 +45,16 @@ func TestBatchCollector_Add_Complete(t *testing.T) {
 
 	for i, msg := range msgs {
 		data, complete := bc.Add(msg)
-		if i < 2 {
-			if data != nil {
-				t.Errorf("expected nil data on msg %d", i+1)
-			}
-			if complete {
-				t.Errorf("expected complete=false on msg %d", i+1)
-			}
-		} else {
-			if data == nil {
-				t.Error("expected joined data on final msg")
-			}
-			if !complete {
-				t.Error("expected complete=true on final msg")
-			}
-			expected := "part1\npart2\npart3"
-			if string(data) != expected {
-				t.Errorf("expected %q, got %q", expected, string(data))
-			}
+		last := i == len(msgs)-1
+
+		if complete != last {
+			t.Errorf("msg %d: complete=%v, want %v", i+1, complete, last)
+		}
+		if !last && data != nil {
+			t.Errorf("msg %d: expected nil data before completion, got %q", i+1, data)
+		}
+		if last && string(data) != "part1\npart2\npart3" {
+			t.Errorf("final msg: expected %q, got %q", "part1\npart2\npart3", string(data))
 		}
 	}
 }
@@ -100,8 +92,16 @@ func TestBatchCollector_MultipleBatches(t *testing.T) {
 
 	_, _ = bc.Add(batch1[0])
 	_, _ = bc.Add(batch2[0])
-	_, _ = bc.Add(batch1[1])
-	_, _ = bc.Add(batch2[1])
+
+	data1, done1 := bc.Add(batch1[1])
+	if !done1 || string(data1) != "a1\na2" {
+		t.Errorf("batch1 not completed correctly: data=%q complete=%v", data1, done1)
+	}
+
+	data2, done2 := bc.Add(batch2[1])
+	if !done2 || string(data2) != "b1\nb2" {
+		t.Errorf("batch2 not completed correctly: data=%q complete=%v", data2, done2)
+	}
 }
 
 // BenchmarkBatchCollector_Add measures assembling a complete file batch:

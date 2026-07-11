@@ -63,7 +63,7 @@ func TestChannel_History_Eviction(t *testing.T) {
 	for i := 0; i < channel.HistorySize+1; i++ {
 		msg := domain.Message{
 			ID:            domain.MessageID(id.Unique(i + 1)),
-			Data:          []byte(fmt.Sprintf("file_%d", i)),
+			Data:          fmt.Appendf(nil, "file_%d", i),
 			MimeType:      mime.TypePath,
 			ContentHash:   uint64(i + 1),
 			ContentLength: 10,
@@ -131,7 +131,7 @@ func TestChannel_Get_LookupLogic(t *testing.T) {
 		t.Error("failed to retrieve historic message via Get")
 	}
 
-	if _, ok := ch.Get(999); ok {
+	if _, found := ch.Get(999); found {
 		t.Error("retrieved non-existent message")
 	}
 }
@@ -160,7 +160,7 @@ func TestChannel_Announce_Deduplication(t *testing.T) {
 	}
 }
 
-func TestChannel_Concurrency_Race(t *testing.T) {
+func TestChannel_Concurrency_Race(_ *testing.T) {
 	ch := channel.New(0)
 	var wg sync.WaitGroup
 	workers := 10
@@ -181,7 +181,7 @@ func TestChannel_Concurrency_Race(t *testing.T) {
 	wg.Add(workers * 3)
 
 	for i := 0; i < workers; i++ {
-		go func(idVal int) {
+		go func() {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				ch.Send(domain.EventMessage{
@@ -193,7 +193,7 @@ func TestChannel_Concurrency_Race(t *testing.T) {
 					},
 				})
 			}
-		}(i)
+		}()
 	}
 
 	for i := 0; i < workers; i++ {

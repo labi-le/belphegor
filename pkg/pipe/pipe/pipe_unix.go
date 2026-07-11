@@ -11,7 +11,7 @@ import (
 
 func readableSize(fd uintptr) int {
 	var length int
-	syscall.Syscall(
+	_, _, _ = syscall.Syscall(
 		syscall.SYS_IOCTL,
 		fd,
 		syscall.TIOCINQ,

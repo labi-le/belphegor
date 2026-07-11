@@ -52,7 +52,7 @@ func (h *fifo[K, V]) Add(key K, value V) bool {
 	return true
 }
 
-func (h *fifo[K, V]) Get(key K) (V, bool) {
+func (h *fifo[K, V]) Get(key K) (V, bool) { //nolint:ireturn // generic getter returns the stored value type
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

@@ -3,6 +3,8 @@ package id
 import (
 	"fmt"
 	"net"
+	"os"
+	"strconv"
 	"sync"
 
 	"github.com/bwmarrin/snowflake"
@@ -10,6 +12,13 @@ import (
 )
 
 type Unique = int64
+
+const (
+	nodeIDBits  = 10
+	nodeIDShift = 12
+	nodeIDMask  = 1<<nodeIDBits - 1
+	nodeIDCount = 1 << nodeIDBits
+)
 
 var (
 	MyID      = getNodeID()
@@ -37,11 +46,20 @@ func New() Unique {
 }
 
 func Mine(id Unique) bool {
-	node := (id >> 12) & 0x3FF
-	return node == MyID
+	return Author(id) == MyID
 }
 
 func getNodeID() int64 {
+	if v, ok := os.LookupEnv("BELPHEGOR_NODE_ID"); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			nid := int64(n) % nodeIDCount
+			if nid < 0 {
+				nid += nodeIDCount
+			}
+			return nid
+		}
+	}
+
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return 1
@@ -50,10 +68,10 @@ func getNodeID() int64 {
 	for _, i := range interfaces {
 		if (i.Flags&net.FlagUp) != 0 && i.HardwareAddr != nil && len(i.HardwareAddr) > 0 {
 			h := xxhash.New()
-			if _, err := h.Write(i.HardwareAddr); err != nil {
-				panic(fmt.Sprintf("failed to generate node id: %s", err))
+			if _, writeErr := h.Write(i.HardwareAddr); writeErr != nil {
+				panic(fmt.Sprintf("failed to generate node id: %s", writeErr))
 			}
-			return int64(h.Sum64() % 1024)
+			return int64(h.Sum64() % nodeIDCount)
 		}
 	}
 
@@ -61,5 +79,5 @@ func getNodeID() int64 {
 }
 
 func Author(id Unique) Unique {
-	return (id >> 12) & 0x3FF
+	return (id >> nodeIDShift) & nodeIDMask
 }
