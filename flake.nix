@@ -178,6 +178,24 @@
               default = null;
               description = "Enable notifications. By default: true";
             };
+
+            hidden = mkOption {
+              type = types.bool;
+              default = true;
+              description = "Run detached with a tray icon (Linux systray; hides the console window on Windows). By default: true";
+            };
+
+            allowCopyFiles = mkOption {
+              type = types.nullOr types.bool;
+              default = null;
+              description = "Allow copying files. By default: true";
+            };
+
+            maxClipboardFiles = mkOption {
+              type = types.nullOr types.int;
+              default = null;
+              description = "Maximum number of files copied (and announced) in a single copy operation";
+            };
           };
 
           config = lib.mkIf cfg.enable {
@@ -213,6 +231,7 @@
                   let
                     args = lib.flatten [
                       (lib.optional cfg.verbose "--verbose")
+                      "--hidden=${boolStr cfg.hidden}"
 
                       (lib.optional (cfg.transport != null) [
                         "--transport"
@@ -262,6 +281,11 @@
 
                       (lib.optional (cfg.nodeDiscover != null) "--node_discover=${boolStr cfg.nodeDiscover}")
                       (lib.optional (cfg.notify != null) "--notify=${boolStr cfg.notify}")
+                      (lib.optional (cfg.allowCopyFiles != null) "--allow_copy_files=${boolStr cfg.allowCopyFiles}")
+                      (lib.optional (cfg.maxClipboardFiles != null) [
+                        "--max_clipboard_files"
+                        (toString cfg.maxClipboardFiles)
+                      ])
                     ];
                   in
                   "${cfg.package}/bin/belphegor ${lib.escapeShellArgs args}";
