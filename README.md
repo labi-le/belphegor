@@ -27,10 +27,21 @@ ___
   * 12 or newer
 - windows:
   * 10 or newer (may work on older versions)
+- android:
+  * 8.0 or newer
+  * 10 or newer + root (magisk/kernelsu) & lsposed for the background clipboard module
 
 ### Installation
 
 - [Prebuilt binaries](https://github.com/labi-le/belphegor/releases)
+- [Android apk](https://github.com/labi-le/belphegor-mobile/releases)
+  <details> <summary>which apk</summary>
+
+  * `belphegor.apk` - phones/tablets (arm)
+  * `belphegor-x86_64.apk` - emulators/waydroid (x86_64)
+  * `belphegor-background-clipboard.apk` - optional lsposed module, keeps the sync working while the app is in the
+    background (android 10+)
+  </details>
 - Nix flake
   <details> <summary>as profile</summary>
 
@@ -145,4 +156,4 @@ to install service, you need to have PATH in current ENV, otherwise the notifica
 
 [] Upnp (?)
 
-[] Android app or magisk module (?)
+[x] [Android app](https://github.com/labi-le/belphegor-mobile) (+ lsposed module for the background clipboard)
