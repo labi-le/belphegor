@@ -15,7 +15,7 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -59,7 +59,7 @@ jobs:
 
       - name: create pull request
         id: cpr
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           base: main
           commit-message: "chore: update flake.nix to v${{ env.VERSION }}"

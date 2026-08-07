@@ -15,7 +15,7 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/stale@v11
         with:
           stale-issue-message: 'this issue is automatically closing because there has been no activity'
           stale-issue-label: 'stale'
@@ -23,7 +23,7 @@ jobs:
           days-before-close: 14
           exempt-all-milestones: true
 
-      - uses: actions/stale@v9
+      - uses: actions/stale@v11
         with:
           close-issue-message: 'closing this as we have not received a response in 14 days.'
           stale-issue-label: 'awaiting-reply'
