@@ -1,6 +1,6 @@
 module github.com/labi-le/belphegor
 
-go 1.26
+go 1.26.0
 
 require (
 	deedles.dev/wl v0.0.0-20260216032335-64a434ab53c9
@@ -15,7 +15,7 @@ require (
 	github.com/jezek/xgb v1.3.1
 	github.com/nightlyone/lockfile v1.0.0
 	github.com/planetscale/vtprotobuf v0.6.0
-	github.com/quic-go/quic-go v0.61.0
+	github.com/quic-go/quic-go v0.62.0
 	github.com/rs/zerolog v1.35.1
 	github.com/schollz/peerdiscovery v1.7.6
 	github.com/spf13/pflag v1.0.10
