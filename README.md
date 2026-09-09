@@ -1,5 +1,7 @@
 # belphegor
 
+[![lines of code](https://img.shields.io/endpoint?url=https%3A%2F%2Fghloc.vercel.app%2Fapi%2Flabi-le%2Fbelphegor%2Fbadge%3Ffilter%3D.go)](https://github.com/labi-le/belphegor)
+
 Belphegor is a clipboard manager that allows you to share your clipboard with other devices on the network\
 <img src="logo.jpg" width="500">
 ___
