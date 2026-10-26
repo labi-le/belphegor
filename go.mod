@@ -9,7 +9,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/dustin/go-humanize v1.1.0
 	github.com/ebitengine/purego v0.11.2
-	github.com/gen2brain/beeep v0.11.2
+	github.com/gen2brain/beeep v0.11.3
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/yamux v0.1.2
 	github.com/jezek/xgb v1.3.1
