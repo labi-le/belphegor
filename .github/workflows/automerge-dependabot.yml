@@ -1,8 +1,17 @@
+# Merges Dependabot pull requests and deletes their branches.
+#
+# pull_request_target, not pull_request: runs triggered by Dependabot events get
+# a read-only GITHUB_TOKEN, while pull_request_target runs in the base-repository
+# context with the permissions below. workflow_dispatch is the catch-up path: it
+# merges every open Dependabot PR, which is what to run after this file lands or
+# when an earlier run failed for an unrelated reason.
 ---
 name: "Dependabot Automerge - Action"
 
 on:
   pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -12,15 +21,28 @@ jobs:
   auto-merge:
     name: DependabotMerge
     runs-on: ubuntu-latest
-    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
-      - name: Merge the Dependabot PR
-        run: |
-          for attempt in 1 2 3 4 5; do
-            if gh pr merge --merge "$PR_URL"; then exit 0; fi
-            sleep $((attempt * 5))
-          done
-          exit 1
+      - name: Merge the Dependabot PR(s)
         env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          merge() {
+            for attempt in 1 2 3 4 5 6; do
+              if gh pr merge --merge --delete-branch "$1"; then return 0; fi
+              sleep $((attempt * 5))
+            done
+            return 1
+          }
+          if [ -n "$PR_URL" ]; then
+            merge "$PR_URL"
+            exit
+          fi
+          failed=0
+          for url in $(gh pr list --app dependabot --state open --limit 100 --json url --jq '.[].url'); do
+            merge "$url" || failed=1
+          done
+          exit "$failed"
