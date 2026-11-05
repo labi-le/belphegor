@@ -32,7 +32,7 @@ jobs:
         run: |
           merge() {
             for attempt in 1 2 3 4 5 6; do
-              if gh pr merge --merge --delete-branch "$1"; then return 0; fi
+              if gh pr merge --merge "$1"; then return 0; fi
               sleep $((attempt * 5))
             done
             return 1
