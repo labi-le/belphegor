@@ -18,7 +18,7 @@ require (
 	github.com/quic-go/quic-go v0.64.1
 	github.com/rs/zerolog v1.35.1
 	github.com/schollz/peerdiscovery v1.7.6
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	golang.org/x/image v0.47.0
 	golang.org/x/sys v0.49.0
 	google.golang.org/protobuf v1.36.12
